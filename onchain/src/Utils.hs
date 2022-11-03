@@ -479,7 +479,7 @@ someWith ::
     )
 someWith = phoistAcyclic $
   plam $ \csPred tnPred nPred ->
-    tokenPredicate por csPred tnPred nPred
+    tokenPredicate por (pconstant False) csPred tnPred nPred
 
 {- | Returns `PTrue` if *all* tokens present in `PValue` satisfy *all* of
   the predicates given as parameters
@@ -496,7 +496,7 @@ allWith ::
     )
 allWith = phoistAcyclic $
   plam $ \csPred tnPred nPred ->
-    tokenPredicate pand csPred tnPred nPred
+    tokenPredicate pand (pconstant True) csPred tnPred nPred
 
 {- | Returns `PTrue` if only *one* token present in `PValue` satisfies *all* the
  predicates given as parameters
@@ -513,7 +513,7 @@ oneWith ::
     )
 oneWith = phoistAcyclic $
   plam $ \csPred tnPred nPred ->
-    tokenPredicate' pxor csPred tnPred nPred
+    tokenPredicate' pxor (pconstant False) csPred tnPred nPred
 
 {- | Assigns a boolean to each token in the value based on the the result of:
 
@@ -531,15 +531,16 @@ oneWith = phoistAcyclic $
 tokenPredicate ::
   forall (s :: S).
   Term s (PBool :--> PDelayed PBool :--> PDelayed PBool) ->
+  Term s PBool ->
   Term s (PCurrencySymbol :--> PBool) ->
   Term s (PTokenName :--> PBool) ->
   Term s (PInteger :--> PBool) ->
   Term s (PValue :--> PBool)
-tokenPredicate boolOp csPred tnPred nPred = plam $ \val -> unTermCont $ do
+tokenPredicate boolOp def csPred tnPred nPred = plam $ \val -> unTermCont $ do
   let csMap = pto $ pto val
-  csTnPair <- tcont $ matchPair boolOp csMap
+  csTnPair <- tcont $ matchPair boolOp def csMap
   tnMap <- tcont $ evalCs csPred csTnPair
-  tnAmountPair <- tcont $ matchPair boolOp $ pto tnMap
+  tnAmountPair <- tcont $ matchPair boolOp def $ pto tnMap
   pure $ evalTnAndAmount tnPred nPred tnAmountPair
 
 {- | Same as `tokenPredicate`, but `boolOp` is strict on both arguments. This
@@ -548,16 +549,17 @@ tokenPredicate boolOp csPred tnPred nPred = plam $ \val -> unTermCont $ do
 tokenPredicate' ::
   forall (s :: S).
   Term s (PBool :--> PBool :--> PBool) ->
+  Term s PBool ->
   Term s (PCurrencySymbol :--> PBool) ->
   Term s (PTokenName :--> PBool) ->
   Term s (PInteger :--> PBool) ->
   Term s (PValue :--> PBool)
-tokenPredicate' boolOp csPred tnPred nPred = plam $ \val -> unTermCont $ do
+tokenPredicate' boolOp def csPred tnPred nPred = plam $ \val -> unTermCont $ do
   -- Map of CurrencySymbols
   let csMap = pto $ pto val
-  csTnPair <- tcont $ matchPair' boolOp csMap
+  csTnPair <- tcont $ matchPair' boolOp def csMap
   tnMap <- tcont $ evalCs csPred csTnPair
-  tnAmountPair <- tcont $ matchPair' boolOp $ pto tnMap
+  tnAmountPair <- tcont $ matchPair' boolOp def $ pto tnMap
   pure $ evalTnAndAmount tnPred nPred tnAmountPair
 
 -- Auxiliary functions for `tokenPredicate` and `tokenPredicate'`
@@ -568,10 +570,11 @@ matchPair ::
   forall (s :: S) (a :: PType).
   PLift a =>
   Term s (PBool :--> PDelayed PBool :--> PDelayed PBool) ->
+  Term s PBool ->
   Term s (PBuiltinList a) ->
   (Term s a -> Term s PBool) ->
   Term s PBool
-matchPair boolOp ls cont = (pfix # plam go) # ls # plam cont
+matchPair boolOp def ls cont = (pfix # plam go) # ls # plam cont
   where
     -- Recurring function for the Y combinator
     go ::
@@ -582,7 +585,7 @@ matchPair boolOp ls cont = (pfix # plam go) # ls # plam cont
       Term s (a :--> PBool) ->
       Term s PBool
     go self ls cont = pmatch ls $ \case
-      PNil -> pconstant False
+      PNil -> def
       PCons p ps -> pforce $ boolOp # (cont # p) # pdelay (self # ps # cont)
 
 -- Strict version of `matchPair`
@@ -590,10 +593,11 @@ matchPair' ::
   forall (s :: S) (a :: PType).
   PLift a =>
   Term s (PBool :--> PBool :--> PBool) ->
+  Term s PBool ->
   Term s (PBuiltinList a) ->
   (Term s a -> Term s PBool) ->
   Term s PBool
-matchPair' boolOp ls cont = (pfix # plam go) # ls # plam cont
+matchPair' boolOp def ls cont = (pfix # plam go) # ls # plam cont
   where
     -- Recurring function for the Y combinator
     go ::
@@ -604,7 +608,7 @@ matchPair' boolOp ls cont = (pfix # plam go) # ls # plam cont
       Term s (a :--> PBool) ->
       Term s PBool
     go self ls cont = pmatch ls $ \case
-      PNil -> pconstant False
+      PNil -> def
       PCons p ps -> boolOp # (cont # p) #$ self # ps # cont
 
 -- Evaluate condition on CurrencySymbol
