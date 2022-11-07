@@ -77,7 +77,7 @@ https://github.com/input-output-hk/cardano-node
 
 #### Version
 
-Revision `e406801eaeb32b28cd84357596ca1512bff27741`
+Revision `9c04524d45de2c417ddda9e7ab0d587a54954c57`
 
 #### Installation
 
@@ -125,7 +125,7 @@ Revision `880a69a03fbfd06a4990ba8873f06907d4cd16a7`
 First, clone the [repository](https://github.com/mlabs-haskell/ogmios-datum-cache), then:
 
 ```
-git checkout 98b1c4f2badc7ab1efe4be188ee9f9f5e4e54bb0
+git checkout 880a69a03fbfd06a4990ba8873f06907d4cd16a7
 
 nix build .
 ```
@@ -175,12 +175,12 @@ https://github.com/mlabs-haskell/ogmios-datum-cache
 
 #### Version
 
-The version of `ctl-server` corresponds to the CTL tag/revision being used, currently `v2.0.0-alpha`, and the code resides in the same repository as CTL.
+The version of `ctl-server` corresponds to the CTL tag/revision being used, currently `767e1f35b8b1f243f31ed3360d85a59ef695262b`, and the code resides in the same repository as CTL.
 
 #### Installation
 
 ```
-git checkout tags/v2.0.0-alpha
+git checkout 767e1f35b8b1f243f31ed3360d85a59ef695262b
 
 nix build .#ctl-server:exe:ctl-server
 ```
