@@ -46,7 +46,6 @@ import Contract.Numeric.Natural (Natural, fromBigInt', toBigInt)
 import Contract.Numeric.Rational (Rational, numerator, denominator)
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray)
 import Contract.ScriptLookups as ScriptLookups
-import Contract.Scripts (PlutusScript)
 import Contract.Time
   ( ChainTip(..)
   , Tip(..)
@@ -63,6 +62,7 @@ import Contract.Transaction
   , submit
   , awaitTxConfirmedWithTimeout
   , plutusV1Script
+  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -72,7 +72,7 @@ import Contract.TxConstraints
   )
 import Contract.TxConstraints as TxConstraints
 import Contract.PlutusData (Datum, DataHash, PlutusData)
-import Contract.Scripts (ValidatorHash)
+import Contract.Scripts (ValidatorHash, PlutusScript)
 import Contract.Utxos (UtxoMap)
 import Contract.Value
   ( CurrencySymbol
@@ -101,8 +101,11 @@ import Data.Array
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
+import Prim.Row (class Lacks)
+import Record (insert, delete)
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
+import Data.Symbol (SProxy(..))
 import Data.Time.Duration (Seconds, Milliseconds(Milliseconds))
 import Data.Unfoldable (unfoldr)
 import Effect.Aff (delay)
@@ -117,6 +120,7 @@ import Types
   )
 import Types.Interval (POSIXTime(POSIXTime))
 import Types.OutputDatum (OutputDatum(OutputDatumHash))
+import Types.ByteArray (byteArrayToHex)
 import Types.Redeemer (Redeemer)
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
@@ -504,10 +508,13 @@ submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
 -- | does or `maxTrials` attempts are completed.
 repeatUntilConfirmed
   :: forall (r :: Row Type) (p :: Row Type)
-   . Seconds
+   . Lacks "txId" p
+  => Lacks "signedTx" p
+  => Seconds
   -> Int
   -> Contract r { signedTx :: BalancedSignedTransaction | p }
-  -> Contract r { signedTx :: BalancedSignedTransaction | p }
+  -> Contract r
+       { txId :: String | p }
 repeatUntilConfirmed timeout maxTrials contract = do
   result@{ signedTx } <- contract
   logInfo' "repeatUntilConfirmed: transaction built successfully"
@@ -531,7 +538,9 @@ repeatUntilConfirmed timeout maxTrials contract = do
     Right _ -> do
       logInfo' "repeatUntilConfirmed: transaction confirmed!"
       logInfo_ "TX Hash" txHash
-      pure result
+      -- pure $ insert { txId: txHash } result
+      pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
+        (delete (SProxy :: SProxy "signedTx") result)
 
 mustPayToScript
   :: forall (i :: Type) (o :: Type)

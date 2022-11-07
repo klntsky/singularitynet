@@ -23,6 +23,7 @@ import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( BalancedSignedTransaction
   , balanceAndSignTx
+  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -60,7 +61,7 @@ import Utils
 createBondedPoolContract
   :: InitialBondedParams
   -> Contract ()
-       { signedTx :: BalancedSignedTransaction
+       { txId :: String
        , bondedPoolParams :: BondedPoolParams
        , address :: Bech32String
        }

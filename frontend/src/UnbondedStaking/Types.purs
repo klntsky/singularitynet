@@ -25,6 +25,7 @@ import Contract.PlutusData
   , genericToData
   , toData
   )
+import Contract.Transaction (TransactionHash)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Value (CurrencySymbol)
 import Data.BigInt (BigInt)
