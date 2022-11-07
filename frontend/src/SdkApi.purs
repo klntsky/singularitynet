@@ -10,6 +10,7 @@ module SdkApi
   , InitialBondedArgs
   , callCloseBondedPool
   , callCreateBondedPool
+  , callGetBondedPools
   , callDepositBondedPool
   , callUserStakeBondedPool
   , callUserWithdrawBondedPool
@@ -57,7 +58,7 @@ import Contract.Value
   )
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
-import CreatePool (createBondedPoolContract)
+import CreatePool (createBondedPoolContract, getBondedPoolsContract)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -292,6 +293,16 @@ callCreateBondedPool cfg iba = Promise.fromAff do
   { bondedPoolParams: bpp, address } <- runContract cfg $
     createBondedPoolContract ibp
   pure $ { args: toBondedPoolArgs bpp, address }
+
+callGetBondedPools
+  :: ConfigParams ()
+  -> String
+  -> InitialBondedArgs
+  -> Effect (Promise (Array BondedPoolArgs))
+callGetBondedPools cfg addrStr iba = Promise.fromAff do
+  ibp <- liftEither $ fromInitialBondedArgs iba
+  bpps <- runContract cfg $ getBondedPoolsContract addrStr ibp
+  pure $ map toBondedPoolArgs bpps
 
 callDepositBondedPool
   :: ConfigParams ()

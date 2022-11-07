@@ -24,80 +24,34 @@ module Utils
   , repeatUntilConfirmed
   , mustPayToScript
   , getUtxoDatumHash
+  , addressFromBech32
   ) where
 
 import Contract.Prelude hiding (length)
 
-import Contract.Address (PaymentPubKeyHash)
+import Contract.Address (Address, Bech32String, PaymentPubKeyHash, getNetworkId)
 import Contract.Hashing (blake2b256Hash)
-import Contract.Monad
-  ( Contract
-  , liftedE
-  , liftedM
-  , tag
-  , throwContractError
-  )
-import Contract.Log
-  ( logInfo
-  , logInfo'
-  , logAesonInfo
-  )
+import Contract.Log (logInfo, logInfo', logAesonInfo)
+import Contract.Monad (Contract, liftContractM, liftedE, liftedM, tag, throwContractError)
 import Contract.Numeric.Natural (Natural, fromBigInt', toBigInt)
 import Contract.Numeric.Rational (Rational, numerator, denominator)
+import Contract.PlutusData (Datum, DataHash, PlutusData)
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript)
-import Contract.Time
-  ( ChainTip(..)
-  , Tip(..)
-  , getEraSummaries
-  , getSystemStart
-  , getTip
-  , slotToPosixTime
-  )
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript(TransactionOutputWithRefScript)
-  , BalancedSignedTransaction
-  , balanceAndSignTx
-  , submit
-  , awaitTxConfirmedWithTimeout
-  , plutusV1Script
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , DatumPresence(DatumWitness)
-  , mustSpendScriptOutput
-  , mustPayToScript
-  )
-import Contract.TxConstraints as TxConstraints
-import Contract.PlutusData (Datum, DataHash, PlutusData)
 import Contract.Scripts (ValidatorHash)
+import Contract.Time (ChainTip(..), Tip(..), getEraSummaries, getSystemStart, getTip, slotToPosixTime)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript(TransactionOutputWithRefScript), BalancedSignedTransaction, balanceAndSignTx, submit, awaitTxConfirmedWithTimeout, plutusV1Script)
+import Contract.TxConstraints (TxConstraints, DatumPresence(DatumWitness), mustSpendScriptOutput, mustPayToScript)
+import Contract.TxConstraints as TxConstraints
 import Contract.Utxos (UtxoMap)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  , Value
-  , flattenNonAdaAssets
-  , getTokenName
-  , valueOf
-  )
+import Contract.Value (CurrencySymbol, TokenName, Value, flattenNonAdaAssets, getTokenName, valueOf)
 import Control.Alternative (guard)
-import Control.Monad.Error.Class (try, liftMaybe)
+import Control.Monad.Error.Class (liftMaybe, throwError, try)
 import Data.Argonaut.Core (Json, caseJsonObject)
 import Data.Argonaut.Decode.Combinators (getField) as Json
 import Data.Argonaut.Decode.Error (JsonDecodeError(TypeMismatch))
-import Data.Array
-  ( filter
-  , head
-  , last
-  , length
-  , partition
-  , mapMaybe
-  , slice
-  , sortBy
-  , (..)
-  )
+import Data.Array (filter, head, last, length, partition, mapMaybe, slice, sortBy, (..))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
@@ -108,13 +62,10 @@ import Data.Unfoldable (unfoldr)
 import Effect.Aff (delay)
 import Effect.Exception (error, throw)
 import Math (ceil)
+import Plutus.Conversion (toPlutusAddress)
+import Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Serialization.Hash (ed25519KeyHashToBytes)
-import Types
-  ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
-  , MintingAction(MintEnd, MintInBetween)
-  )
+import Types (AssetClass(AssetClass), BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams), MintingAction(MintEnd, MintInBetween))
 import Types.Interval (POSIXTime(POSIXTime))
 import Types.OutputDatum (OutputDatum(OutputDatumHash))
 import Types.Redeemer (Redeemer)
@@ -545,3 +496,16 @@ getUtxoDatumHash :: TransactionOutputWithRefScript -> Maybe DataHash
 getUtxoDatumHash = unwrap >>> _.output >>> unwrap >>> _.datum >>> case _ of
   OutputDatumHash dh -> pure dh
   _ -> Nothing
+
+-- Copied from newer CTL revision
+addressFromBech32 :: Bech32String -> Contract () Address
+addressFromBech32 str = do
+  networkId <- getNetworkId
+  cslAddress <- liftContractM "addressFromBech32: unable to read address" $
+    SA.addressFromBech32 str
+  address <-
+    liftContractM "addressFromBech32: unable to convert to plutus address" $
+      toPlutusAddress cslAddress
+  when (networkId /= SA.addressNetworkId cslAddress)
+    (throwError $ error "addressFromBech32: address has wrong NetworkId")
+  pure address

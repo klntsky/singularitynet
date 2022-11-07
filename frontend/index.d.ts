@@ -54,6 +54,12 @@ export declare function createBondedPool(
   initialArgs: InitialBondedArgs
 ): Promise<BondedPool>;
 
+export declare function getBondedPools(
+  config: SdkConfig,
+  address: string,
+  initialArgs: InitialBondedArgs
+): Promise<Array<BondedPool>>;
+
 export type BondedPoolArgs = {
   iterations: BigInteger; // Natural
   start: BigInteger; // like POSIXTime so positive

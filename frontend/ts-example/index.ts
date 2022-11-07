@@ -52,12 +52,24 @@ const main = async () => {
     },
   };
 
-  const bondedPool: BondedPool = await singularitynet.createBondedPool(
+  let bondedPool: BondedPool = await singularitynet.createBondedPool(
     localHostSdkConfig,
     initialBondedArgs
   );
   const bondedPoolArgs: BondedPoolArgs = bondedPool.args;
   await logSwitchAndCountdown(user, "pool start", bondedPoolArgs.start);
+
+  // We try recreate the pool just from its address and initial bonded args
+  const bondedPoolsArray: Array<BondedPool> = await singularitynet.getBondedPools(
+    localHostSdkConfig,
+    bondedPool.address,
+    initialBondedArgs
+  );
+
+  // We get the first pool of the list (which should be the only one)
+  // and we use it instead of the first object.
+  const bondedPoolCopy = bondedPoolsArray[0];
+  bondedPool = bondedPoolCopy;
 
   // User stakes, waiting for pool start
   const userStakeAmt = BigInteger(40000);
@@ -91,27 +103,27 @@ const main = async () => {
 };
 
 const localHostSdkConfig: SdkConfig = {
-  ctlServerConfig: {
-    host: "localhost",
-    port: 8081,
-    secure: false,
-    path: "",
-  },
   ogmiosConfig: {
-    host: "localhost",
-    port: 1337,
-    secure: false,
-    path: "",
-  },
-  datumCacheConfig: {
-    host: "localhost",
-    port: 9999,
-    secure: false,
-    path: "",
-  },
-  networkId: 0,
-  logLevel: "Info",
-  walletSpec: "Lode",
+        port: 1337 
+      , host: "35.175.138.251" 
+      , secure: false 
+      , path: ""
+  } 
+  , datumCacheConfig: {
+        port: 9999 
+      , host: "35.175.138.251" 
+      , secure: false 
+      , path: ""
+      } 
+  , ctlServerConfig: {
+        port: 8081 
+      , host: "35.175.138.251" 
+      , secure: false
+      , path: ""
+  }
+  , networkId: 0
+  , logLevel: "Info"
+  , walletSpec: "Eternl"
 };
 
 // Helpers
