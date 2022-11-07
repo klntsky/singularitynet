@@ -22,6 +22,7 @@ import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( BalancedSignedTransaction
+  , TransactionHash
   , balanceAndSignTx
   )
 import Contract.TxConstraints
@@ -62,7 +63,7 @@ import Utils
 createUnbondedPoolContract
   :: InitialUnbondedParams
   -> Contract ()
-       { signedTx :: BalancedSignedTransaction
+       { txId :: String
        , unbondedPoolParams :: UnbondedPoolParams
        , address :: Bech32String
        }

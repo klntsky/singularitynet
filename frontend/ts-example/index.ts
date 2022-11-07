@@ -4,14 +4,16 @@
 import {
   SdkConfig,
   BondedPool,
-  InitialBondedArgs,
+  InitialUnbondedArgs,
   BondedPoolArgs,
+  UnbondedPool,
+  UnbondedPoolArgs,
 } from "singularitynet";
 
 const singularitynet = require("singularitynet");
 // We need to use `big-integer` directly instead of the `BigInt` constructor
 // as this package defines some methods that are required by the PS code
-const BigInteger = require("big-integer");
+import BigInteger = require("big-integer");
 
 // Runs all of the operations defined for a `BondedPool` and simulates the
 // entire pool lifecycle
@@ -36,82 +38,85 @@ const main = async () => {
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
-  const initialBondedArgs: InitialBondedArgs = {
-    iterations: BigInteger(1),
+  const initialBondedArgs: InitialUnbondedArgs = {
     start: nodeTime.add(delay),
-    end: nodeTime.add(delay).add(BigInteger(2).multiply(periodLength)).add(periodLength),
     userLength: periodLength,
     bondingLength: periodLength,
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
-    bondedAssetClass: {
+    adminLength: BigInteger(5000),
+    interestLength: BigInteger(5),
+    increments: BigInteger(1),
+    unbondedAssetClass: {
       currencySymbol:
         "6f1a1f0c7ccf632cc9ff4b79687ed13ffe5b624cce288b364ebdce50",
       tokenName: "AGIX",
     },
   };
 
-  const bondedPool: BondedPool = await singularitynet.createBondedPool(
+  const unbondedPool: UnbondedPool = await singularitynet.createUnbondedPool(
     localHostSdkConfig,
     initialBondedArgs
   );
-  const bondedPoolArgs: BondedPoolArgs = bondedPool.args;
-  await logSwitchAndCountdown(user, "pool start", bondedPoolArgs.start);
+  const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
+  console.log(JSON.stringify(unbondedPool))
+  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
 
   // User stakes, waiting for pool start
   const userStakeAmt = BigInteger(40000);
-  await bondedPool.userStake(userStakeAmt);
+  const r = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r))
   await logSwitchAndCountdown(
     admin,
     "bonding period",
-    bondedPoolArgs.start + bondedPoolArgs.userLength
+    unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
 
   // Admin deposits to pool
   const depositBatchSize = BigInteger(1);
-  await bondedPool.deposit(depositBatchSize, []);
+  await unbondedPool.deposit(depositBatchSize, []);
   await logSwitchAndCountdown(
     user,
     "withdrawing  period",
-    bondedPoolArgs.start +
-      bondedPoolArgs.userLength +
-      bondedPoolArgs.bondingLength
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.bondingLength)
   );
 
   // User withdraws
-  await bondedPool.userWithdraw();
-  await logSwitchAndCountdown(admin, "closing period", bondedPoolArgs.end);
+  await unbondedPool.userWithdraw();
+  //await logSwitchAndCountdown(admin, "closing period";
 
   // Admin closes pool
   const closeBatchSize = BigInteger(10);
-  await bondedPool.close(closeBatchSize, []);
+  await unbondedPool.close(closeBatchSize, []);
 
   console.log("Pool closed");
 };
 
 const localHostSdkConfig: SdkConfig = {
   ctlServerConfig: {
-    host: "localhost",
+    host: "35.175.138.251",
     port: 8081,
     secure: false,
     path: "",
   },
   ogmiosConfig: {
-    host: "localhost",
+    host: "35.175.138.251",
     port: 1337,
     secure: false,
     path: "",
   },
   datumCacheConfig: {
-    host: "localhost",
+    host: "35.175.138.251",
     port: 9999,
     secure: false,
     path: "",
   },
   networkId: 0,
   logLevel: "Info",
-  walletSpec: "Lode",
+  walletSpec: "Eternl",
 };
 
 // Helpers

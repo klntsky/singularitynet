@@ -35,6 +35,8 @@ import Contract.Transaction
   ( TransactionInput
   , TransactionOutputWithRefScript
   , balanceAndSignTx
+  , TransactionHash
+  , BalancedSignedTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -85,7 +87,10 @@ import Utils
   )
 
 -- Deposits a certain amount in the pool
-userWithdrawUnbondedPoolContract :: UnbondedPoolParams -> Contract () Unit
+userWithdrawUnbondedPoolContract
+  :: UnbondedPoolParams
+  -> Contract ()
+       { txId :: String }
 userWithdrawUnbondedPoolContract
   params@
     ( UnbondedPoolParams
@@ -93,7 +98,7 @@ userWithdrawUnbondedPoolContract
         , nftCs
         , assocListCs
         }
-    ) = void $ repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
+    ) = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
   ---- FETCH BASIC INFORMATION ----
   -- Get network ID
   networkId <- getNetworkId

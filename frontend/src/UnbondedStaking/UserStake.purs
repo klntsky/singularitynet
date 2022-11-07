@@ -28,7 +28,11 @@ import Contract.PlutusData
   )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (balanceAndSignTx)
+import Contract.Transaction
+  ( balanceAndSignTx
+  , TransactionHash
+  , BalancedSignedTransaction
+  )
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -74,7 +78,10 @@ import Utils
 
 -- Deposits a certain amount in the pool
 userStakeUnbondedPoolContract
-  :: UnbondedPoolParams -> Natural -> Contract () Unit
+  :: UnbondedPoolParams
+  -> Natural
+  -> Contract ()
+       { txId :: String }
 userStakeUnbondedPoolContract
   params@
     ( UnbondedPoolParams
@@ -85,7 +92,7 @@ userStakeUnbondedPoolContract
         , assocListCs
         }
     )
-  amt = void $ repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
+  amt = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
   -- Fetch information related to the pool
   -- Get network ID
   networkId <- getNetworkId

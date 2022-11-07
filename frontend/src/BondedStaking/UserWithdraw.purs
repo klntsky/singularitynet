@@ -38,6 +38,7 @@ import Contract.Transaction
   , TransactionOutputWithRefScript
   , BalancedSignedTransaction
   , balanceAndSignTx
+  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -87,7 +88,9 @@ import Utils
 
 -- Deposits a certain amount in the pool
 userWithdrawBondedPoolContract
-  :: BondedPoolParams -> Contract () { signedTx :: BalancedSignedTransaction }
+  :: BondedPoolParams
+  -> Contract ()
+       { txId :: String }
 userWithdrawBondedPoolContract
   params@
     ( BondedPoolParams

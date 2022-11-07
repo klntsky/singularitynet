@@ -35,6 +35,7 @@ import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( BalancedSignedTransaction
   , balanceAndSignTx
+  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -80,7 +81,8 @@ import Utils
 userStakeBondedPoolContract
   :: BondedPoolParams
   -> Natural
-  -> Contract () { signedTx :: BalancedSignedTransaction }
+  -> Contract ()
+       { txId :: String }
 userStakeBondedPoolContract
   params@
     ( BondedPoolParams
