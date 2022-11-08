@@ -74,19 +74,10 @@ createUnbondedPoolContract iup =
     tokenName <-
       liftContractM "createUnbondedPoolContract: Cannot create TokenName"
         unbondedStakingTokenName
-    -- We get the current time and set up the pool to start immediately
-    POSIXTime currTime <- currentRoundedTime
-    let
-      iup' = unwrap iup
-
-      iupWithTime :: InitialUnbondedParams
-      iupWithTime = InitialUnbondedParams $ iup'
-        { start = currTime
-        }
     -- We define the parameters of the pool
     let
       unbondedPoolParams = mkUnbondedPoolParams adminPkh stateNftCs assocListCs
-        iupWithTime
+        iup
     -- Get the bonding validator and hash
     validator <- liftedE' "createUnbondedPoolContract: Cannot create validator"
       $ mkUnbondedPoolValidator unbondedPoolParams

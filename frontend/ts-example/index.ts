@@ -63,15 +63,21 @@ const main = async () => {
   console.log(JSON.stringify(unbondedPool))
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
 
-  // We try to recreate the pool just from its address and initial bonded args
+  // We try to recreate the pool just from its address and initial bonded args.
+  // This is just for testing the pool query functionality.
+  //
+  // Note that more than one pool may be found at a given address, since it's
+  // possible to create many pools with the same `InitialBondedArgs`. But this
+  // is unlikely if the `start` parameter is different for every pool.
   const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
     localHostSdkConfig,
     unbondedPool.address,
     initialUnbondedArgs
   );
 
-  //// We get the first pool of the list (which should be the only one)
-  //// and we use it instead of the first object.
+  // We get the first pool of the list (which should be the only one)
+  // and we use it instead of the first object. This should not make a
+  // difference, the objects are identical.
   const unbondedPoolCopy = unbondedPoolsArray[0];
   unbondedPool = unbondedPoolCopy;
 
