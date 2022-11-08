@@ -9,8 +9,8 @@ export declare class Pool<T> {
 
   deposit(amount: BigInteger, idxArray: int[]): Promise<int[]>;
   close(amount: BigInteger, idxArray: int[]): Promise<int[]>;
-  userStake(amount: BigInteger): Promise<void>;
-  userWithdraw(): Promise<void>;
+  userStake(amount: BigInteger): Promise<any>;
+  userWithdraw(): Promise<any>;
 }
 
 export type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";

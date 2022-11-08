@@ -44,6 +44,33 @@ import Contract.Time (ChainTip(..), Tip(..), getEraSummaries, getSystemStart, ge
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript(TransactionOutputWithRefScript), BalancedSignedTransaction, balanceAndSignTx, submit, awaitTxConfirmedWithTimeout, plutusV1Script)
 import Contract.TxConstraints (TxConstraints, DatumPresence(DatumWitness), mustSpendScriptOutput, mustPayToScript)
 import Contract.TxConstraints as TxConstraints
+import Contract.Time
+  ( ChainTip(..)
+  , Tip(..)
+  , getEraSummaries
+  , getSystemStart
+  , getTip
+  , slotToPosixTime
+  )
+import Contract.Transaction
+  ( TransactionInput
+  , TransactionOutputWithRefScript(TransactionOutputWithRefScript)
+  , BalancedSignedTransaction
+  , balanceAndSignTx
+  , submit
+  , awaitTxConfirmedWithTimeout
+  , plutusV1Script
+  , TransactionHash
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , DatumPresence(DatumWitness)
+  , mustSpendScriptOutput
+  , mustPayToScript
+  )
+import Contract.TxConstraints as TxConstraints
+import Contract.PlutusData (Datum, DataHash, PlutusData)
+import Contract.Scripts (ValidatorHash, PlutusScript)
 import Contract.Utxos (UtxoMap)
 import Contract.Value (CurrencySymbol, TokenName, Value, flattenNonAdaAssets, getTokenName, valueOf)
 import Control.Alternative (guard)
@@ -55,8 +82,11 @@ import Data.Array (filter, head, last, length, partition, mapMaybe, slice, sortB
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
+import Prim.Row (class Lacks)
+import Record (insert, delete)
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
+import Data.Symbol (SProxy(..))
 import Data.Time.Duration (Seconds, Milliseconds(Milliseconds))
 import Data.Unfoldable (unfoldr)
 import Effect.Aff (delay)
@@ -68,6 +98,7 @@ import Serialization.Hash (ed25519KeyHashToBytes)
 import Types (AssetClass(AssetClass), BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams), MintingAction(MintEnd, MintInBetween))
 import Types.Interval (POSIXTime(POSIXTime))
 import Types.OutputDatum (OutputDatum(OutputDatumHash))
+import Types.ByteArray (byteArrayToHex)
 import Types.Redeemer (Redeemer)
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
@@ -455,10 +486,13 @@ submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
 -- | does or `maxTrials` attempts are completed.
 repeatUntilConfirmed
   :: forall (r :: Row Type) (p :: Row Type)
-   . Seconds
+   . Lacks "txId" p
+  => Lacks "signedTx" p
+  => Seconds
   -> Int
   -> Contract r { signedTx :: BalancedSignedTransaction | p }
-  -> Contract r { signedTx :: BalancedSignedTransaction | p }
+  -> Contract r
+       { txId :: String | p }
 repeatUntilConfirmed timeout maxTrials contract = do
   result@{ signedTx } <- contract
   logInfo' "repeatUntilConfirmed: transaction built successfully"
@@ -482,7 +516,9 @@ repeatUntilConfirmed timeout maxTrials contract = do
     Right _ -> do
       logInfo' "repeatUntilConfirmed: transaction confirmed!"
       logInfo_ "TX Hash" txHash
-      pure result
+      -- pure $ insert { txId: txHash } result
+      pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
+        (delete (SProxy :: SProxy "signedTx") result)
 
 mustPayToScript
   :: forall (i :: Type) (o :: Type)

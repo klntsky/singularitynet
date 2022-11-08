@@ -28,7 +28,7 @@ import Utils (addressFromBech32, logInfo_, mkBondedPoolParams, mustPayToScript, 
 createBondedPoolContract
   :: InitialBondedParams
   -> Contract ()
-       { signedTx :: BalancedSignedTransaction
+       { txId :: String
        , bondedPoolParams :: BondedPoolParams
        , address :: Bech32String
        }

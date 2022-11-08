@@ -169,12 +169,12 @@ buildContractConfig cfg = Promise.fromAff $ do
   errorWithContext msg = error $ "buildContractConfig: " <> msg
 
 callWithArgs
-  :: forall (a :: Type) (b :: Type)
+  :: forall (a :: Type) (b :: Type) (c :: Type)
    . (a -> Either Error b)
-  -> (b -> Contract () Unit)
+  -> (b -> Contract () c)
   -> ConfigParams ()
   -> a
-  -> Effect (Promise Unit)
+  -> Effect (Promise c)
 callWithArgs f contract cfg args = Promise.fromAff
   $ runContract cfg
   <<< contract
@@ -287,12 +287,13 @@ type InitialBondedArgs =
 callCreateBondedPool
   :: ConfigParams ()
   -> InitialBondedArgs
-  -> Effect (Promise { args :: BondedPoolArgs, address :: String })
+  -> Effect
+       (Promise { args :: BondedPoolArgs, address :: String, txId :: String })
 callCreateBondedPool cfg iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialBondedArgs iba
-  { bondedPoolParams: bpp, address } <- runContract cfg $
+  { bondedPoolParams: bpp, address, txId } <- runContract cfg $
     createBondedPoolContract ibp
-  pure $ { args: toBondedPoolArgs bpp, address }
+  pure $ { args: toBondedPoolArgs bpp, address, txId }
 
 callGetBondedPools
   :: ConfigParams ()
@@ -329,24 +330,28 @@ callCloseBondedPool cfg bpa bi arr = Promise.fromAff $ runContract cfg do
   closeBondedPoolContract upp nat arr
 
 callUserStakeBondedPool
-  :: ConfigParams () -> BondedPoolArgs -> BigInt -> Effect (Promise Unit)
+  :: ConfigParams ()
+  -> BondedPoolArgs
+  -> BigInt
+  -> Effect (Promise { txId :: String })
 callUserStakeBondedPool cfg bpa bi = Promise.fromAff $ runContract cfg do
   bpp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callUserStakeBondedPool: Invalid natural number")
     $ fromBigInt bi
-  _ <- userStakeBondedPoolContract bpp nat
-  pure unit
+  userStakeBondedPoolContract bpp nat
+
+-- pure unit
 
 callUserWithdrawBondedPool
-  :: ConfigParams () -> BondedPoolArgs -> Effect (Promise Unit)
+  :: ConfigParams () -> BondedPoolArgs -> Effect (Promise { txId :: String })
 callUserWithdrawBondedPool =
-  callWithBondedPoolArgs $ (pure unit <* _) <<< userWithdrawBondedPoolContract
+  callWithBondedPoolArgs userWithdrawBondedPoolContract
 
 callWithBondedPoolArgs
-  :: (BondedPoolParams -> Contract () Unit)
+  :: (BondedPoolParams -> Contract () { txId :: String })
   -> ConfigParams ()
   -> BondedPoolArgs
-  -> Effect (Promise Unit)
+  -> Effect (Promise { txId :: String })
 callWithBondedPoolArgs contract cfg = callWithArgs fromBondedPoolArgs contract
   cfg
 
@@ -457,13 +462,14 @@ type InitialUnbondedArgs =
 callCreateUnbondedPool
   :: ConfigParams ()
   -> InitialUnbondedArgs
-  -> Effect (Promise { args :: UnbondedPoolArgs, address :: String })
+  -> Effect
+       (Promise { args :: UnbondedPoolArgs, address :: String, txId :: String })
 callCreateUnbondedPool cfg iba = Promise.fromAff do
   iup <- liftEither $ fromInitialUnbondedArgs iba
-  { unbondedPoolParams: upp, address } <- runContract cfg $
+  { unbondedPoolParams: upp, address, txId } <- runContract cfg $
     createUnbondedPoolContract
       iup
-  pure $ { args: toUnbondedPoolArgs upp, address }
+  pure $ { args: toUnbondedPoolArgs upp, address, txId }
 
 callDepositUnbondedPool
   :: ConfigParams ()
@@ -490,7 +496,13 @@ callCloseUnbondedPool cfg upa bi arr = Promise.fromAff $ runContract cfg do
   closeUnbondedPoolContract upp nat arr
 
 callUserStakeUnbondedPool
-  :: ConfigParams () -> UnbondedPoolArgs -> BigInt -> Effect (Promise Unit)
+  :: ConfigParams ()
+  -> UnbondedPoolArgs
+  -> BigInt
+  -> Effect
+       ( Promise
+           { txId :: String }
+       )
 callUserStakeUnbondedPool cfg upa bi = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callUserStakeUnbondedPool: Invalid natural number")
@@ -498,15 +510,26 @@ callUserStakeUnbondedPool cfg upa bi = Promise.fromAff $ runContract cfg do
   userStakeUnbondedPoolContract upp nat
 
 callUserWithdrawUnbondedPool
-  :: ConfigParams () -> UnbondedPoolArgs -> Effect (Promise Unit)
+  :: ConfigParams ()
+  -> UnbondedPoolArgs
+  -> Effect
+       ( Promise
+           { txId :: String }
+       )
 callUserWithdrawUnbondedPool =
   callWithUnbondedPoolArgs userWithdrawUnbondedPoolContract
 
 callWithUnbondedPoolArgs
-  :: (UnbondedPoolParams -> Contract () Unit)
+  :: ( UnbondedPoolParams
+       -> Contract ()
+            { txId :: String }
+     )
   -> ConfigParams ()
   -> UnbondedPoolArgs
-  -> Effect (Promise Unit)
+  -> Effect
+       ( Promise
+           { txId :: String }
+       )
 callWithUnbondedPoolArgs contract cfg = callWithArgs fromUnbondedPoolArgs
   contract
   cfg
