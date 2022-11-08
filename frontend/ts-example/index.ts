@@ -38,7 +38,7 @@ const main = async () => {
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
-  const initialBondedArgs: InitialUnbondedArgs = {
+  const initialUnbondedArgs: InitialUnbondedArgs = {
     start: nodeTime.add(delay),
     userLength: periodLength,
     bondingLength: periodLength,
@@ -55,26 +55,25 @@ const main = async () => {
     },
   };
 
-  const unbondedPool: UnbondedPool = await singularitynet.createUnbondedPool(
+  let unbondedPool: UnbondedPool = await singularitynet.createUnbondedPool(
     localHostSdkConfig,
-    initialBondedArgs
+    initialUnbondedArgs
   );
   const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
   console.log(JSON.stringify(unbondedPool))
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
 
-  // FIXME: Replace with code for recreating unbonded pool
-  // We try recreate the pool just from its address and initial bonded args
-  //const bondedPoolsArray: Array<BondedPool> = await singularitynet.getBondedPools(
-  //  localHostSdkConfig,
-  //  bondedPool.address,
-  //  initialBondedArgs
-  //);
+  // We try to recreate the pool just from its address and initial bonded args
+  const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
+    localHostSdkConfig,
+    unbondedPool.address,
+    initialUnbondedArgs
+  );
 
   //// We get the first pool of the list (which should be the only one)
   //// and we use it instead of the first object.
-  //const bondedPoolCopy = bondedPoolsArray[0];
-  //bondedPool = bondedPoolCopy;
+  const unbondedPoolCopy = unbondedPoolsArray[0];
+  unbondedPool = unbondedPoolCopy;
 
   // User stakes, waiting for pool start
   const userStakeAmt = BigInteger(40000);

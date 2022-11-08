@@ -113,6 +113,17 @@ exports.createUnbondedPool = async (sdkConfig, initialArgs) => {
   return new exports.UnbondedPool(sdkConfig, info.args, info.address);
 };
 
+exports.getUnbondedPools = async (sdkConfig, address, initialArgs) => {
+  const contracts = await frontend;
+  const config = await contracts.buildContractConfig(sdkConfig)();
+  const poolsUnbondedParams = await contracts.callGetUnbondedPools(config)(address)(initialArgs)();
+  let pools = [];
+  for (const unbondedParams of poolsUnbondedParams) {
+      pools.push(new exports.UnbondedPool(sdkConfig, unbondedParams, address));
+  }
+  return pools;
+};
+
 exports.getNodeTime = async (sdkConfig) => {
   const contracts = await frontend;
   const config = await contracts.buildContractConfig(sdkConfig)();

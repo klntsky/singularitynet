@@ -19,6 +19,7 @@ module SdkApi
   , InitialUnbondedArgs
   , callCloseUnbondedPool
   , callCreateUnbondedPool
+  , callGetUnbondedPools
   , callDepositUnbondedPool
   , callUserStakeUnbondedPool
   , callUserWithdrawUnbondedPool
@@ -28,34 +29,13 @@ import Contract.Prelude
 
 import ClosePool (closeBondedPoolContract)
 import Contract.Address (PaymentPubKeyHash)
-import Contract.Config
-  ( ConfigParams
-  , WalletSpec
-      ( ConnectToNami
-      , ConnectToGero
-      , ConnectToFlint
-      , ConnectToLode
-      , ConnectToEternl
-      )
-  )
+import Contract.Config (ConfigParams, WalletSpec(ConnectToNami, ConnectToGero, ConnectToFlint, ConnectToLode, ConnectToEternl))
 import Contract.Monad (Contract, runContract)
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
 import Contract.Numeric.Natural (Natural, fromBigInt, toBigInt)
 import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.Prim.ByteArray
-  ( byteArrayFromAscii
-  , byteArrayToHex
-  , byteArrayToIntArray
-  , hexToByteArray
-  )
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  , getCurrencySymbol
-  , getTokenName
-  , mkCurrencySymbol
-  , mkTokenName
-  )
+import Contract.Prim.ByteArray (byteArrayFromAscii, byteArrayToHex, byteArrayToIntArray, hexToByteArray)
+import Contract.Value (CurrencySymbol, TokenName, getCurrencySymbol, getTokenName, mkCurrencySymbol, mkTokenName)
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
 import CreatePool (createBondedPoolContract, getBondedPoolsContract)
@@ -72,19 +52,12 @@ import Effect.Exception (Error)
 import Partial.Unsafe (unsafePartial)
 import Serialization.Address (intToNetworkId)
 import Serialization.Hash (ed25519KeyHashFromBytes, ed25519KeyHashToBytes)
-import Types
-  ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams
-  )
+import Types (AssetClass(AssetClass), BondedPoolParams(BondedPoolParams), InitialBondedParams)
 import Types.RawBytes (hexToRawBytes, rawBytesToHex)
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
-import UnbondedStaking.CreatePool (createUnbondedPoolContract)
+import UnbondedStaking.CreatePool (createUnbondedPoolContract, getUnbondedPoolsContract)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
-import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
-  , InitialUnbondedParams
-  )
+import UnbondedStaking.Types (UnbondedPoolParams(UnbondedPoolParams), InitialUnbondedParams)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 import UserStake (userStakeBondedPoolContract)
@@ -470,6 +443,16 @@ callCreateUnbondedPool cfg iba = Promise.fromAff do
     createUnbondedPoolContract
       iup
   pure $ { args: toUnbondedPoolArgs upp, address, txId }
+
+callGetUnbondedPools
+  :: ConfigParams ()
+  -> String
+  -> InitialUnbondedArgs
+  -> Effect (Promise (Array UnbondedPoolArgs))
+callGetUnbondedPools cfg addrStr iba = Promise.fromAff do
+  ibp <- liftEither $ fromInitialUnbondedArgs iba
+  ubpps <- runContract cfg $ getUnbondedPoolsContract addrStr ibp
+  pure $ map toUnbondedPoolArgs ubpps
 
 callDepositUnbondedPool
   :: ConfigParams ()

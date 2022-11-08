@@ -96,6 +96,12 @@ export declare function createUnbondedPool(
   initialArgs: InitialUnbondedArgs
 ): Promise<UnbondedPool>;
 
+export declare function getUnbondedPools(
+  config: SdkConfig,
+  address: string,
+  initialArgs: InitialUnbondedArgs
+): Promise<Array<UnbondedPool>>;
+
 export type UnbondedPoolArgs = {
   start: BigInteger; // like POSIXTime so positive
   userLength: BigInteger; // like POSIXTime so positive
