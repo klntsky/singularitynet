@@ -205,12 +205,11 @@ getBondedPoolsContract addrStr ibp = do
   symbols <- traverse addListTokenCs
     $ Array.mapMaybe (getStateTokenCs <<< getValue)
     $ Array.fromFoldable poolUtxos
-  if Array.length symbols > 1 then logWarn'
-    "(getBondedPoolsContract) More than one pool with the given \n\
-    \address"
-  else pure unit
+  when (Array.length symbols > 1) $
+    logWarn'
+      "(getBondedPoolsContract) More than one pool with the given address"
   -- For each symbol, we create the bonded params and we returh all of them
-  adminPkh <- liftedM "createBondedPoolContract: Cannot get admin's pkh"
+  adminPkh <- liftedM "(getBondedPoolsContract) Cannot get admin's pkh"
     ownPaymentPubKeyHash
   pure $ map
     (\(stateCs /\ listCs) -> mkBondedPoolParams adminPkh stateCs listCs ibp)
