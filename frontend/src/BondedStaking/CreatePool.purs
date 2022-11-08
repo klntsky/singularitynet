@@ -1,4 +1,4 @@
-module CreatePool (createBondedPoolContract) where
+module CreatePool (createBondedPoolContract, getBondedPoolsContract) where
 
 import Contract.Prelude
 
@@ -9,21 +9,24 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
+import Contract.Log (logAesonInfo, logWarn')
+import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
+import Contract.PlutusData
+  ( DataHash(..)
+  , Datum(Datum)
+  , OutputDatum(..)
+  , PlutusData
+  , datumHash
+  , fromData
+  , getDatumsByHashes
+  , toData
   )
-import Contract.Log (logAesonInfo)
-import Contract.PlutusData (PlutusData, Datum(Datum), toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( BalancedSignedTransaction
+  , TransactionOutputWithRefScript(..)
   , balanceAndSignTx
-  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -31,10 +34,17 @@ import Contract.TxConstraints
   , mustSpendPubKeyOutput
   )
 import Contract.Utxos (utxosAt)
-import Contract.Value (scriptCurrencySymbol, singleton)
-import Data.Array (head)
+import Contract.Value
+  ( CurrencySymbol
+  , Value
+  , flattenValue
+  , scriptCurrencySymbol
+  , singleton
+  )
+import Control.Monad.Error.Class (liftMaybe)
+import Data.Array as Array
 import Data.Map (toUnfoldable)
-import Plutus.Conversion (fromPlutusAddress)
+import Effect.Exception as Exception
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
@@ -50,10 +60,11 @@ import Types
   , StakingType(Bonded)
   )
 import Utils
-  ( logInfo_
+  ( addressFromBech32
+  , logInfo_
   , mkBondedPoolParams
-  , repeatUntilConfirmed
   , mustPayToScript
+  , repeatUntilConfirmed
   )
 
 -- Sets up pool configuration, mints the state NFT and deposits
@@ -83,7 +94,7 @@ createBondedPoolContract ibp =
       txOutRef <-
         liftContractM "createBondedPoolContract: Could not get head UTXO"
           $ fst
-          <$> (head $ toUnfoldable adminUtxos)
+          <$> (Array.head $ toUnfoldable adminUtxos)
       logInfo_ "createBondedPoolContract: Admin Utxos" adminUtxos
       -- Get the minting policy and currency symbol from the state NFT:
       statePolicy <- liftedE $ mkStateNFTPolicy Bonded txOutRef
@@ -151,3 +162,58 @@ createBondedPoolContract ibp =
           $ balanceAndSignTx unattachedUnbalancedTx
       -- Return the transaction and the pool info for subsequent transactions
       pure { signedTx, bondedPoolParams, address }
+
+-- Get all the pools at the given address. Although more than one could be
+-- returned, in all likelihood the user intended (and managed) to create only
+-- one. This is because most pools will have unique start times.
+getBondedPoolsContract
+  :: String
+  -> InitialBondedParams
+  -> Contract () (Array BondedPoolParams)
+getBondedPoolsContract addrStr ibp = do
+  -- Get all UTxOs locked in the protocol's address
+  poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool UTxOs"
+    $ utxosAt
+    =<< addressFromBech32 addrStr
+  logInfo_ "(getBondedPoolContract) UTxOs at pool address: " (show poolUtxos)
+  -- For each pool, we obtain its state NFT and assoc list CS (it should be
+  -- the only token with name 'BondedStakingToken')
+  stateTokenTn <-
+    liftMaybe
+      ( Exception.error
+          "(getBondedPoolsContract) Could not get bonded staking token name"
+      )
+      bondedStakingTokenName
+  let
+    getStateTokenCs :: Value -> Maybe CurrencySymbol
+    getStateTokenCs =
+      Array.head
+        <<< map fst
+        <<< Array.filter ((_ == stateTokenTn) <<< fst <<< snd)
+        <<< flattenValue
+
+    addListTokenCs
+      :: CurrencySymbol -> Contract () (CurrencySymbol /\ CurrencySymbol)
+    addListTokenCs stateNftCs = do
+      listPolicy <- liftedE (mkListNFTPolicy Bonded stateNftCs)
+      listNftCs <-
+        liftMaybe
+          (Exception.error "Could not obtain currency symbol from list policy")
+          $
+            scriptCurrencySymbol listPolicy
+      pure $ stateNftCs /\ listNftCs
+  symbols <- traverse addListTokenCs
+    $ Array.mapMaybe (getStateTokenCs <<< getValue)
+    $ Array.fromFoldable poolUtxos
+  when (Array.length symbols > 1) $
+    logWarn'
+      "(getBondedPoolsContract) More than one pool with the given address"
+  -- For each symbol, we create the bonded params and we returh all of them
+  adminPkh <- liftedM "(getBondedPoolsContract) Cannot get admin's pkh"
+    ownPaymentPubKeyHash
+  pure $ map
+    (\(stateCs /\ listCs) -> mkBondedPoolParams adminPkh stateCs listCs ibp)
+    symbols
+  where
+  getValue :: TransactionOutputWithRefScript -> Value
+  getValue = _.amount <<< unwrap <<< _.output <<< unwrap

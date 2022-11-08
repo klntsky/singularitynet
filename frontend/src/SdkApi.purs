@@ -10,6 +10,7 @@ module SdkApi
   , InitialBondedArgs
   , callCloseBondedPool
   , callCreateBondedPool
+  , callGetBondedPools
   , callDepositBondedPool
   , callUserStakeBondedPool
   , callUserWithdrawBondedPool
@@ -18,6 +19,7 @@ module SdkApi
   , InitialUnbondedArgs
   , callCloseUnbondedPool
   , callCreateUnbondedPool
+  , callGetUnbondedPools
   , callDepositUnbondedPool
   , callUserStakeUnbondedPool
   , callUserWithdrawUnbondedPool
@@ -57,7 +59,7 @@ import Contract.Value
   )
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
-import CreatePool (createBondedPoolContract)
+import CreatePool (createBondedPoolContract, getBondedPoolsContract)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -78,7 +80,10 @@ import Types
   )
 import Types.RawBytes (hexToRawBytes, rawBytesToHex)
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
-import UnbondedStaking.CreatePool (createUnbondedPoolContract)
+import UnbondedStaking.CreatePool
+  ( createUnbondedPoolContract
+  , getUnbondedPoolsContract
+  )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
@@ -294,6 +299,16 @@ callCreateBondedPool cfg iba = Promise.fromAff do
     createBondedPoolContract ibp
   pure $ { args: toBondedPoolArgs bpp, address, txId }
 
+callGetBondedPools
+  :: ConfigParams ()
+  -> String
+  -> InitialBondedArgs
+  -> Effect (Promise (Array BondedPoolArgs))
+callGetBondedPools cfg addrStr iba = Promise.fromAff do
+  ibp <- liftEither $ fromInitialBondedArgs iba
+  bpps <- runContract cfg $ getBondedPoolsContract addrStr ibp
+  pure $ map toBondedPoolArgs bpps
+
 callDepositBondedPool
   :: ConfigParams ()
   -> BondedPoolArgs
@@ -459,6 +474,16 @@ callCreateUnbondedPool cfg iba = Promise.fromAff do
     createUnbondedPoolContract
       iup
   pure $ { args: toUnbondedPoolArgs upp, address, txId }
+
+callGetUnbondedPools
+  :: ConfigParams ()
+  -> String
+  -> InitialUnbondedArgs
+  -> Effect (Promise (Array UnbondedPoolArgs))
+callGetUnbondedPools cfg addrStr iba = Promise.fromAff do
+  ibp <- liftEither $ fromInitialUnbondedArgs iba
+  ubpps <- runContract cfg $ getUnbondedPoolsContract addrStr ibp
+  pure $ map toUnbondedPoolArgs ubpps
 
 callDepositUnbondedPool
   :: ConfigParams ()

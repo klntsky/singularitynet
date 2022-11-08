@@ -95,11 +95,33 @@ exports.createBondedPool = async (sdkConfig, initialArgs) => {
   return new exports.BondedPool(sdkConfig, info.args, info.address);
 };
 
+exports.getBondedPools = async (sdkConfig, address, initialArgs) => {
+  const contracts = await frontend;
+  const config = await contracts.buildContractConfig(sdkConfig)();
+  const poolsBondedParams = await contracts.callGetBondedPools(config)(address)(initialArgs)();
+  let pools = [];
+  for (const bondedParams of poolsBondedParams) {
+      pools.push(new exports.BondedPool(sdkConfig, bondedParams, address));
+  }
+  return pools;
+};
+
 exports.createUnbondedPool = async (sdkConfig, initialArgs) => {
   const contracts = await frontend;
   const config = await contracts.buildContractConfig(sdkConfig)();
   const info = await contracts.callCreateUnbondedPool(config)(initialArgs)();
   return new exports.UnbondedPool(sdkConfig, info.args, info.address);
+};
+
+exports.getUnbondedPools = async (sdkConfig, address, initialArgs) => {
+  const contracts = await frontend;
+  const config = await contracts.buildContractConfig(sdkConfig)();
+  const poolsUnbondedParams = await contracts.callGetUnbondedPools(config)(address)(initialArgs)();
+  let pools = [];
+  for (const unbondedParams of poolsUnbondedParams) {
+      pools.push(new exports.UnbondedPool(sdkConfig, unbondedParams, address));
+  }
+  return pools;
 };
 
 exports.getNodeTime = async (sdkConfig) => {
