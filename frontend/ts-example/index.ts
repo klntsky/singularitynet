@@ -33,8 +33,8 @@ const main = async () => {
   console.log(
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
-  // Length of a staking/bonding period
-  const periodLength = BigInteger(240000);
+  // Length of all periods (staking/withdraing, bonding and admin)
+  const periodLength = BigInteger(180000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
@@ -45,7 +45,7 @@ const main = async () => {
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
-    adminLength: BigInteger(5000),
+    adminLength: periodLength,
     interestLength: BigInteger(5),
     increments: BigInteger(1),
     unbondedAssetClass: {
