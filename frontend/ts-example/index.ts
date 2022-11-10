@@ -97,7 +97,7 @@ const main = async () => {
   // User withdraws during bonding period, waiting for adminLength to finish
   await logSwitchAndCountdown(
     user,
-    "withdrawing  period",
+    "staking/withdrawing  period",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
       unbondedPoolArgs.adminLength)
@@ -107,7 +107,7 @@ const main = async () => {
   // User stakes during user period, waiting for bondingLength to finish
   await logSwitchAndCountdown(
     user,
-    "withdrawing  period",
+    "staking/withdrawing  period",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
       unbondedPoolArgs.adminLength).add(
@@ -119,7 +119,7 @@ const main = async () => {
   // Admin closes pool, waiting for userLength to finish
   await logSwitchAndCountdown(
       admin,
-      "closing period",
+      "admin period",
       unbondedPoolArgs.start.add(
         unbondedPoolArgs.userLength).add(
         unbondedPoolArgs.adminLength).add(
