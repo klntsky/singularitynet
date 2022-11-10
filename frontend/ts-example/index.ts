@@ -1,6 +1,5 @@
 // This module demonstrates how to use the `singularitynet` TS/JS SDK to
 // operate a bonded pool across the entire application lifecycle
-
 import {
   SdkConfig,
   BondedPool,
@@ -83,7 +82,7 @@ const main = async () => {
   // User stakes, waiting for pool start
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
   const userStakeAmt = BigInteger(40000);
-  const r = await unbondedPool.userStake(userStakeAmt);
+  let r = await unbondedPool.userStake(userStakeAmt);
   console.log(JSON.stringify(r))
 
   // Admin deposits to pool, waiting for userLength to end
@@ -105,7 +104,19 @@ const main = async () => {
   );
   await unbondedPool.userWithdraw();
 
-  // Admin closes pool, waiting for bondingLength + userLength to finish
+  // User stakes during user period, waiting for bondingLength to finish
+  await logSwitchAndCountdown(
+    user,
+    "withdrawing  period",
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength).add(
+      unbondedPoolArgs.bondingLength)
+  );
+  r = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r))
+
+  // Admin closes pool, waiting for userLength to finish
   await logSwitchAndCountdown(
       admin,
       "closing period",
