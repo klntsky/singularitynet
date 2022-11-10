@@ -46,7 +46,7 @@ const main = async () => {
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
     adminLength: periodLength,
-    interestLength: BigInteger(5),
+    interestLength: periodLength,
     increments: BigInteger(1),
     unbondedAssetClass: {
       currencySymbol:
@@ -61,7 +61,6 @@ const main = async () => {
   );
   const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
   console.log(JSON.stringify(unbondedPool))
-  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
 
   // We try to recreate the pool just from its address and initial bonded args.
   // This is just for testing the pool query functionality.
@@ -82,31 +81,40 @@ const main = async () => {
   unbondedPool = unbondedPoolCopy;
 
   // User stakes, waiting for pool start
+  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
   const userStakeAmt = BigInteger(40000);
   const r = await unbondedPool.userStake(userStakeAmt);
   console.log(JSON.stringify(r))
+
+  // Admin deposits to pool, waiting for userLength to end
   await logSwitchAndCountdown(
     admin,
     "bonding period",
     unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
-
-  // Admin deposits to pool
   const depositBatchSize = BigInteger(1);
   await unbondedPool.deposit(depositBatchSize, []);
+
+  // User withdraws during bonding period, waiting for adminLength to finish
   await logSwitchAndCountdown(
     user,
     "withdrawing  period",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
-      unbondedPoolArgs.bondingLength)
+      unbondedPoolArgs.adminLength)
   );
-
-  // User withdraws
   await unbondedPool.userWithdraw();
-  //await logSwitchAndCountdown(admin, "closing period";
 
-  // Admin closes pool
+  // Admin closes pool, waiting for bondingLength + userLength to finish
+  await logSwitchAndCountdown(
+      admin,
+      "closing period",
+      unbondedPoolArgs.start.add(
+        unbondedPoolArgs.userLength).add(
+        unbondedPoolArgs.adminLength).add(
+        unbondedPoolArgs.bondingLength).add(
+        unbondedPoolArgs.userLength));
+
   const closeBatchSize = BigInteger(10);
   await unbondedPool.close(closeBatchSize, []);
 
