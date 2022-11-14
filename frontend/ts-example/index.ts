@@ -82,8 +82,8 @@ const main = async () => {
   // User stakes, waiting for pool start
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
   const userStakeAmt = BigInteger(40000);
-  let r = await unbondedPool.userStake(userStakeAmt);
-  console.log(JSON.stringify(r))
+  const r0 = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r0))
 
   // Admin deposits to pool, waiting for userLength to end
   await logSwitchAndCountdown(
@@ -92,8 +92,8 @@ const main = async () => {
     unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
   const depositBatchSize = BigInteger(1);
-  r = await unbondedPool.deposit(depositBatchSize, []);
-  console.log(JSON.stringify(r));
+  const r1 = await unbondedPool.deposit(depositBatchSize, []);
+  console.log(JSON.stringify(r1));
 
   // User withdraws during bonding period, waiting for adminLength to finish
   await logSwitchAndCountdown(
@@ -103,8 +103,8 @@ const main = async () => {
       unbondedPoolArgs.userLength).add(
       unbondedPoolArgs.adminLength)
   );
-  r = await unbondedPool.userWithdraw();
-  console.log(JSON.stringify(r));
+  const r2 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r2));
 
   // User stakes during user period, waiting for bondingLength to finish
   await logSwitchAndCountdown(
@@ -115,8 +115,8 @@ const main = async () => {
       unbondedPoolArgs.adminLength).add(
       unbondedPoolArgs.bondingLength)
   );
-  r = await unbondedPool.userStake(userStakeAmt);
-  console.log(JSON.stringify(r));
+  const r3 = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r3));
 
   // Admin closes pool, waiting for userLength to finish
   await logSwitchAndCountdown(
@@ -129,8 +129,8 @@ const main = async () => {
         unbondedPoolArgs.userLength));
 
   const closeBatchSize = BigInteger(10);
-  r = await unbondedPool.close(closeBatchSize, []);
-  console.log(JSON.stringify(r));
+  const r4 = await unbondedPool.close(closeBatchSize, []);
+  console.log(JSON.stringify(r4));
 
   // The user withdraws their rewards after pool closure.
   await logSwitchAndCountdown(
@@ -143,8 +143,8 @@ const main = async () => {
         unbondedPoolArgs.userLength).add(
         unbondedPoolArgs.adminLength));
 
-  r = await unbondedPool.userWithdraw();
-  console.log(JSON.stringify(r));
+  const r5 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r5));
 
 };
 
