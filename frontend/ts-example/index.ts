@@ -1,6 +1,5 @@
 // This module demonstrates how to use the `singularitynet` TS/JS SDK to
 // operate a bonded pool across the entire application lifecycle
-
 import {
   SdkConfig,
   BondedPool,
@@ -33,8 +32,8 @@ const main = async () => {
   console.log(
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
-  // Length of a staking/bonding period
-  const periodLength = BigInteger(240000);
+  // Length of all periods (staking/withdraing, bonding and admin)
+  const periodLength = BigInteger(180000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
@@ -45,8 +44,8 @@ const main = async () => {
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
-    adminLength: BigInteger(5000),
-    interestLength: BigInteger(5),
+    adminLength: periodLength,
+    interestLength: periodLength,
     increments: BigInteger(1),
     unbondedAssetClass: {
       currencySymbol:
@@ -61,7 +60,6 @@ const main = async () => {
   );
   const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
   console.log(JSON.stringify(unbondedPool))
-  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
 
   // We try to recreate the pool just from its address and initial bonded args.
   // This is just for testing the pool query functionality.
@@ -82,35 +80,72 @@ const main = async () => {
   unbondedPool = unbondedPoolCopy;
 
   // User stakes, waiting for pool start
+  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
   const userStakeAmt = BigInteger(40000);
-  const r = await unbondedPool.userStake(userStakeAmt);
-  console.log(JSON.stringify(r))
+  const r0 = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r0))
+
+  // Admin deposits to pool, waiting for userLength to end
   await logSwitchAndCountdown(
     admin,
     "bonding period",
     unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
-
-  // Admin deposits to pool
   const depositBatchSize = BigInteger(1);
-  await unbondedPool.deposit(depositBatchSize, []);
+  const r1 = await unbondedPool.deposit(depositBatchSize, []);
+  console.log(JSON.stringify(r1));
+
+  // User withdraws during bonding period, waiting for adminLength to finish
   await logSwitchAndCountdown(
     user,
-    "withdrawing  period",
+    "staking/withdrawing  period",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength)
+  );
+  const r2 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r2));
+
+  // User stakes during user period, waiting for bondingLength to finish
+  await logSwitchAndCountdown(
+    user,
+    "staking/withdrawing  period",
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength).add(
       unbondedPoolArgs.bondingLength)
   );
+  const r3 = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r3));
 
-  // User withdraws
-  await unbondedPool.userWithdraw();
-  //await logSwitchAndCountdown(admin, "closing period";
+  // Admin closes pool, waiting for userLength to finish
+  await logSwitchAndCountdown(
+      admin,
+      "admin period",
+      unbondedPoolArgs.start.add(
+        unbondedPoolArgs.userLength).add(
+        unbondedPoolArgs.adminLength).add(
+        unbondedPoolArgs.bondingLength).add(
+        unbondedPoolArgs.userLength));
 
-  // Admin closes pool
   const closeBatchSize = BigInteger(10);
-  await unbondedPool.close(closeBatchSize, []);
+  const r4 = await unbondedPool.close(closeBatchSize, []);
+  console.log(JSON.stringify(r4));
 
-  console.log("Pool closed");
+  // The user withdraws their rewards after pool closure.
+  await logSwitchAndCountdown(
+      admin,
+      "admin period",
+      unbondedPoolArgs.start.add(
+        unbondedPoolArgs.userLength).add(
+        unbondedPoolArgs.adminLength).add(
+        unbondedPoolArgs.bondingLength).add(
+        unbondedPoolArgs.userLength).add(
+        unbondedPoolArgs.adminLength));
+
+  const r5 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r5));
+
 };
 
 const localHostSdkConfig: SdkConfig = {
