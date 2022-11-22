@@ -343,7 +343,7 @@ findInsertUpdateElem
 findInsertUpdateElem assocList hashedKey = do
   -- The list should findAssocElem assocList hashedKey = do be sorted so no
   -- need to resort
-  let { no, yes } = partition (fst >>> (>=) hashedKey) assocList
+  let { no, yes } = partition (\t -> (fst t) >= hashedKey) assocList
   bytesL /\ txInputL /\ txOutputL <- last yes
   -- If we're at the last element, it must be an end stake or updating last
   -- element
@@ -391,7 +391,7 @@ findRemoveOtherElem
              }
        )
 findRemoveOtherElem assocList hashedKey = do
-  let { no, yes } = partition (fst >>> (<) hashedKey) assocList
+  let { no, yes } = partition (\t -> (fst t) < hashedKey) assocList
   bytesL /\ txInputL /\ txOutputL <- last yes
   bytesH /\ txInputH /\ txOutputH <- head no
   if bytesH /= hashedKey
