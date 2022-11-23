@@ -33,6 +33,7 @@ import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( TransactionInput
+  , TransactionOutput
   , TransactionOutputWithRefScript
   , balanceAndSignTx
   , TransactionHash
@@ -99,28 +100,39 @@ userWithdrawUnbondedPoolContract
         , assocListCs
         }
     ) = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
+  logInfo_ "userWithdrawUnbondedPoolContract: Params" params
   ---- FETCH BASIC INFORMATION ----
   -- Get network ID
   networkId <- getNetworkId
+
   -- Get own public key hash and compute hashed version
   userPkh <- liftedM "userWithdrawUnbondedPoolContract: Cannot get user's pkh"
     ownPaymentPubKeyHash
   logInfo_ "userWithdrawUnbondedPoolContract: User's PaymentPubKeyHash" userPkh
   hashedUserPkh <- liftAff $ hashPkh userPkh
+  logInfo_ "userWithdrawUnbondedPoolContract: hashed user's PaymentPubKeyHash" hashedUserPkh
+
   -- Get own staking hash
   userStakingPubKeyHash <-
     liftedM
       "userWithdrawnUnbondedPoolContract: Cannot get\
       \ user's staking pub key hash" $
       ownStakePubKeyHash
+  logInfo_ "userWithdrawUnbondedPoolContract: User's StakePubKeyHash" userStakingPubKeyHash
+
   -- Get the (Nami) wallet address
   userAddr <-
     liftedM "userWithdrawUnbondedPoolContract: Cannot get wallet Address"
       getWalletAddress
+  logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
+
   -- Get utxos at the wallet address
   userUtxos <-
     liftedM "userWithdrawUnbondedPoolContract: Cannot get user Utxos"
       $ utxosAt userAddr
+  logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
+
+
   ---- FETCH POOL DATA ----
   -- Get the unbonded pool validator and hash
   validator <-
@@ -131,6 +143,7 @@ userWithdrawUnbondedPoolContract
   let poolAddr = scriptHashAddress valHash
   logInfo_ "userWithdrawUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
+
   -- Get the unbonded pool's utxo
   unbondedPoolUtxos <-
     liftedM
@@ -138,25 +151,31 @@ userWithdrawUnbondedPoolContract
       \ utxos at pool address"
       $ utxosAt poolAddr
   logInfo_ "userWithdrawUnbondedPoolContract: Pool UTxOs" unbondedPoolUtxos
+
   -- Get asset UTxOs in unbonded pool
   logInfo'
     "userWithdrawUnbondedPoolContract: Getting unbonded assets in \
     \the pool..."
   unbondedAssetUtxos <- getUnbondedAssetUtxos unbondedPoolUtxos
-  logInfo_ "userWithdrawnUnbondedPoolContract: Bonded Asset UTxOs"
+  logInfo_ "userWithdrawnUnbondedPoolContract: Unbonded Asset UTxOs"
     unbondedAssetUtxos
+
   -- Get the minting policy and currency symbol from the list NFT:
   listPolicy <- liftedE $ mkListNFTPolicy Unbonded nftCs
+
   -- Get the staking range to use
   logInfo' "userWithdrawUnbondedPoolContract: Getting user range..."
   { currTime, range } <- getBondingTime params
   logInfo_ "userWithdrawUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "userWithdrawUnbondedPoolContract: TX Range" range
+
   -- Get the token name for the user by hashing
   assocListTn <-
     liftContractM
       "userWithdrawUnbondedPoolContract: Could not create token name for user`"
       $ mkTokenName hashedUserPkh
+  logInfo_ "userWithdrawUnbondedPoolContract: User's assoc list token name" assocListTn
+
   -- Get user entry utxo
   entryInput /\ entryOutput <-
     liftContractM "userWithdrawUnbondedPoolContract: Cannot get assocList utxo"
@@ -393,6 +412,12 @@ userWithdrawUnbondedPoolContract
                   firstInput
                   secondInput
 
+                prevTxOutput :: TransactionOutput
+                prevTxOutput = (unwrap firstOutput).output
+
+                prevTxValue :: Value
+                prevTxValue = (unwrap prevTxOutput).amount
+
                 constraints :: TxConstraints Unit Unit
                 constraints =
                   mconcat
@@ -400,7 +425,7 @@ userWithdrawUnbondedPoolContract
                     , mustSpendScriptOutput secondInput valRedeemer
                     , mkAssetUtxosConstraints consumedAssetUtxos valRedeemer
                     , mustMintValueWithRedeemer mintRedeemer burnEntryValue
-                    , mustPayToScript valHash prevEntryUpdated mintEntryValue
+                    , mustPayToScript valHash prevEntryUpdated prevTxValue
                     ]
               pure $ constraints /\ prevEntryDatumLookup
       pure $ constraints /\ lookups
@@ -431,7 +456,7 @@ getUnbondedAssetUtxos utxos = do
         =<< getDatumByHash datumHash
     unbondedDatum :: UnbondedStakingDatum <-
       liftContractM
-        "getAssetUtxos: could not parse datum as a bonded staking \
+        "getAssetUtxos: could not parse datum as an unbonded staking \
         \datum" $ fromData (unwrap datum)
     case unbondedDatum of
       AssetDatum -> pure $ Just utxo
