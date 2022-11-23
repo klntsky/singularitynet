@@ -91,8 +91,9 @@ const main = async () => {
     "bonding period",
     unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
-  const depositBatchSize = BigInteger(1);
-  const r1 = await unbondedPool.deposit(depositBatchSize, []);
+  const depositBatchSize = BigInteger(0);
+  const adminDeposit = BigInteger(40000);
+  const r1 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
   console.log(JSON.stringify(r1));
 
   // User withdraws during bonding period, waiting for adminLength to finish
@@ -119,6 +120,19 @@ const main = async () => {
   console.log(JSON.stringify(r3));
 
   // Admin closes pool, waiting for userLength to finish
+  //await logSwitchAndCountdown(
+  //    admin,
+  //    "admin period",
+  //    unbondedPoolArgs.start.add(
+  //      unbondedPoolArgs.userLength).add(
+  //      unbondedPoolArgs.adminLength).add(
+  //      unbondedPoolArgs.bondingLength).add(
+  //      unbondedPoolArgs.userLength));
+
+ // const closeBatchSize = BigInteger(10);
+  //const r4 = await unbondedPool.close(closeBatchSize, []);
+  //console.log(JSON.stringify(r4));
+
   await logSwitchAndCountdown(
       admin,
       "admin period",
@@ -128,8 +142,8 @@ const main = async () => {
         unbondedPoolArgs.bondingLength).add(
         unbondedPoolArgs.userLength));
 
-  const closeBatchSize = BigInteger(10);
-  const r4 = await unbondedPool.close(closeBatchSize, []);
+  const closeBatchSize = BigInteger(0);
+  const r4 = await unbondedPool.deposit(BigInteger(0), closeBatchSize, []);
   console.log(JSON.stringify(r4));
 
   // The user withdraws their rewards after pool closure.

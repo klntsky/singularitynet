@@ -2,79 +2,31 @@ module UnbondedStaking.DepositPool (depositUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.Numeric.Rational ((%))
-import Contract.PlutusData
-  ( PlutusData
-  , Datum(Datum)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
 import Data.Array (elemIndex, (!!))
+import Data.BigInt (BigInt)
 import Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings
-  ( unbondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
+import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
 import Types.Natural (fromBigInt')
 import Types.Redeemer (Redeemer(Redeemer))
 import Types.Scripts (ValidatorHash)
-import UnbondedStaking.Types
-  ( Entry(Entry)
-  , UnbondedPoolParams(UnbondedPoolParams)
-  , UnbondedStakingAction(AdminAct)
-  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  )
-import UnbondedStaking.Utils
-  ( calculateRewards
-  , getAdminTime
-  )
-import Utils
-  ( getUtxoWithNFT
-  , mkOnchainAssocList
-  , logInfo_
-  , mkRatUnsafe
-  , roundUp
-  , splitByLength
-  , submitTransaction
-  , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(AdminAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
+import UnbondedStaking.Utils (calculateRewards, getAdminTime)
+import Utils (getUtxoWithNFT, mkOnchainAssocList, logInfo_, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash)
 
 -- | Deposits a certain amount in the pool
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -83,11 +35,13 @@ import Utils
 -- | users. Otherwise only the users within in the list will have rewards
 -- | deposited.
 depositUnbondedPoolContract
-  :: UnbondedPoolParams
+  :: BigInt
+  -> UnbondedPoolParams
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
 depositUnbondedPoolContract
+  depositAmt
   params@
     ( UnbondedPoolParams
         { admin
@@ -190,10 +144,10 @@ depositUnbondedPoolContract
       -- Get list of users to deposit rewards too
       updateList <-
         if null depositList then
-          traverse (mkEntryUpdateList params valHash) assocList
+          traverse (mkEntryUpdateList depositAmt params valHash) assocList
         else do
           constraintsLookupsList <-
-            traverse (mkEntryUpdateList params valHash) assocList
+            traverse (mkEntryUpdateList depositAmt params valHash) assocList
           liftContractM
             "depositUnbondedPoolContract: Failed to create updateList'" $
             traverse ((!!) constraintsLookupsList) depositList
@@ -228,7 +182,8 @@ depositUnbondedPoolContract
 
 -- | Creates a constraint and lookups list for updating each user entry
 mkEntryUpdateList
-  :: UnbondedPoolParams
+  :: BigInt
+  -> UnbondedPoolParams
   -> ValidatorHash
   -> (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
   -> Contract ()
@@ -236,10 +191,9 @@ mkEntryUpdateList
            (ScriptLookups.ScriptLookups PlutusData)
        )
 mkEntryUpdateList
+  depositAmt
   ( UnbondedPoolParams
-      { increments
-      , interest
-      , unbondedAssetClass
+      { unbondedAssetClass
       , assocListCs
       }
   )
@@ -278,20 +232,17 @@ mkEntryUpdateList
       let
         updatedRewards = roundUp calculatedRewards
         updatedTotalDeposited = e.deposited + updatedRewards
-        incrementsRat = mkRatUnsafe (toBigInt increments % one)
-        updatedTotalRewards = updatedTotalDeposited *
-          (roundUp (interest * incrementsRat))
         -- Datum and redeemer creation
         entryDatum = Datum $ toData $ EntryDatum
           { entry: Entry $ e
               { newDeposit = zero
               , rewards = mkRatUnsafe (updatedRewards % one)
-              , totalRewards = updatedTotalRewards
+              , totalRewards = depositAmt
               , totalDeposited = updatedTotalDeposited
               }
           }
         valRedeemer = Redeemer $ toData $ AdminAct
-          { totalRewards: fromBigInt' $ updatedTotalRewards
+          { totalRewards: fromBigInt' $ depositAmt
           , totalDeposited: fromBigInt' $ updatedTotalDeposited
           }
         -- Build asset datum and value types

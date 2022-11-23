@@ -7,8 +7,8 @@ export declare class Pool<T> {
 
   constructor(config: SdkConfig, args: T, address: string);
 
-  deposit(amount: BigInteger, idxArray: int[]): Promise<int[]>;
-  close(amount: BigInteger, idxArray: int[]): Promise<int[]>;
+  deposit(amount: BigInteger, batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
+  close(batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
 }
