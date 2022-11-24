@@ -343,11 +343,11 @@ findInsertUpdateElem
 findInsertUpdateElem assocList hashedKey = do
   -- The list should findAssocElem assocList hashedKey = do be sorted so no
   -- need to resort
-  let { no, yes } = partition (\t -> (fst t) >= hashedKey) assocList
-  bytesL /\ txInputL /\ txOutputL <- last yes
+  let { no, yes } = partition (\t -> (fst t) > hashedKey) assocList
+  bytesL /\ txInputL /\ txOutputL <- last no
   -- If we're at the last element, it must be an end stake or updating last
   -- element
-  if length no == zero then do
+  if length yes == zero then do
     -- Workout whether it's an initial deposit
     let
       mintingAction =
@@ -360,7 +360,7 @@ findInsertUpdateElem assocList hashedKey = do
       /\ { firstKey: bytesL, secondKey: Nothing }
   -- Otherwise, it is an inbetween stake or updating the first element
   else do
-    bytesH /\ txInputH /\ txOutputH <- head no
+    bytesH /\ txInputH /\ txOutputH <- head yes
     let
       mintingAction =
         if bytesL == hashedKey then Nothing
