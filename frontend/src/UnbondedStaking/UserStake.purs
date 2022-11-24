@@ -120,7 +120,7 @@ userStakeUnbondedPoolContract
   logInfo_ "userStakeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
 
-  -- Get the unbonded pool's datum
+  -- Get the unbonded pool's datum and utxos
   unbondedPoolUtxos <-
     liftedM
       "userStakeUnbondedPoolContract: Cannot get pool's utxos at pool address"
@@ -269,6 +269,7 @@ userStakeUnbondedPoolContract
           -- Minting a new Entry
           let
             mh = MintHead poolTxInput
+            
             -- Minting a new Entry
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt
@@ -295,6 +296,7 @@ userStakeUnbondedPoolContract
                   }
               }
 
+          logInfo_ "userStakeUnbondedPoolContract: Minting action" mh
           unbondedStateDatumLookup <-
             liftContractM
               "userStakeUnbondedPoolContract: Could not create state datum lookup"
@@ -338,13 +340,15 @@ userStakeUnbondedPoolContract
               $ head assocList
           let
             txIn /\ txOut = snd assocElem
+            mintingAction = Nothing
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt
               , stakeHolder: userPkh
-              , mintingAction: Nothing -- equality means we are updating the
+              , mintingAction: mintingAction -- equality means we are updating the
               -- head Assoc. List element.
               }
           -- Get the Entry datum of the old assoc. list element
+          logInfo_ "userStakeUnbondedPoolContract: Minting action" mintingAction
           dHash <-
             liftContractM
               "userStakeUnbondedPoolContract: Could not get Entry Datum Hash"
@@ -532,6 +536,7 @@ userStakeUnbondedPoolContract
                 constr = mconcat
                   [ mustMintValueWithRedeemer mintRedeemer entryValue
                   , mustPayToScript valHash entryDatum entryValue
+                  , mustPayToScript valHash assetDatum stakeValue
                   ]
                 lu = mconcat
                   [ ScriptLookups.mintingPolicy listPolicy
