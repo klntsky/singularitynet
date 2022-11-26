@@ -250,7 +250,10 @@ mkEntryUpdateList
         assetParams = unwrap unbondedAssetClass
         assetCs = assetParams.currencySymbol
         assetTn = assetParams.tokenName
-        depositValue = singleton assetCs assetTn updatedRewards
+        -- The difference between `updatedRewards` and `rewards` are the
+        -- rewards the user has earnt in the previous cycle and which we need
+        -- to deposit now.
+        depositValue = singleton assetCs assetTn $ roundUp (calculatedRewards - e.rewards)
         entryValue = singleton assocListCs assocListTn one
 
         -- Build constraints and lookups
