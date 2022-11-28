@@ -293,6 +293,7 @@ userWithdrawUnbondedPoolContract
       headEntry /\ poolOpenState <- getStateDatumFromOutput poolTxOutput
       logInfo_ "userWithdrawUnbondedPoolContract: Head entry of the pool"
         headEntry
+
       ---- BUILD CONSTRAINTS AND LOOKUPS ----
       constraints /\ lookups <- case headEntry of
         Nothing -> throwContractError
@@ -363,6 +364,8 @@ userWithdrawUnbondedPoolContract
               -- The hashed key is greater than so we must look at the assoc. list
               -- in more detail
               logInfo' "userWithdrawUnbondedPoolContract: Compare GT"
+              logInfo_ "userWithdrawUnbondedPoolContract: assoc list" assocList
+              logInfo_ "userWithdrawUnbondedPoolContract: hashedUserPkh" hashedUserPkh
               { firstInput, secondInput }
                 /\ { firstOutput, secondOutput }
                 /\ _ <-

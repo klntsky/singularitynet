@@ -29,9 +29,10 @@ import Contract.PlutusData
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( balanceAndSignTx
-  , TransactionHash
+  ( TransactionHash
+  , TransactionOutput
   , BalancedSignedTransaction
+  , balanceAndSignTx
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -41,7 +42,7 @@ import Contract.TxConstraints
   , mustValidateIn
   )
 import Contract.Utxos (utxosAt)
-import Contract.Value (mkTokenName, singleton)
+import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
 import Data.Array (head)
 import Plutus.Conversion (fromPlutusAddress)
@@ -99,14 +100,17 @@ userStakeUnbondedPoolContract
   userPkh <- liftedM "userStakeUnbondedPoolContract: Cannot get user's pkh"
     ownPaymentPubKeyHash
   logInfo_ "userStakeUnbondedPoolContract: User's PaymentPubKeyHash" userPkh
+
   -- Get the (Nami) wallet address
   userAddr <-
     liftedM "userStakeUnbondedPoolContract: Cannot get wallet Address"
       getWalletAddress
+
   -- Get utxos at the wallet address
   userUtxos <-
     liftedM "userStakeUnbondedPoolContract: Cannot get user Utxos"
       $ utxosAt userAddr
+
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params
@@ -115,7 +119,8 @@ userStakeUnbondedPoolContract
   let poolAddr = scriptHashAddress valHash
   logInfo_ "userStakeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
-  -- Get the unbonded pool's utxo
+
+  -- Get the unbonded pool's datum and utxos
   unbondedPoolUtxos <-
     liftedM
       "userStakeUnbondedPoolContract: Cannot get pool's utxos at pool address"
@@ -139,6 +144,7 @@ userStakeUnbondedPoolContract
     liftContractM
       "userStakeUnbondedPoolContract: Cannot extract NFT State datum"
       $ fromData (unwrap poolDatum)
+
   let
     amtBigInt = toBigInt amt
     assetDatum = Datum $ toData AssetDatum
@@ -147,21 +153,29 @@ userStakeUnbondedPoolContract
     assetCs = assetParams.currencySymbol
     assetTn = assetParams.tokenName
     stakeValue = singleton assetCs assetTn amtBigInt
+
   -- Get the the hashed user PKH used as key in the entry list
   hashedUserPkh <- liftAff $ hashPkh userPkh
+  logInfo_ "userStakeUnbondedPoolContract: Hashed user PKH" hashedUserPkh
+
   -- Get the minting policy and currency symbol from the list NFT:
   listPolicy <- liftedE $ mkListNFTPolicy Unbonded nftCs
+
   -- Get the token name for the user by hashing
   assocListTn <-
     liftContractM
       "userStakeUnbondedPoolContract: Could not create token name for user`"
       $ mkTokenName hashedUserPkh
+  logInfo_ "userStakeUnbondedPoolContract: assoc list token name" assocListTn
   let entryValue = singleton assocListCs assocListTn one
+
   -- Get the staking range to use
   logInfo' "userStakeUnbondedPoolContract: Getting user time range..."
   { currTime, range } <- getUserTime params
   logInfo_ "userStakeUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "userStakeUnbondedPoolContract: TX Range" range
+
+  -- Figure out where in the linked list the new stake goes
   constraints /\ lookup <- case unbondedStakingDatum of
     StateDatum { maybeEntryName: Nothing, open: true } -> do
       logInfo'
@@ -238,6 +252,8 @@ userStakeUnbondedPoolContract
         "userStakeUnbondedPoolContract: STAKE TYPE - StateDatum is \
         \StateDatum { maybeEntryName: Just ..., open: true }"
       let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
+      logInfo_ "userStakeUnbondedPoolContract: Assoc list keys" $ map fst assocList
+
       -- If hashedUserPkh < key, we have a head deposit, spending the state utxo
       -- If hashedUserPkh == key, this is a non-init deposit spending the first
       -- assoc. list element.
@@ -253,6 +269,7 @@ userStakeUnbondedPoolContract
           -- Minting a new Entry
           let
             mh = MintHead poolTxInput
+            
             -- Minting a new Entry
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt
@@ -279,6 +296,7 @@ userStakeUnbondedPoolContract
                   }
               }
 
+          logInfo_ "userStakeUnbondedPoolContract: Minting action" mh
           unbondedStateDatumLookup <-
             liftContractM
               "userStakeUnbondedPoolContract: Could not create state datum lookup"
@@ -322,13 +340,15 @@ userStakeUnbondedPoolContract
               $ head assocList
           let
             txIn /\ txOut = snd assocElem
+            mintingAction = Nothing
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt
               , stakeHolder: userPkh
-              , mintingAction: Nothing -- equality means we are updating the
+              , mintingAction: mintingAction -- equality means we are updating the
               -- head Assoc. List element.
               }
           -- Get the Entry datum of the old assoc. list element
+          logInfo_ "userStakeUnbondedPoolContract: Minting action" mintingAction
           dHash <-
             liftContractM
               "userStakeUnbondedPoolContract: Could not get Entry Datum Hash"
@@ -400,6 +420,8 @@ userStakeUnbondedPoolContract
             liftContractM
               "userStakeUnbondedPoolContract: Cannot get position in Assoc. List"
               $ findInsertUpdateElem assocList hashedUserPkh
+          logInfo_ "userStakeUnbondedPoolContract: Minting action" mintingAction
+
           let
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt
@@ -416,7 +438,7 @@ userStakeUnbondedPoolContract
           firstListDatum <-
             liftedM
               "userStakeUnbondedPoolContract: Cannot get \
-              \Entry's  datum" $ getDatumByHash dHash
+              \Entry's datum" $ getDatumByHash dHash
           firstunBondedListDatum :: UnbondedStakingDatum <-
             liftContractM
               "userStakeUnbondedPoolContract: Cannot extract Assoc. List datum"
@@ -457,8 +479,14 @@ userStakeUnbondedPoolContract
                   \lookup"
                   $ ScriptLookups.datum firstEntryDatum
               let
+                firstTxOutput :: TransactionOutput
+                firstTxOutput = (unwrap firstOutput).output
+
+                firstTxValue :: Value
+                firstTxValue = (unwrap firstTxOutput).amount
+
                 constr = mconcat
-                  [ mustPayToScript valHash firstEntryDatum entryValue
+                  [ mustPayToScript valHash firstEntryDatum firstTxValue
                   , mustSpendScriptOutput firstInput valRedeemer
                   ]
                 -- We add validator at the end. If we are minting i.e. when
@@ -508,6 +536,7 @@ userStakeUnbondedPoolContract
                 constr = mconcat
                   [ mustMintValueWithRedeemer mintRedeemer entryValue
                   , mustPayToScript valHash entryDatum entryValue
+                  , mustPayToScript valHash assetDatum stakeValue
                   ]
                 lu = mconcat
                   [ ScriptLookups.mintingPolicy listPolicy
@@ -548,8 +577,14 @@ userStakeUnbondedPoolContract
                   \lookup"
                   $ ScriptLookups.datum lastEntryDatum
               let
+                secondTxOutput :: TransactionOutput
+                secondTxOutput = (unwrap so).output
+
+                secondTxValue :: Value
+                secondTxValue = (unwrap secondTxOutput).amount
+
                 constr = mconcat
-                  [ mustPayToScript valHash lastEntryDatum entryValue
+                  [ mustPayToScript valHash lastEntryDatum secondTxValue
                   , mustSpendScriptOutput si valRedeemer
                   ]
                 lu = mconcat
