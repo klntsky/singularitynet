@@ -311,13 +311,7 @@ mkEntryUpdateList
   case unbondedListDatum of
     EntryDatum { entry } -> do
       let e = unwrap entry
-      calculatedRewards <-
-        calculateRewards
-          e.rewards
-          e.totalRewards
-          e.deposited
-          e.newDeposit
-          e.totalDeposited
+          calculatedRewards = calculateRewards entry
       -- Get the token name for the user by hashing
       assocListTn <-
         liftContractM
