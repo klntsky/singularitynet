@@ -153,16 +153,16 @@ punbondedPoolValidator = phoistAcyclic $
     pure $
       pmatch act $ \case
         PAdminAct _ -> unTermCont $ do
-          --pguardC
-          --  "punbondedPoolValidator: wrong period for PAdminAct \
-          --  \redeemer"
-          --  $ period #== adminUpdatePeriod
+          pguardC
+            "punbondedPoolValidator: wrong period for PAdminAct \
+            \redeemer"
+            $ period #== adminUpdatePeriod
           pure $ adminLogic txInfoF paramsF
         PStakeAct dataRecord -> unTermCont $ do
-          -- pguardC
-          --   "punbondedPoolValidator: wrong period for PStakeAct \
-          --   \redeemer"
-          --   $ period #== depositWithdrawPeriod
+          pguardC
+            "punbondedPoolValidator: wrong period for PStakeAct \
+            \redeemer"
+            $ period #== depositWithdrawPeriod
           stakeActParamsF <-
             tcont $
               pletFields
@@ -187,10 +187,10 @@ punbondedPoolValidator = phoistAcyclic $
             withdrawActParamsF
             period
         PCloseAct _ -> unTermCont $ do
-          -- pguardC
-          --   "punbondedPoolValidator: wrong period for PCloseAct \
-          --   \redeemer"
-          --   $ period #== adminUpdatePeriod
+          pguardC
+            "punbondedPoolValidator: wrong period for PCloseAct \
+            \redeemer"
+            $ period #== adminUpdatePeriod
           pure $ adminLogic txInfoF paramsF
 
 -- Untyped version to be serialised. This version is responsible for verifying
@@ -666,10 +666,10 @@ withdrawActLogic txInfoF paramsF purpose datum withdrawActParamsF period = do
       pguardC "withdrawActLogic: Pool is not closed" $
         pnot # (toPBool # entryF.open)
       -- Validate period
-      -- pguardC "withdrawActLogic: wrong period for PWithdrawAct redeemer" $
-      --   period #== depositWithdrawPeriod
-      --     #|| period #== adminUpdatePeriod
-      --     #|| period #== bondingPeriod
+      pguardC "withdrawActLogic: wrong period for PWithdrawAct redeemer" $
+        period #== depositWithdrawPeriod
+          #|| period #== adminUpdatePeriod
+          #|| period #== bondingPeriod
       ---- BUSINESS LOGIC ----
       -- Validate that entry key matches the key in state UTxO
       pguardC "withdrawActLogic: consumed entry key does not match user's pkh" $
