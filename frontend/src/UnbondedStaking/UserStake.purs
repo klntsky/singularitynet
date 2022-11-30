@@ -583,13 +583,9 @@ userStakeUnbondedPoolContract
                 secondTxValue :: Value
                 secondTxValue = (unwrap secondTxOutput).amount
 
-                constr = mconcat
-                  [ mustPayToScript valHash lastEntryDatum secondTxValue
-                  , mustSpendScriptOutput si valRedeemer
-                  ]
+                constr = mempty
                 lu = mconcat
-                  [ ScriptLookups.mintingPolicy listPolicy
-                  , lastEntryDatumLookup
+                  [ lastEntryDatumLookup
                   ]
               pure $ constr /\ lu
             _, _ -> throwContractError
