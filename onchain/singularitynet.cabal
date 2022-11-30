@@ -154,6 +154,7 @@ test-suite singularitynet-test
     Test.Common
     Test.SpecNFT
     Test.SpecPeriod
+    Test.Unit
     Test.Utils
 
   hs-source-dirs: test

@@ -9,8 +9,8 @@ serialise-scripts:
 
 serialise-scripts-offchain:
 	cabal build
-	cabal exec serialise -- state-policy -o /dev/stdout | ${FILTERSCRIPT} > ../offchain/scripts/BondedStateNFT.plutus
-	cabal exec serialise -- list-policy -o /dev/stdout | ${FILTERSCRIPT} > ../offchain/scripts/BondedListNFT.plutus
-	cabal exec serialise -- validator -o /dev/stdout | ${FILTERSCRIPT} > ../offchain/scripts/BondedPoolValidator.plutus
+	cabal exec serialise -- state-policy -o ../frontend/src/Scripts/StateNFT.js
+	cabal exec serialise -- list-policy -o ../frontend/src/Scripts/ListNFT.js
+	cabal exec serialise -- validator -o ../frontend/src/Scripts/PoolValidator.js
 
 .PHONY: serialise-scripts

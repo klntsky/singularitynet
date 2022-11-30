@@ -444,7 +444,7 @@ oneOf = phoistAcyclic $
     oneWith
       # (peq # cs)
       # (peq # tn)
-      # (ple # 1)
+      # (peq # 1)
       #$ val
 
 {- | Returns `PTrue` if the token described by its `PCurrencySymbol` and
