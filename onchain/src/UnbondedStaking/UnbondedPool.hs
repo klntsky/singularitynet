@@ -932,8 +932,6 @@ withdrawRewardsGuard ::
   PEntryHRec s ->
   TermCont s (Term s PUnit)
 withdrawRewardsGuard period amount paramsF txInfoF entryF =
-  -- TODO: Make one version that always calculates rewards as a
-  -- deposit/withdraw period and another as a bonding period.
   pure . pmatch period $ \case
     DepositWithdrawPeriod -> unTermCont $ do
       -- User can deposit then withdraw in the first cycle, resulting in
