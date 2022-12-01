@@ -15,6 +15,7 @@ module Utils
   , mkBondedPoolParams
   , mkOnchainAssocList
   , mkRatUnsafe
+  , toRational
   , nat
   , roundDown
   , roundUp
@@ -32,102 +33,35 @@ import Contract.Prelude hiding (length)
 import Contract.Address (Address, Bech32String, PaymentPubKeyHash, getNetworkId)
 import Contract.Hashing (blake2b256Hash)
 import Contract.Log (logInfo, logInfo', logAesonInfo)
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftedE
-  , liftedM
-  , tag
-  , throwContractError
-  )
+import Contract.Monad (Contract, liftContractM, liftedE, liftedM, tag, throwContractError)
 import Contract.Numeric.Natural (Natural, fromBigInt', toBigInt)
-import Contract.Numeric.Rational (Rational, numerator, denominator)
+import Contract.Numeric.Rational (Rational, denominator, numerator, (%))
+import Contract.PlutusData (Datum, DataHash, PlutusData)
 import Contract.PlutusData (Datum, DataHash, PlutusData)
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript)
 import Contract.Scripts (ValidatorHash)
-import Contract.Time
-  ( ChainTip(..)
-  , Tip(..)
-  , getEraSummaries
-  , getSystemStart
-  , getTip
-  , slotToPosixTime
-  )
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript(TransactionOutputWithRefScript)
-  , BalancedSignedTransaction
-  , balanceAndSignTx
-  , submit
-  , awaitTxConfirmedWithTimeout
-  , plutusV1Script
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , DatumPresence(DatumWitness)
-  , mustSpendScriptOutput
-  , mustPayToScript
-  )
-import Contract.TxConstraints as TxConstraints
-import Contract.Time
-  ( ChainTip(..)
-  , Tip(..)
-  , getEraSummaries
-  , getSystemStart
-  , getTip
-  , slotToPosixTime
-  )
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript(TransactionOutputWithRefScript)
-  , BalancedSignedTransaction
-  , balanceAndSignTx
-  , submit
-  , awaitTxConfirmedWithTimeout
-  , plutusV1Script
-  , TransactionHash
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , DatumPresence(DatumWitness)
-  , mustSpendScriptOutput
-  , mustPayToScript
-  )
-import Contract.TxConstraints as TxConstraints
-import Contract.PlutusData (Datum, DataHash, PlutusData)
 import Contract.Scripts (ValidatorHash, PlutusScript)
+import Contract.Time (ChainTip(..), Tip(..), getEraSummaries, getSystemStart, getTip, slotToPosixTime)
+import Contract.Time (ChainTip(..), Tip(..), getEraSummaries, getSystemStart, getTip, slotToPosixTime)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript(TransactionOutputWithRefScript), BalancedSignedTransaction, balanceAndSignTx, submit, awaitTxConfirmedWithTimeout, plutusV1Script)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript(TransactionOutputWithRefScript), BalancedSignedTransaction, balanceAndSignTx, submit, awaitTxConfirmedWithTimeout, plutusV1Script, TransactionHash)
+import Contract.TxConstraints (TxConstraints, DatumPresence(DatumWitness), mustSpendScriptOutput, mustPayToScript)
+import Contract.TxConstraints (TxConstraints, DatumPresence(DatumWitness), mustSpendScriptOutput, mustPayToScript)
+import Contract.TxConstraints as TxConstraints
+import Contract.TxConstraints as TxConstraints
 import Contract.Utxos (UtxoMap)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  , Value
-  , flattenNonAdaAssets
-  , getTokenName
-  , valueOf
-  )
+import Contract.Value (CurrencySymbol, TokenName, Value, flattenNonAdaAssets, getTokenName, valueOf)
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
 import Data.Argonaut.Core (Json, caseJsonObject)
 import Data.Argonaut.Decode.Combinators (getField) as Json
 import Data.Argonaut.Decode.Error (JsonDecodeError(TypeMismatch))
-import Data.Array
-  ( filter
-  , head
-  , last
-  , length
-  , partition
-  , mapMaybe
-  , slice
-  , sortBy
-  , (..)
-  )
+import Data.Array (filter, head, last, length, partition, mapMaybe, slice, sortBy, (..))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
-import Prim.Row (class Lacks)
-import Record (insert, delete)
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
 import Data.Symbol (SProxy(..))
@@ -137,17 +71,14 @@ import Effect.Aff (delay)
 import Effect.Exception (error, throw)
 import Math (ceil)
 import Plutus.Conversion (toPlutusAddress)
+import Prim.Row (class Lacks)
+import Record (insert, delete)
 import Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Serialization.Hash (ed25519KeyHashToBytes)
-import Types
-  ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
-  , MintingAction(MintEnd, MintInBetween)
-  )
+import Types (AssetClass(AssetClass), BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams), MintingAction(MintEnd, MintInBetween))
+import Types.ByteArray (byteArrayToHex)
 import Types.Interval (POSIXTime(POSIXTime))
 import Types.OutputDatum (OutputDatum(OutputDatumHash))
-import Types.ByteArray (byteArrayToHex)
 import Types.Redeemer (Redeemer)
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
@@ -254,6 +185,10 @@ mkRatUnsafe :: Maybe Rational -> Rational
 mkRatUnsafe Nothing = zero
 mkRatUnsafe (Just r) = r
 
+-- Helper for making `Rational`s out of `BigInt`s
+toRational :: BigInt -> Rational
+toRational x = mkRatUnsafe $ x % one
+
 -- | Converts from a contract 'Natural' to an 'Int'
 toIntUnsafe :: Natural -> Int
 toIntUnsafe = fromMaybe 0 <<< toInt <<< toBigInt
@@ -343,11 +278,11 @@ findInsertUpdateElem
 findInsertUpdateElem assocList hashedKey = do
   -- The list should findAssocElem assocList hashedKey = do be sorted so no
   -- need to resort
-  let { no, yes } = partition (\t -> (fst t) >= hashedKey) assocList
-  bytesL /\ txInputL /\ txOutputL <- last yes
+  let { no, yes } = partition (\t -> (fst t) > hashedKey) assocList
+  bytesL /\ txInputL /\ txOutputL <- last no
   -- If we're at the last element, it must be an end stake or updating last
   -- element
-  if length no == zero then do
+  if length yes == zero then do
     -- Workout whether it's an initial deposit
     let
       mintingAction =
@@ -360,7 +295,7 @@ findInsertUpdateElem assocList hashedKey = do
       /\ { firstKey: bytesL, secondKey: Nothing }
   -- Otherwise, it is an inbetween stake or updating the first element
   else do
-    bytesH /\ txInputH /\ txOutputH <- head no
+    bytesH /\ txInputH /\ txOutputH <- head yes
     let
       mintingAction =
         if bytesL == hashedKey then Nothing

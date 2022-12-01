@@ -15,10 +15,7 @@ import Contract.Value (CurrencySymbol)
 import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
 import Types.Interval (POSIXTime(POSIXTime), POSIXTimeRange, interval)
-import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
-  , InitialUnbondedParams(InitialUnbondedParams)
-  )
+import UnbondedStaking.Types (UnbondedPoolParams(UnbondedPoolParams), InitialUnbondedParams(InitialUnbondedParams), Entry(..))
 import Utils (big, currentRoundedTime, mkRatUnsafe)
 
 -- | Admin deposit/closing
@@ -173,23 +170,14 @@ mkUnbondedPoolParams admin nftCs assocListCs (InitialUnbondedParams iup) = do
     }
 
 -- | Calculates user awards according to spec formula
-calculateRewards
-  :: Rational
-  -> BigInt
-  -> BigInt
-  -> BigInt
-  -> BigInt
-  -> Contract () Rational
-calculateRewards rewards totalRewards deposited newDeposit totalDeposited = do
+calculateRewards :: Entry -> Rational
+calculateRewards (Entry e) = do
   -- New users will have zero total deposited for the first cycle
-  if totalDeposited == zero then
-    pure zero
-  else do
-    let
-      lhs = mkRatUnsafe $ totalRewards % totalDeposited
-      rhs = rewards + mkRatUnsafe (deposited % one)
-      rhs' = rhs - mkRatUnsafe (newDeposit % one)
-      f = rhs' * lhs
-    when (f < zero) $ throwContractError
-      "calculateRewards: invalid rewards amount"
-    pure $ rewards + f
+  if e.totalDeposited == zero then
+    zero
+  else let
+    lhs = mkRatUnsafe $ e.totalRewards % e.totalDeposited
+    rhs = e.rewards + mkRatUnsafe (e.deposited % one)
+    rhs' = rhs - mkRatUnsafe (e.newDeposit % one)
+    f = rhs' * lhs
+    in e.rewards + f

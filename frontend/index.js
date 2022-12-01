@@ -24,10 +24,10 @@ exports.BondedPool = class BondedPool {
     )();
   }
 
-  async close(amount, idxArray) {
+  async close(batchSize, idxArray) {
     const contracts = await frontend;
     const _config = await this._config;
-    return contracts.callCloseBondedPool(_config)(this.args)(amount)(
+    return contracts.callCloseBondedPool(_config)(this.args)(batchSize)(
       idxArray
     )();
   }
@@ -59,10 +59,10 @@ exports.UnbondedPool = class UnbondedPool {
     this._config = _config;
   }
 
-  async deposit(amount, idxArray) {
+  async deposit(amount, batchSize, idxArray) {
     const contracts = await frontend;
     const _config = await this._config;
-    return contracts.callDepositUnbondedPool(_config)(this.args)(amount)(
+    return contracts.callDepositUnbondedPool(_config)(amount)(this.args)(batchSize)(
       idxArray
     )();
   }
