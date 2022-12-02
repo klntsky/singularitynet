@@ -597,6 +597,7 @@ userStakeUnbondedPoolContract
                 , middleConstraints
                 , lastConstraints
                 , mustBeSignedBy userPkh
+                , mustValidateIn range
                 ]
             /\
               mconcat
