@@ -487,15 +487,16 @@ callGetUnbondedPools cfg addrStr iba = Promise.fromAff do
 
 callDepositUnbondedPool
   :: ConfigParams ()
+  -> BigInt
   -> UnbondedPoolArgs
   -> BigInt
   -> Array Int
   -> Effect (Promise (Array Int))
-callDepositUnbondedPool cfg upa bi arr = Promise.fromAff $ runContract cfg do
+callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
     $ fromBigInt bi
-  depositUnbondedPoolContract upp nat arr
+  depositUnbondedPoolContract amt upp nat arr
 
 callCloseUnbondedPool
   :: ConfigParams ()

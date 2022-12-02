@@ -28,23 +28,23 @@ const main = async () => {
   const nodeTime = await singularitynet.getNodeTime(localHostSdkConfig);
   console.log(nodeTime);
   const date = new Date(nodeTime);
-  const delay = BigInteger(80000);
+  const delay = BigInteger(10000);
   console.log(
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
   // Length of all periods (staking/withdraing, bonding and admin)
-  const periodLength = BigInteger(180000);
+  const periodLength = BigInteger(150000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
   const initialUnbondedArgs: InitialUnbondedArgs = {
     start: nodeTime.add(delay),
-    userLength: BigInteger(360000),
+    userLength: periodLength,
     bondingLength: periodLength,
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
-    adminLength: BigInteger(90000),
+    adminLength: periodLength,
     interestLength: periodLength,
     increments: BigInteger(1),
     unbondedAssetClass: {
@@ -67,72 +67,72 @@ const main = async () => {
   // Note that more than one pool may be found at a given address, since it's
   // possible to create many pools with the same `InitialBondedArgs`. But this
   // is unlikely if the `start` parameter is different for every pool.
-  const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
-    localHostSdkConfig,
-    unbondedPool.address,
-    initialUnbondedArgs
-  );
+  // const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
+  //   localHostSdkConfig,
+  //   unbondedPool.address,
+  //   initialUnbondedArgs
+  // );
 
   // We get the first pool of the list (which should be the only one)
   // and we use it instead of the first object. This should not make a
   // difference, the objects are identical.
-  const unbondedPoolCopy = unbondedPoolsArray[0];
-  unbondedPool = unbondedPoolCopy;
+  // const unbondedPoolCopy = unbondedPoolsArray[0];
+  // unbondedPool = unbondedPoolCopy;
 
   // User stakes, waiting for pool start
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
-  const user1StakeAmt = BigInteger(20);
-  var r0 = await unbondedPool.userStake(user1StakeAmt);
-  console.log(JSON.stringify(r0))
-
-  // User stakes, waiting for pool start
-  await logSwitchAndCountdown(user, "staking/withdrawing  period", unbondedPoolArgs.start);
-  const user2StakeAmt = BigInteger(10);
-  r0 = await unbondedPool.userStake(user2StakeAmt);
-  console.log(JSON.stringify(r0))
-
-  // User stakes, waiting for pool start
-  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
-  const user3StakeAmt = BigInteger(50);
-  var r0 = await unbondedPool.userStake(user3StakeAmt);
-  console.log(JSON.stringify(r0))
-
-  // User stakes, waiting for pool start
-  await logSwitchAndCountdown(user, "staking/withdrawing  period", unbondedPoolArgs.start);
-  const user4StakeAmt = BigInteger(43);
-  r0 = await unbondedPool.userStake(user4StakeAmt);
+  const userStakeAmt = BigInteger(40000);
+  const r0 = await unbondedPool.userStake(userStakeAmt);
   console.log(JSON.stringify(r0))
 
   // Admin deposits to pool, waiting for userLength to end
-  await logSwitchAndCountdown(admin,"bonding period", unbondedPoolArgs.start.add(unbondedPoolArgs.userLength));
+  await logSwitchAndCountdown(
+    admin,
+    "bonding period",
+    unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
+  );
   const depositBatchSize = BigInteger(0);
-  const r1 = await unbondedPool.deposit(depositBatchSize, []);
+  const adminDeposit = BigInteger(40000);
+  const r1 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
   console.log(JSON.stringify(r1));
 
   // User withdraws during bonding period, waiting for adminLength to finish
-  await logSwitchAndCountdown(
-    user,
-    "staking/withdrawing  period",
-    unbondedPoolArgs.start.add(
-      unbondedPoolArgs.userLength).add(
-      unbondedPoolArgs.adminLength)
-  );
-  const r2 = await unbondedPool.userWithdraw();
-  console.log(JSON.stringify(r2));
+  // await logSwitchAndCountdown(
+  //   user,
+  //   "staking/withdrawing  period",
+  //   unbondedPoolArgs.start.add(
+  //     unbondedPoolArgs.userLength).add(
+  //     unbondedPoolArgs.adminLength)
+  // );
+  // const r2 = await unbondedPool.userWithdraw();
+  // console.log(JSON.stringify(r2));
 
   // User stakes during user period, waiting for bondingLength to finish
-  await logSwitchAndCountdown(
-    user,
-    "staking/withdrawing  period",
-    unbondedPoolArgs.start.add(
-      unbondedPoolArgs.userLength).add(
-      unbondedPoolArgs.adminLength).add(
-      unbondedPoolArgs.bondingLength)
-  );
-  const r3 = await unbondedPool.userStake(user1StakeAmt);
-  console.log(JSON.stringify(r3));
+  // await logSwitchAndCountdown(
+  //   user,
+  //   "staking/withdrawing  period",
+  //   unbondedPoolArgs.start.add(
+  //     unbondedPoolArgs.userLength).add(
+  //     unbondedPoolArgs.adminLength).add(
+  //     unbondedPoolArgs.bondingLength)
+  // );
+  // const r3 = await unbondedPool.userStake(userStakeAmt);
+  // console.log(JSON.stringify(r3));
 
   // Admin closes pool, waiting for userLength to finish
+  //await logSwitchAndCountdown(
+  //    admin,
+  //    "admin period",
+  //    unbondedPoolArgs.start.add(
+  //      unbondedPoolArgs.userLength).add(
+  //      unbondedPoolArgs.adminLength).add(
+  //      unbondedPoolArgs.bondingLength).add(
+  //      unbondedPoolArgs.userLength));
+
+  //const closeBatchSize = BigInteger(10);
+  //const r4 = await unbondedPool.close(closeBatchSize, []);
+  //console.log(JSON.stringify(r4));
+
   await logSwitchAndCountdown(
       admin,
       "admin period",
@@ -142,8 +142,8 @@ const main = async () => {
         unbondedPoolArgs.bondingLength).add(
         unbondedPoolArgs.userLength));
 
-  const closeBatchSize = BigInteger(10);
-  const r4 = await unbondedPool.close(closeBatchSize, []);
+  const closeBatchSize = BigInteger(0);
+  const r4 = await unbondedPool.deposit(BigInteger(0), closeBatchSize, []);
   console.log(JSON.stringify(r4));
 
   // The user withdraws their rewards after pool closure.
@@ -191,7 +191,7 @@ const localHostSdkConfig: SdkConfig = {
 const logSwitchAndCountdown = async (
   who: "USER" | "ADMIN", // the wallet to switch to
   what: string, // what we're waiting for
-  time: bigInt.BigInteger // how long to wait
+  time: BigInteger // how long to wait
 ) => {
   console.log(`SWITCH WALLETS NOW - CHANGE TO ${who}`);
   const _input = prompt("Press OK after switching.");
@@ -204,7 +204,7 @@ const countdownTo = async (tf: number) => {
   while (now <= tf) {
     console.log(`${now} <= ${tf}`);
     console.log(`Countdown: ${showSecondsDiff(tf, now)}`);
-    await sleep(10000);
+    await sleep(20000);
     now = await singularitynet.getNodeTime(localHostSdkConfig);
   }
   console.log(`${now} > ${tf}`);

@@ -25,6 +25,7 @@ You can edit this file as you like.
   , "ordered-collections"
   , "partial"
   , "prelude"
+  , "rationals"
   , "record"
   , "strings"
   , "transformers"
