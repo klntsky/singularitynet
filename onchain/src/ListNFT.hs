@@ -35,11 +35,13 @@ import Utils (
   getOnlySignatory,
   oneOf,
   oneWith,
+  pconst,
   peq,
   pflip,
   pguardC,
   pletC,
   porList,
+  ptrue,
   ptryFromUndata,
   punit,
  )
@@ -193,7 +195,7 @@ mintGuard ::
   TermCont s (Term s PUnit)
 mintGuard listNftCs entryTn mint = do
   pguardC "mintGuard: failed when checking minted value" $
-    oneOf # listNftCs # entryTn # mint
+    oneOf # listNftCs # entryTn # mint #&& oneWith # (peq # listNftCs) # (pconst ptrue) # (pconst ptrue) # mint
   pure punit
 
 -- | Fails if the TX does *not* burn the appropriate list oken

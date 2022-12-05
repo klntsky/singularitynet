@@ -4,6 +4,7 @@ import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import Test.SpecNFT (nftTests)
 import Test.SpecPeriod (specPeriodTests)
 import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Unit (unitTests)
 import Prelude (IO)
 
 -- | @since 0.1
@@ -22,4 +23,5 @@ tests =
     "SingularityNet"
     [ nftTests
     , specPeriodTests
+    , unitTests
     ]

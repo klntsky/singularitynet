@@ -444,7 +444,7 @@ oneOf = phoistAcyclic $
     oneWith
       # (peq # cs)
       # (peq # tn)
-      # (ple # 1)
+      # (peq # 1)
       #$ val
 
 {- | Returns `PTrue` if the token described by its `PCurrencySymbol` and
@@ -910,7 +910,7 @@ getCoWithDatum poolAddr pred outputs datums = do
   ppairData . pmatch cos $ \case
     PNil ->
       ptraceError
-        "getCoWithDatum: found more than one CO with given \
+        "getCoWithDatum: No input found with given datum \
         \ datum"
     PCons x xs -> pmatch xs $ \case
       PCons _ _ ->
