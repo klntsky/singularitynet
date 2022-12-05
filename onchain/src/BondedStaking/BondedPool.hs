@@ -432,12 +432,12 @@ newStakeLogic txInfo params spentInput datum holderPkh stakeAmt mintAct =
             currentEntryKey <- pletC $ pfromData $ pfield @"_0" # currentEntryKey'
             -- Validate order of entries
             pguardC
-              "newStakeLogic (mintInBetween): new entry's key should be \
+              "newStakeLogic (mintHead): new entry's key should be \
               \strictly less than  current entry"
               $ pfromData newEntry.key #< currentEntryKey
             -- The new entry should point to the current entry
             pguardC
-              "newStakeLogic (mintInBetween): new entry should point to \
+              "newStakeLogic (mintHead): new entry should point to \
               \current entry"
               $ newEntry.next `pointsTo` currentEntryKey
             pure punit
@@ -445,7 +445,7 @@ newStakeLogic txInfo params spentInput datum holderPkh stakeAmt mintAct =
           PDNothing _ -> unTermCont $ do
             -- The new entry should *not* point to anything
             pguardC
-              "newStakeLogic (mintInBetween): new entry should not point to \
+              "newStakeLogic (mintHead): new entry should not point to \
               \anything"
               $ pointsNowhere newEntry.next
             pure punit
@@ -471,7 +471,7 @@ newStakeLogic txInfo params spentInput datum holderPkh stakeAmt mintAct =
           PDJust key -> pfield @"_0" # key
           PDNothing _ ->
             ptraceError
-              "newStakeLogic (mintEnd): the previous \
+              "newStakeLogic (mintInBetween): the previous \
               \ entry does not point to another entry"
         ---- BUSINESS LOGIC ----
         -- Validate initialization of new entry
@@ -480,25 +480,25 @@ newStakeLogic txInfo params spentInput datum holderPkh stakeAmt mintAct =
         equalEntriesGuard prevEntry prevEntryUpdated
         ---- INDUCTIVE CONDITIONS ----
         -- Validate that previousEntry is a list entry and matches redeemer
-        pguardC "newStakeLogic (mintEnd): spent input is not an entry" $
+        pguardC "newStakeLogic (mintInBetween): spent input is not an entry" $
           hasListNft params.assocListCs spentInputResolved.value
         pguardC
-          "newStakeLogic (mintEnd): spent input is not the same as input in \
+          "newStakeLogic (mintInBetween): spent input is not the same as input in \
           \ redeemer"
           $ spentInput.outRef #== entriesRefs.previousEntry
         -- Previous entry should now point to the new entry
         pguardC
-          "newStakeLogic (mintEnd): the previous entry should point to the \
+          "newStakeLogic (mintInBetween): the previous entry should point to the \
           \new entry"
           $ prevEntryUpdated.next `pointsTo` newEntry.key
         -- And new entry should point to the current entry
         pguardC
-          "newStakeLogic (mintEnd): the new entry should point to the \
+          "newStakeLogic (mintInBetween): the new entry should point to the \
           \current entry"
           $ newEntry.next `pointsTo` currEntryKey
         -- Validate entries' order
         pguardC
-          "newStakeLogic (mintEnd): failed to validate order in previous, \
+          "newStakeLogic (mintInBetween): failed to validate order in previous, \
           \current and new entry"
           $ pfromData prevEntry.key #< newEntry.key
             #&& newEntry.key #< currEntryKey

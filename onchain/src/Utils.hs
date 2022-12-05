@@ -910,7 +910,7 @@ getCoWithDatum poolAddr pred outputs datums = do
   ppairData . pmatch cos $ \case
     PNil ->
       ptraceError
-        "getCoWithDatum: found more than one CO with given \
+        "getCoWithDatum: No input found with given datum \
         \ datum"
     PCons x xs -> pmatch xs $ \case
       PCons _ _ ->
