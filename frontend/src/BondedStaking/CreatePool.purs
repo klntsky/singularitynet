@@ -26,7 +26,8 @@ import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( BalancedSignedTransaction
   , TransactionOutputWithRefScript(..)
-  , balanceAndSignTx
+  , balanceTx
+  , signTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -89,8 +90,8 @@ createBondedPoolContract ibp =
       logInfo_ "createBondedPoolContract: Admin Address"
         =<< addressToBech32 adminAddr
       -- Get utxos at the wallet address
-      adminUtxos <- liftedM "createBondedPoolContract: Cannot get user Utxos"
-        $ utxosAt adminAddr
+      adminUtxos <- liftedM "createBondedPoolContract: could not get admin's utxos" $
+          utxosAt adminAddr
       txOutRef <-
         liftContractM "createBondedPoolContract: Could not get head UTXO"
           $ fst
@@ -123,7 +124,7 @@ createBondedPoolContract ibp =
       let
         valHash = validatorHash validator
         mintValue = singleton stateNftCs tokenName one
-      address <- addressToBech32 $ scriptHashAddress valHash
+      address <- addressToBech32 $ scriptHashAddress valHash Nothing
       logInfo_ "createBondedPoolContract: BondedPool Validator's address"
         address
       let
@@ -155,11 +156,8 @@ createBondedPoolContract ibp =
       -- 2) Reindex `Spend` redeemers after finalising transaction inputs.
       -- 3) Attach datums and redeemers to transaction.
       -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
-      signedTx <-
-        liftedM
-          "createBondedPoolContract: Cannot balance, reindex redeemers, attach /\
-          \datums redeemers and sign"
-          $ balanceAndSignTx unattachedUnbalancedTx
+      bTx <- liftedE $ balanceTx unattachedUnbalancedTx
+      signedTx <- signTransaction bTx
       -- Return the transaction and the pool info for subsequent transactions
       pure { signedTx, bondedPoolParams, address }
 
@@ -172,9 +170,8 @@ getBondedPoolsContract
   -> Contract () (Array BondedPoolParams)
 getBondedPoolsContract addrStr ibp = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool UTxOs"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool utxos" $
+     utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getBondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'BondedStakingToken')

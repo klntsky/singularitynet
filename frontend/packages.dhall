@@ -224,6 +224,7 @@ let additions =
           , "node-streams"
           , "nonempty"
           , "now"
+          , "node-readline"
           , "numbers"
           , "optparse"
           , "ordered-collections"
@@ -260,7 +261,7 @@ let additions =
           , "variant"
           ]
         , repo = "https://github.com/Plutonomicon/cardano-transaction-lib.git"
-        , version = "767e1f35b8b1f243f31ed3360d85a59ef695262b"
+        , version = "362c651cc9af7d40e2f8e4054a58fd209e81d2c3"
         }
     }
 in upstream // additions

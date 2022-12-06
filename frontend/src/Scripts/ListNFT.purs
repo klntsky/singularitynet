@@ -6,15 +6,11 @@ import Contract.Prelude
 
 import Contract.Monad (Contract, liftContractE)
 import Contract.PlutusData (toData)
-import Contract.Scripts
-  ( ClientError
-  , MintingPolicy(MintingPolicy)
-  , PlutusScript
-  , applyArgs
-  )
+import Contract.Scripts (ClientError, MintingPolicy(PlutusMintingPolicy), PlutusScript, applyArgs)
 import Contract.Value (CurrencySymbol)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
+import Data.Bifunctor (rmap)
 import Types (StakingType(Bonded, Unbonded))
 import Utils (jsonReader)
 
@@ -33,7 +29,7 @@ mkListNFTPolicy
   -> Contract r (Either ClientError MintingPolicy)
 mkListNFTPolicy st nftCs = do
   unappliedScript <- liftContractE $ listNFTPolicy st
-  applyArgs (MintingPolicy unappliedScript) [ toData nftCs ]
+  map (rmap PlutusMintingPolicy) $ applyArgs unappliedScript [ toData nftCs ]
 
 foreign import _bondedListNFT :: Json
 foreign import _unbondedListNFT :: Json

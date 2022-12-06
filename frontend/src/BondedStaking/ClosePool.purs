@@ -37,7 +37,7 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Data.Array (elemIndex, (!!))
 import Data.Map (toUnfoldable)
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
   ( bondedStakingTokenName
@@ -49,8 +49,8 @@ import Types
   , BondedStakingAction(CloseAct)
   , BondedStakingDatum
   )
-import Types.Natural (Natural)
-import Types.Redeemer (Redeemer(Redeemer))
+import Contract.Numeric.Natural (Natural)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( getUtxoWithNFT
   , logInfo_
@@ -83,13 +83,12 @@ closeBondedPoolContract
     $ mkBondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "closeBondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "closeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "closeBondedPoolContract: Cannot get pool's utxos at pool address" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- liftedM "closeBondedPoolContract: could not obtain pool utxos" $
+     utxosAt poolAddr
   logInfo_ "closeBondedPoolContract: Pool's UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "closeBondedPoolContract: Cannot create TokenName"

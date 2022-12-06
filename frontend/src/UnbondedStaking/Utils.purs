@@ -12,9 +12,10 @@ import Contract.Address (PaymentPubKeyHash)
 import Contract.Monad (Contract, liftContractM, throwContractError)
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.Value (CurrencySymbol)
+import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, interval)
 import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
-import Types.Interval (POSIXTime(POSIXTime), POSIXTimeRange, interval)
+import Data.BigInt as BigInt
 import UnbondedStaking.Types (UnbondedPoolParams(UnbondedPoolParams), InitialUnbondedParams(InitialUnbondedParams), Entry(..))
 import Utils (big, currentRoundedTime, mkRatUnsafe)
 
@@ -39,7 +40,7 @@ getAdminTime (UnbondedPoolParams upp) = do
   -- Return range
   start /\ end <- liftContractM "getAdminTime: this is not a admin period" $
     isWithinPeriod currTime' cycleLength adminStart adminEnd
-  pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+  pure { currTime, range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1) }
 
 -- | User deposits/withdrawals
 getUserTime
@@ -62,7 +63,7 @@ getUserTime (UnbondedPoolParams upp) = do
   -- Return range
   start /\ end <- liftContractM "getUserTime: this is not a user period" $
     isWithinPeriod currTime' cycleLength userStart userEnd
-  pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+  pure { currTime, range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1) }
 
 -- | User withdrawals only
 -- | Note: Period can either be in bonding period or user period

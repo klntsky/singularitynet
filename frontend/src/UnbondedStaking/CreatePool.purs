@@ -28,7 +28,8 @@ import Contract.Transaction
   ( BalancedSignedTransaction
   , TransactionHash
   , TransactionOutputWithRefScript(..)
-  , balanceAndSignTx
+  , balanceTx
+  , signTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -47,7 +48,7 @@ import Control.Monad.Error.Class (liftMaybe)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
 import Effect.Exception as Exception
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
@@ -57,7 +58,7 @@ import Settings
   , unbondedStakingTokenName
   )
 import Types (StakingType(Unbonded))
-import Types.Interval (POSIXTime(POSIXTime))
+import Contract.Time (POSIXTime(POSIXTime))
 import UnbondedStaking.Types
   ( InitialUnbondedParams(InitialUnbondedParams)
   , UnbondedPoolParams
@@ -129,7 +130,7 @@ createUnbondedPoolContract iup =
     let
       valHash = validatorHash validator
       mintValue = singleton stateNftCs tokenName one
-    address <- addressToBech32 $ scriptHashAddress valHash
+    address <- addressToBech32 $ scriptHashAddress valHash Nothing
     logInfo_ "createUnbondedPoolContract: UnbondedPool Validator's address"
       address
     let
@@ -162,11 +163,8 @@ createUnbondedPoolContract iup =
     -- 2) Reindex `Spend` redeemers after finalising transaction inputs.
     -- 3) Attach datums and redeemers to transaction.
     -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
-    signedTx <-
-      liftedM
-        "createUnbondedPoolContract: Cannot balance, reindex redeemers, attach /\
-        \datums redeemers and sign"
-        $ balanceAndSignTx unattachedBalancedTx
+    bTx <- liftedE $ balanceTx unattachedBalancedTx
+    signedTx <- signTransaction bTx
 
     -- Return the pool info for subsequent transactions
     pure { signedTx, unbondedPoolParams, address }

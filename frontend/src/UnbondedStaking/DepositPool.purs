@@ -23,12 +23,12 @@ import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Ratio (Ratio)
 import Data.Unfoldable (none)
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types.Natural (fromBigInt')
-import Types.Redeemer (Redeemer(Redeemer))
-import Types.Scripts (ValidatorHash)
+import Contract.Numeric.Natural (fromBigInt')
+import Contract.PlutusData (Redeemer(Redeemer))
+import Contract.Scripts (ValidatorHash)
 import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(AdminAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
 import Utils (getUtxoWithNFT, mkOnchainAssocList, logInfo_, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash, toRational)
@@ -77,7 +77,7 @@ depositUnbondedPoolContract
     $ mkUnbondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "depositUnbondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "depositUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the unbonded pool's utxo

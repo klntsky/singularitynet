@@ -35,7 +35,8 @@ import Contract.Transaction
   ( TransactionInput
   , TransactionOutput
   , TransactionOutputWithRefScript
-  , balanceAndSignTx
+  , balanceTx
+  , signTransaction
   , TransactionHash
   , BalancedSignedTransaction
   )
@@ -52,7 +53,7 @@ import Contract.Value (Value, mkTokenName, singleton)
 import Data.Array (catMaybes)
 import Data.BigInt (BigInt, fromInt)
 import Data.Map as Map
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
@@ -65,8 +66,8 @@ import Types
   , ListAction(ListRemove)
   , StakingType(Unbonded)
   )
-import Types.Rational (Rational, denominator, numerator)
-import Types.Redeemer (Redeemer(Redeemer))
+import Contract.Numeric.Rational (Rational, denominator, numerator)
+import Contract.PlutusData (Redeemer(Redeemer))
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedPoolParams(UnbondedPoolParams)
@@ -127,8 +128,7 @@ userWithdrawUnbondedPoolContract
   logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
 
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userWithdrawUnbondedPoolContract: Cannot get user Utxos"
+  userUtxos <- liftedM "userWithdrawUnbondedPoolContract: could not obtain user utxos"
       $ utxosAt userAddr
   logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
 
@@ -140,16 +140,13 @@ userWithdrawUnbondedPoolContract
       $ mkUnbondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "userWithdrawUnbondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "userWithdrawUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "userWithdrawUnbondedPoolContract: Cannot get pool's\
-      \ utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- liftedM "userWithdrawUnbondedPoolContract: could not obtain pool utxos" $
+     utxosAt poolAddr
   logInfo_ "userWithdrawUnbondedPoolContract: Pool UTxOs" unbondedPoolUtxos
 
   -- Get asset UTxOs in unbonded pool
@@ -441,11 +438,8 @@ userWithdrawUnbondedPoolContract
   logInfo_
     "userWithdrawUnbondedPoolContract: unAttachedUnbalancedTx"
     unattachedBalancedTx
-  signedTx <-
-    liftedM
-      "userWithdrawUnbondedPoolContract: Cannot balance, reindex redeemers, \
-      \ attach datums redeemers and sign"
-      $ balanceAndSignTx unattachedBalancedTx
+  bTx <- liftedE $ balanceTx unattachedBalancedTx
+  signedTx <- signTransaction bTx
   pure { signedTx }
 
 -- | This function filters all the asset UTxOs from a `UtxoMap`

@@ -32,7 +32,8 @@ import Contract.Transaction
   ( TransactionHash
   , TransactionOutput
   , BalancedSignedTransaction
-  , balanceAndSignTx
+  , balanceTx
+  , signTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -45,7 +46,7 @@ import Contract.Utxos (utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
 import Data.Array (head)
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
@@ -58,7 +59,7 @@ import Types
   , MintingAction(MintHead)
   , StakingType(Unbonded)
   )
-import Types.Redeemer (Redeemer(Redeemer))
+import Contract.PlutusData (Redeemer(Redeemer))
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedStakingAction(StakeAct)
@@ -107,23 +108,20 @@ userStakeUnbondedPoolContract
       getWalletAddress
 
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userStakeUnbondedPoolContract: Cannot get user Utxos"
-      $ utxosAt userAddr
+  userUtxos <- liftedM "userStakeUnbondedPoolContract: could not obtain user utxos" $
+      utxosAt userAddr
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "userStakeUnbondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "userStakeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's datum and utxos
-  unbondedPoolUtxos <-
-    liftedM
-      "userStakeUnbondedPoolContract: Cannot get pool's utxos at pool address"
+  unbondedPoolUtxos <- liftedM "userStakeUnbondedPoolContract: could not obtain user utxos"
       $ utxosAt poolAddr
   logInfo_ "userStakeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
@@ -620,10 +618,7 @@ userStakeUnbondedPoolContract
   logInfo_
     "userStakeUnbondedPoolContract: unAttachedUnbalancedTx"
     unattachedBalancedTx
-  signedTx <-
-    liftedM
-      "userStakeUnbondedPoolContract: Cannot balance, reindex redeemers, attach \
-      \datums redeemers and sign"
-      $ balanceAndSignTx unattachedBalancedTx
+  bTx <- liftedE $ balanceTx unattachedBalancedTx
+  signedTx <- signTransaction bTx
   -- Submit transaction using Cbor-hex encoded `ByteArray`
   pure { signedTx }

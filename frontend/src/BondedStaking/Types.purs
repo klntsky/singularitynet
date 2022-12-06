@@ -30,12 +30,13 @@ import Contract.PlutusData
   , genericFromData
   , genericToData
   , toData
+  , S
+  , Z
   )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Transaction (TransactionInput)
 import Contract.Value (CurrencySymbol, TokenName)
 import Data.BigInt (BigInt)
-import TypeLevel.Nat (S, Z)
 
 newtype AssetClass = AssetClass
   { currencySymbol :: CurrencySymbol
