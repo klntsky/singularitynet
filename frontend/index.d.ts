@@ -11,6 +11,14 @@ export declare class Pool<T> {
   close(batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
+  getAssocList(): Promise<EntryList>;
+}
+
+export declare class EntryList {
+  constructor (sdk: any, entries: UserEntry[]);
+  private sdk: any
+  readonly entries: UserEntry[];
+  byPubKeyHash(pkh: string): Promise<UserEntry>;
 }
 
 export type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
@@ -44,6 +52,12 @@ export type SdkConfig = {
   logLevel: LogLevel;
   walletSpec: WalletSpec;
 };
+
+export type UserEntry = {
+  key: string;
+  deposited: BigInteger;
+  rewards: BigInteger
+}
 
 // Bonded pool
 

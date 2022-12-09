@@ -33,7 +33,7 @@ const main = async () => {
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
   // Length of all periods (staking/withdraing, bonding and admin)
-  const periodLength = BigInteger(150000);
+  const periodLength = BigInteger(1500000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
