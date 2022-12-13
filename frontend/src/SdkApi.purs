@@ -22,6 +22,7 @@ module SdkApi
   , callUserStakeUnbondedPool
   , callUserWithdrawBondedPool
   , callUserWithdrawUnbondedPool
+  , fromSdkLogLevel
   , toUnbondedPoolArgs
   ) where
 
@@ -89,9 +90,9 @@ import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
   , InitialUnbondedParams
-  , Entry
+  , Entry(..)
   )
-import UnbondedStaking.Utils (queryAssocListUnbonded)
+import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 import UserStake (userStakeBondedPoolContract)
@@ -466,12 +467,6 @@ type InitialUnbondedArgs =
   , unbondedAssetClass :: SdkAssetClass
   }
 
-type UserEntry =
-  { key :: String
-  , deposited :: BigInt
-  , rewards :: BigInt
-  }
-
 callCreateUnbondedPool
   :: ConfigParams ()
   -> InitialUnbondedArgs
@@ -559,6 +554,13 @@ callWithUnbondedPoolArgs contract cfg = callWithArgs fromUnbondedPoolArgs
   contract
   cfg
 
+type UserEntry =
+  { key :: ByteArray
+  , deposited :: BigInt
+  , rewards :: Rational
+  , nextCycleRewards :: Rational
+  }
+
 callHashPkh :: String -> Effect (Promise ByteArray)
 callHashPkh pkh = Promise.fromAff $ do
   p <- liftEither $ fromSdkAdmin "callHashPkh" pkh
@@ -567,11 +569,19 @@ callHashPkh pkh = Promise.fromAff $ do
 callQueryAssocListUnbondedPool
   :: ConfigParams ()
   -> UnbondedPoolArgs
-  -> Effect (Promise (Array Entry))
+  -> Effect (Promise (Array UserEntry))
 callQueryAssocListUnbondedPool cfg upa = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   entries <- queryAssocListUnbonded upp
-  pure entries
+  pure $ map
+    ( \(Entry e) ->
+        { key: e.key
+        , deposited: e.deposited
+        , rewards: e.rewards
+        , nextCycleRewards: calculateRewards (wrap e)
+        }
+    )
+    entries
 
 toUnbondedPoolArgs :: UnbondedPoolParams -> UnbondedPoolArgs
 toUnbondedPoolArgs (UnbondedPoolParams upp) =

@@ -100,9 +100,7 @@ exports.UnbondedPool = class UnbondedPool {
 exports.EntryList = class EntryList {
   constructor (sdk, entries) {
     this.sdk = sdk;
-    this.entries = entries.map((e) => {
-      return { key: e.key, deposited: e.deposited, rewards: e.rewards };
-    })
+    this.entries = entries;
   }
 
   async byPubKeyHash(pkh) {
