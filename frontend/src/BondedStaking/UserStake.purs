@@ -107,7 +107,7 @@ userStakeBondedPoolContract
       getWalletAddress
   -- Get utxos at the wallet address
   userUtxos <- liftedM "userStakeBondedPoolContract: cannot get user utxos" $
-      utxosAt userAddr
+    utxosAt userAddr
   logInfo_ "userStakeBondedPoolContract: User Address" userAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "userStakeBondedPoolContract: Cannot create validator"
@@ -118,7 +118,8 @@ userStakeBondedPoolContract
   logInfo_ "userStakeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <- liftedM "userStakeBondedPoolContract: could not get pool utxos" $
+  bondedPoolUtxos <-
+    liftedM "userStakeBondedPoolContract: could not get pool utxos" $
       utxosAt poolAddr
   logInfo_ "userStakeBondedPoolContract: Pool UTXOs" bondedPoolUtxos
   tokenName <- liftContractM

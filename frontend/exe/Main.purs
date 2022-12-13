@@ -215,7 +215,12 @@ runContract_ contract = do
     , customLogger: Nothing
     , suppressLogs: false
     , extraConfig: {}
-    , hooks: { beforeInit: Nothing, beforeSign: Nothing, onError: Nothing, onSuccess: Nothing }
+    , hooks:
+        { beforeInit: Nothing
+        , beforeSign: Nothing
+        , onError: Nothing
+        , onSuccess: Nothing
+        }
     }
     contract
 

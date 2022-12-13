@@ -108,7 +108,8 @@ userStakeUnbondedPoolContract
       getWalletAddress
 
   -- Get utxos at the wallet address
-  userUtxos <- liftedM "userStakeUnbondedPoolContract: could not obtain user utxos" $
+  userUtxos <-
+    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos" $
       utxosAt userAddr
 
   -- Get the unbonded pool validator and hash
@@ -121,7 +122,8 @@ userStakeUnbondedPoolContract
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's datum and utxos
-  unbondedPoolUtxos <- liftedM "userStakeUnbondedPoolContract: could not obtain user utxos"
+  unbondedPoolUtxos <-
+    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos"
       $ utxosAt poolAddr
   logInfo_ "userStakeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM

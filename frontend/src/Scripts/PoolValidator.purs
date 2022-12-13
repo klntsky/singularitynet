@@ -7,7 +7,12 @@ import Contract.Prelude
 
 import Contract.Monad (Contract, liftedE)
 import Contract.PlutusData (class ToData, toData)
-import Contract.Scripts (ClientError, PlutusScript, Validator(Validator), applyArgs)
+import Contract.Scripts
+  ( ClientError
+  , PlutusScript
+  , Validator(Validator)
+  , applyArgs
+  )
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)

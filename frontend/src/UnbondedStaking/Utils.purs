@@ -9,7 +9,7 @@ module UnbondedStaking.Utils
 
 import Contract.Prelude hiding (length)
 
-import Contract.Address (PaymentPubKeyHash, getNetworkId, scriptHashAddress)
+import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -23,19 +23,11 @@ import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, interval)
 import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
 import Data.BigInt as BigInt
-import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
-  , InitialUnbondedParams(InitialUnbondedParams)
-  , Entry(..)
-  )
-import Utils (big, currentRoundedTime, mkRatUnsafe)
 import Contract.Scripts (validatorHash)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Utxos (utxosAt)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.PlutusData (getDatumByHash, fromData)
-import Data.Array (filter, head, takeWhile, (..))
-import Data.BigInt (BigInt, quot, toInt)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
@@ -49,7 +41,6 @@ import Utils
   , mkRatUnsafe
   , getUtxoDatumHash
   , mkOnchainAssocList
-  , hashPkh
   )
 
 -- | Admin deposit/closing

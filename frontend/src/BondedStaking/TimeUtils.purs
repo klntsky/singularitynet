@@ -32,7 +32,7 @@ import Contract.Time
   , POSIXTimeRange
   , interval
   )
-import Ctl.Internal.Types.Interval(posixTimeRangeToTransactionValidity)
+import Ctl.Internal.Types.Interval (posixTimeRangeToTransactionValidity)
 import Contract.Numeric.Natural (Natural)
 import Utils (big, bigIntRange, currentRoundedTime)
 

@@ -6,7 +6,12 @@ import Contract.Prelude
 
 import Contract.Monad (Contract, liftedE)
 import Contract.PlutusData (toData)
-import Contract.Scripts (ClientError, MintingPolicy(PlutusMintingPolicy), PlutusScript, applyArgs)
+import Contract.Scripts
+  ( ClientError
+  , MintingPolicy(PlutusMintingPolicy)
+  , PlutusScript
+  , applyArgs
+  )
 import Contract.Transaction (TransactionInput)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)

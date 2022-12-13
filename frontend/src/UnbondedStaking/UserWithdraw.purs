@@ -130,7 +130,8 @@ userWithdrawUnbondedPoolContract
   logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
 
   -- Get utxos at the wallet address
-  userUtxos <- liftedM "userWithdrawUnbondedPoolContract: could not obtain user utxos"
+  userUtxos <-
+    liftedM "userWithdrawUnbondedPoolContract: could not obtain user utxos"
       $ utxosAt userAddr
   logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
 
@@ -146,8 +147,9 @@ userWithdrawUnbondedPoolContract
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <- liftedM "userWithdrawUnbondedPoolContract: could not obtain pool utxos" $
-     utxosAt poolAddr
+  unbondedPoolUtxos <-
+    liftedM "userWithdrawUnbondedPoolContract: could not obtain pool utxos" $
+      utxosAt poolAddr
   logInfo_ "userWithdrawUnbondedPoolContract: Pool UTxOs" unbondedPoolUtxos
 
   -- Get asset UTxOs in unbonded pool

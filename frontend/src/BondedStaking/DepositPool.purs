@@ -99,7 +99,8 @@ depositBondedPoolContract
     liftedM "depositBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <- liftedM "depositBondedPoolContract: coudl not get admin's utxos" $
+  adminUtxos <- liftedM "depositBondedPoolContract: coudl not get admin's utxos"
+    $
       utxosAt adminAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "depositBondedPoolContract: Cannot create validator"
@@ -110,7 +111,8 @@ depositBondedPoolContract
   logInfo_ "depositBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <- liftedM "depositBondedPoolContract: could not get pool utxos" $
+  bondedPoolUtxos <-
+    liftedM "depositBondedPoolContract: could not get pool utxos" $
       utxosAt poolAddr
   logInfo_ "depositBondedPoolContract: Pool UTXOs" bondedPoolUtxos
   tokenName <- liftContractM

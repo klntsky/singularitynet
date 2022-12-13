@@ -119,7 +119,8 @@ userWithdrawBondedPoolContract
     liftedM "userWithdrawBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  userUtxos <- liftedM "userWithdrawBondedPoolContract: could not get user utxos" $
+  userUtxos <-
+    liftedM "userWithdrawBondedPoolContract: could not get user utxos" $
       utxosAt userAddr
   ---- FETCH POOL DATA ----
   -- Get the bonded pool validator and hash
@@ -132,7 +133,8 @@ userWithdrawBondedPoolContract
   logInfo_ "userWithdrawBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <- liftedM "userWithdrawBondedPoolContract: could not get pool utxos" $
+  bondedPoolUtxos <-
+    liftedM "userWithdrawBondedPoolContract: could not get pool utxos" $
       utxosAt poolAddr
   logInfo_ "userWithdrawBondedPoolContract: Pool UTxOs" bondedPoolUtxos
   tokenName <- liftContractM
