@@ -1,5 +1,7 @@
 "use strict";
 
+const { EntryList } = require("./index.js");
+
 const frontend = import("./output.js");
 
 exports.BondedPool = class BondedPool {
@@ -67,10 +69,10 @@ exports.UnbondedPool = class UnbondedPool {
     )();
   }
 
-  async close(amount, idxArray) {
+  async close(batchSize, idxArray) {
     const contracts = await frontend;
     const _config = await this._config;
-    return contracts.callCloseUnbondedPool(_config)(this.args)(amount)(
+    return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
       idxArray
     )();
   }
@@ -86,6 +88,50 @@ exports.UnbondedPool = class UnbondedPool {
     const _config = await this._config;
     return contracts.callUserWithdrawUnbondedPool(_config)(this.args)();
   }
+
+  async getAssocList() {
+    const contracts = await frontend;
+    const _config = await this._config;
+    const list = await contracts.callQueryAssocListUnbondedPool(_config)(this.args)();
+    return new exports.EntryList(contracts, list);
+  }
+};
+
+exports.EntryList = class EntryList {
+  constructor (sdk, entries) {
+    this.sdk = sdk;
+    this.entries = entries;
+  }
+
+  async byPubKeyHash(pkh) {
+    for (const el of this.entries) {
+      let pk = await this.sdk.callHashPkh(pkh)()
+      if (arraybufferEqual(el.key.buffer, pk.buffer)) {
+        return el
+      }
+    }
+  }
+}
+
+const arraybufferEqual = (buf1, buf2) => {
+  if (buf1 === buf2) {
+    return true;
+  }
+
+  if (buf1.byteLength !== buf2.byteLength) {
+    return false;
+  }
+
+  let view1 = new DataView(buf1);
+  let view2 = new DataView(buf2);
+
+  for (let i = 0; i < buf1.byteLength; i++) {
+    if (view1.getUint8(i) !== view2.getUint8(i)) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 exports.createBondedPool = async (sdkConfig, initialArgs) => {

@@ -111,7 +111,8 @@ userWithdrawUnbondedPoolContract
     ownPaymentPubKeyHash
   logInfo_ "userWithdrawUnbondedPoolContract: User's PaymentPubKeyHash" userPkh
   hashedUserPkh <- liftAff $ hashPkh userPkh
-  logInfo_ "userWithdrawUnbondedPoolContract: hashed user's PaymentPubKeyHash" hashedUserPkh
+  logInfo_ "userWithdrawUnbondedPoolContract: hashed user's PaymentPubKeyHash"
+    hashedUserPkh
 
   -- Get own staking hash
   userStakingPubKeyHash <-
@@ -119,7 +120,8 @@ userWithdrawUnbondedPoolContract
       "userWithdrawnUnbondedPoolContract: Cannot get\
       \ user's staking pub key hash" $
       ownStakePubKeyHash
-  logInfo_ "userWithdrawUnbondedPoolContract: User's StakePubKeyHash" userStakingPubKeyHash
+  logInfo_ "userWithdrawUnbondedPoolContract: User's StakePubKeyHash"
+    userStakingPubKeyHash
 
   -- Get the (Nami) wallet address
   userAddr <-
@@ -131,7 +133,6 @@ userWithdrawUnbondedPoolContract
   userUtxos <- liftedM "userWithdrawUnbondedPoolContract: could not obtain user utxos"
       $ utxosAt userAddr
   logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
-
 
   ---- FETCH POOL DATA ----
   -- Get the unbonded pool validator and hash
@@ -171,7 +172,8 @@ userWithdrawUnbondedPoolContract
     liftContractM
       "userWithdrawUnbondedPoolContract: Could not create token name for user`"
       $ mkTokenName hashedUserPkh
-  logInfo_ "userWithdrawUnbondedPoolContract: User's assoc list token name" assocListTn
+  logInfo_ "userWithdrawUnbondedPoolContract: User's assoc list token name"
+    assocListTn
 
   -- Get user entry utxo
   entryInput /\ entryOutput <-
@@ -362,7 +364,8 @@ userWithdrawUnbondedPoolContract
               -- in more detail
               logInfo' "userWithdrawUnbondedPoolContract: Compare GT"
               logInfo_ "userWithdrawUnbondedPoolContract: assoc list" assocList
-              logInfo_ "userWithdrawUnbondedPoolContract: hashedUserPkh" hashedUserPkh
+              logInfo_ "userWithdrawUnbondedPoolContract: hashedUserPkh"
+                hashedUserPkh
               { firstInput, secondInput }
                 /\ { firstOutput, secondOutput }
                 /\ _ <-

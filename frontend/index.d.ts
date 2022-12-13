@@ -11,6 +11,14 @@ export declare class Pool<T> {
   close(batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
+  getAssocList(): Promise<EntryList>;
+}
+
+export declare class EntryList {
+  constructor (sdk: any, entries: UserEntry[]);
+  private sdk: any
+  readonly entries: UserEntry[];
+  byPubKeyHash(pkh: string): Promise<UserEntry>;
 }
 
 export type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
@@ -31,7 +39,7 @@ export type SdkAssetClass = {
   tokenName: string;
 };
 
-export type SdkInterest = {
+export type Ratio = {
   numerator: BigInteger;
   denominator: BigInteger;
 };
@@ -44,6 +52,13 @@ export type SdkConfig = {
   logLevel: LogLevel;
   walletSpec: WalletSpec;
 };
+
+export type UserEntry = {
+  key: Uint8Array;
+  deposited: BigInteger;
+  rewards: Ratio;
+  nextCycleRewards: Ratio;
+}
 
 // Bonded pool
 
@@ -66,7 +81,7 @@ export type BondedPoolArgs = {
   end: BigInteger; // like POSIXTime so positive
   userLength: BigInteger; // like POSIXTime so positive
   bondingLength: BigInteger; // like POSIXTime so positive
-  interest: SdkInterest;
+  interest: Ratio;
   minStake: BigInteger; // Natural
   maxStake: BigInteger; // Natural
   bondedAssetClass: SdkAssetClass;
@@ -81,7 +96,7 @@ export type InitialBondedArgs = {
   end: BigInteger; // like POSIXTime so positive
   userLength: BigInteger; // like POSIXTime so positive
   bondingLength: BigInteger; // like POSIXTime so positive
-  interest: SdkInterest;
+  interest: Ratio;
   minStake: BigInteger; // Natural
   maxStake: BigInteger; // Natural
   bondedAssetClass: SdkAssetClass;
@@ -109,7 +124,7 @@ export type UnbondedPoolArgs = {
   adminLength: BigInteger; // like POSIXTime so positive
   interestLength: BigInteger; // like POSIXTime so positive
   increments: BigInteger; // Natural
-  interest: SdkInterest;
+  interest: Ratio;
   minStake: BigInteger; // Natural
   maxStake: BigInteger; // Natural
   unbondedAssetClass: SdkAssetClass;
@@ -125,7 +140,7 @@ export type InitialUnbondedArgs = {
   interestLength: BigInteger; // like POSIXTime so positive
   bondingLength: BigInteger; // like POSIXTime so positive
   increments: BigInteger; // Natural
-  interest: SdkInterest;
+  interest: Ratio;
   minStake: BigInteger; // Natural
   maxStake: BigInteger; // Natural
   unbondedAssetClass: SdkAssetClass;

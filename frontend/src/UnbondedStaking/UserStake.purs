@@ -250,7 +250,8 @@ userStakeUnbondedPoolContract
         "userStakeUnbondedPoolContract: STAKE TYPE - StateDatum is \
         \StateDatum { maybeEntryName: Just ..., open: true }"
       let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
-      logInfo_ "userStakeUnbondedPoolContract: Assoc list keys" $ map fst assocList
+      logInfo_ "userStakeUnbondedPoolContract: Assoc list keys" $ map fst
+        assocList
 
       -- If hashedUserPkh < key, we have a head deposit, spending the state utxo
       -- If hashedUserPkh == key, this is a non-init deposit spending the first
@@ -267,7 +268,7 @@ userStakeUnbondedPoolContract
           -- Minting a new Entry
           let
             mh = MintHead poolTxInput
-            
+
             -- Minting a new Entry
             valRedeemer = Redeemer $ toData $ StakeAct
               { stakeAmount: amt

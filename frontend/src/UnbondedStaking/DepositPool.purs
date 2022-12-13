@@ -2,18 +2,40 @@ module UnbondedStaking.DepositPool (depositUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.Numeric.Rational (Rational, denominator, numerator, (%))
-import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
+import Contract.PlutusData
+  ( PlutusData
+  , Datum(Datum)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups (ScriptLookups(..))
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustSpendScriptOutput, mustValidateIn)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
@@ -25,13 +47,34 @@ import Data.Ratio (Ratio)
 import Data.Unfoldable (none)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
 import Contract.Numeric.Natural (fromBigInt')
 import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.Scripts (ValidatorHash)
-import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(AdminAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
+import Settings
+  ( unbondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import UnbondedStaking.Types
+  ( Entry(Entry)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  , UnbondedStakingAction(AdminAct)
+  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  )
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
-import Utils (getUtxoWithNFT, mkOnchainAssocList, logInfo_, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash, toRational)
+import Utils
+  ( getUtxoWithNFT
+  , mkOnchainAssocList
+  , logInfo_
+  , mkRatUnsafe
+  , roundUp
+  , splitByLength
+  , submitTransaction
+  , toIntUnsafe
+  , mustPayToScript
+  , getUtxoDatumHash
+  , toRational
+  )
 
 -- | Deposits a certain amount in the pool
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -119,22 +162,26 @@ depositUnbondedPoolContract
 
       -- Obtain the on-chain association list. Note that if a previous deposit
       -- failed, some of these entries might be updated while the others are not.
-      let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
-          entriesInputs :: Array TransactionInput
-          entriesInputs = map (fst <<< snd) assocList
+      let
+        assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
+
+        entriesInputs :: Array TransactionInput
+        entriesInputs = map (fst <<< snd) assocList
 
       -- Get datums for entries in the list
       entriesDatums :: Array Entry <- getListDatums assocList
 
       -- Assign rewards and update fields for next cycle
-      let updatedEntriesDatums :: Array Entry
-          updatedEntriesDatums = updateEntriesList depositAmt entriesDatums
+      let
+        updatedEntriesDatums :: Array Entry
+        updatedEntriesDatums = updateEntriesList depositAmt entriesDatums
 
       -- Generate constraints/lookups for updating each entry
       -- TODO: Take into account depositList for completing partial updates
-      entryUpdates :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
-         traverse (updateEntryTx params valHash)
-                  (zip entriesInputs (zip entriesDatums updatedEntriesDatums))
+      entryUpdates
+        :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
+        traverse (updateEntryTx params valHash)
+          (zip entriesInputs (zip entriesDatums updatedEntriesDatums))
 
       -- updateList <-
       --   if null depositList then
@@ -205,7 +252,9 @@ depositUnbondedPoolContract
       throwContractError "depositUnbondedPoolContract: Datum incorrect type"
 
 -- | Get all entries' datums
-getListDatums :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript) -> Contract () (Array Entry)
+getListDatums
+  :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
+  -> Contract () (Array Entry)
 getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
   -- Get the entry's datum
   dHash <-
@@ -223,10 +272,12 @@ getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
   -- The get the entry datum
   case unbondedListDatum of
     EntryDatum { entry } -> pure entry
-    StateDatum _  ->
-        throwContractError "getListDatums: Expected a list datum but found a state datum"
+    StateDatum _ ->
+      throwContractError
+        "getListDatums: Expected a list datum but found a state datum"
     AssetDatum ->
-        throwContractError "getListDatums: Expected an list datum but found an asset datum"
+      throwContractError
+        "getListDatums: Expected an list datum but found an asset datum"
 
 -- | Updates all entries in two passes. We need two passes because all
 -- entries must contain the `totalDeposited` amount in the pool, which requires
@@ -236,68 +287,79 @@ updateEntriesList
   -> Array Entry
   -> Array Entry
 updateEntriesList nextDepositAmt entries =
-    uncurry updateTotalDeposited $ updateRewards nextDepositAmt entries
+  uncurry updateTotalDeposited $ updateRewards nextDepositAmt entries
 
 -- | Assign rewards to each entry, set `newDeposit` to zero, set next
 -- cycle rewards. Sum all deposits/rewards.
 updateRewards :: BigInt -> Array Entry -> (Rational /\ Array Entry)
 updateRewards nextDepositAmt entries = foldl update (zero /\ none) entries
-    where update :: (Rational /\ Array Entry) -> Entry -> (Rational /\ Array Entry)
-          update (accDeposits /\ arr) entry@(Entry e) =
-              let rewards' :: Rational
-                  rewards' = calculateRewards entry
-                  entry' :: Entry
-                  entry' = Entry $ e { newDeposit = zero, rewards = rewards', totalRewards = nextDepositAmt }
-              in (accDeposits + toRational e.deposited + rewards') /\ Array.snoc arr entry'
+  where
+  update :: (Rational /\ Array Entry) -> Entry -> (Rational /\ Array Entry)
+  update (accDeposits /\ arr) entry@(Entry e) =
+    let
+      rewards' :: Rational
+      rewards' = calculateRewards entry
+
+      entry' :: Entry
+      entry' = Entry $ e
+        { newDeposit = zero, rewards = rewards', totalRewards = nextDepositAmt }
+    in
+      (accDeposits + toRational e.deposited + rewards') /\ Array.snoc arr entry'
 
 -- | Set `totalDeposited` in all entries.
 updateTotalDeposited :: Rational -> Array Entry -> Array Entry
 updateTotalDeposited totalDeposited =
-    map (\(Entry e) -> Entry $ e { totalDeposited = roundUp totalDeposited })
+  map (\(Entry e) -> Entry $ e { totalDeposited = roundUp totalDeposited })
 
 -- | Creates the constraints and lookups for submitting an entry update. It
 -- takes both the old and updated version of the `Entry`.
-updateEntryTx ::
-  UnbondedPoolParams
+updateEntryTx
+  :: UnbondedPoolParams
   -> ValidatorHash
   -> (TransactionInput /\ Entry /\ Entry)
   -> Contract ()
        ( Tuple (TxConstraints Unit Unit)
-               (ScriptLookups.ScriptLookups PlutusData)
+           (ScriptLookups.ScriptLookups PlutusData)
        )
-updateEntryTx (UnbondedPoolParams ubp) valHash (txInput /\ (Entry e) /\ (Entry e')) = do
+updateEntryTx
+  (UnbondedPoolParams ubp)
+  valHash
+  (txInput /\ (Entry e) /\ (Entry e')) = do
   -- Get the token name for the user by hashing the key
   assocListTn <-
     liftContractM
       "updateEntryTx: Could not create token name for user"
       $ mkTokenName e.key
   -- Build datums and redeemers
-  let assetDatum = Datum $ toData AssetDatum
-      assetParams = unwrap ubp.unbondedAssetClass
-      assetCs = assetParams.currencySymbol
-      assetTn = assetParams.tokenName
-      -- The difference between the old and new `rewards` is what the user
-      -- has earnt in the previous cycle and what we need to deposit now.
-      rewardsDifference = e'.rewards - e.rewards
-      assetValue = singleton assetCs assetTn $ roundUp rewardsDifference
-      entryValue = singleton ubp.assocListCs assocListTn one
-      entryDatum = Datum $ toData $ EntryDatum { entry: Entry e' }
-      valRedeemer = Redeemer $ toData $ AdminAct
-        { totalRewards: fromBigInt' $ e'.totalRewards
-        , totalDeposited: fromBigInt' $ e'.totalDeposited
-        }
-      -- Build constraints and lookups
-      constraints :: TxConstraints Unit Unit
-      constraints =
-        mconcat
-          [
+  let
+    assetDatum = Datum $ toData AssetDatum
+    assetParams = unwrap ubp.unbondedAssetClass
+    assetCs = assetParams.currencySymbol
+    assetTn = assetParams.tokenName
+    -- The difference between the old and new `rewards` is what the user
+    -- has earnt in the previous cycle and what we need to deposit now.
+    rewardsDifference = e'.rewards - e.rewards
+    assetValue = singleton assetCs assetTn $ roundUp rewardsDifference
+    entryValue = singleton ubp.assocListCs assocListTn one
+    entryDatum = Datum $ toData $ EntryDatum { entry: Entry e' }
+    valRedeemer = Redeemer $ toData $ AdminAct
+      { totalRewards: fromBigInt' $ e'.totalRewards
+      , totalDeposited: fromBigInt' $ e'.totalDeposited
+      }
+
+    -- Build constraints and lookups
+    constraints :: TxConstraints Unit Unit
+    constraints =
+      mconcat
+        [
           -- We don't generate an Asset UTxO if not necessary. This is the case
           -- when a user has just staked in the pool and now rewards have been
           -- accrued.
-          if rewardsDifference == zero then mempty else mustPayToScript valHash assetDatum assetValue
-          , mustPayToScript valHash entryDatum entryValue
-          , mustSpendScriptOutput txInput valRedeemer
-          ]
+          if rewardsDifference == zero then mempty
+          else mustPayToScript valHash assetDatum assetValue
+        , mustPayToScript valHash entryDatum entryValue
+        , mustSpendScriptOutput txInput valRedeemer
+        ]
   entryDatumLookup <-
     liftContractM
       "updateEntryTx: Could not create state datum lookup"
@@ -339,8 +401,9 @@ mkEntryUpdateList
   -- The get the entry datum
   case unbondedListDatum of
     EntryDatum { entry } -> do
-      let Entry e = entry
-          calculatedRewards = calculateRewards entry
+      let
+        Entry e = entry
+        calculatedRewards = calculateRewards entry
       -- Get the token name for the user by hashing
       assocListTn <-
         liftContractM
@@ -371,7 +434,8 @@ mkEntryUpdateList
         -- The difference between `updatedRewards` and `rewards` are the
         -- rewards the user has earnt in the previous cycle and which we need
         -- to deposit now.
-        depositValue = singleton assetCs assetTn $ roundUp (calculatedRewards - e.rewards)
+        depositValue = singleton assetCs assetTn $ roundUp
+          (calculatedRewards - e.rewards)
         entryValue = singleton assocListCs assocListTn one
 
         -- Build constraints and lookups
