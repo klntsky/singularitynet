@@ -5,84 +5,42 @@ module UnbondedStaking.CreatePool
 
 import Contract.Prelude
 
-import Contract.Address
-  ( Bech32String
-  , addressToBech32
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (Bech32String, addressToBech32, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logWarn')
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
-  )
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM)
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionHash
-  , TransactionOutputWithRefScript(..)
-  , balanceTx
-  , signTransaction
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustMintValue
-  , mustSpendPubKeyOutput
-  )
+import Contract.Time (POSIXTime(POSIXTime))
+import Contract.Transaction (BalancedSignedTransaction, TransactionHash, TransactionOutputWithRefScript(..), balanceTx, signTransaction)
+import Contract.TxConstraints (TxConstraints, mustMintValue, mustSpendPubKeyOutput)
 import Contract.Utxos (utxosAt)
-import Contract.Value
-  ( CurrencySymbol
-  , Value
-  , flattenValue
-  , scriptCurrencySymbol
-  , singleton
-  )
+import Contract.Value (CurrencySymbol, Value, flattenValue, scriptCurrencySymbol, singleton)
 import Control.Monad.Error.Class (liftMaybe)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
 import Effect.Exception as Exception
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
-import Settings
-  ( confirmationTimeout
-  , submissionAttempts
-  , unbondedStakingTokenName
-  )
-import Types (StakingType(Unbonded))
-import Contract.Time (POSIXTime(POSIXTime))
-import UnbondedStaking.Types
-  ( InitialUnbondedParams(InitialUnbondedParams)
-  , UnbondedPoolParams
-  , UnbondedStakingDatum(StateDatum)
-  )
+import Settings (confirmationTimeout, submissionAttempts, unbondedStakingTokenName)
+import Types (ScriptVersion, StakingType(Unbonded))
+import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams), UnbondedPoolParams, UnbondedStakingDatum(StateDatum))
 import UnbondedStaking.Utils (mkUnbondedPoolParams)
-import Utils
-  ( addressFromBech32
-  , currentRoundedTime
-  , logInfo_
-  , mustPayToScript
-  , repeatUntilConfirmed
-  )
+import Utils (addressFromBech32, currentRoundedTime, logInfo_, mustPayToScript, repeatUntilConfirmed)
 
 -- Sets up pool configuration, mints the state NFT and deposits
 -- in the pool validator's address
 createUnbondedPoolContract
   :: InitialUnbondedParams
+  -> ScriptVersion
   -> Contract ()
        { txId :: String
        , unbondedPoolParams :: UnbondedPoolParams
        , address :: Bech32String
        }
-createUnbondedPoolContract iup =
+createUnbondedPoolContract iup scriptVersion =
   repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
     adminPkh <- liftedM "createUnbondedPoolContract: Cannot get admin's pkh"
       ownPaymentPubKeyHash
@@ -103,14 +61,14 @@ createUnbondedPoolContract iup =
         <$> (Array.head $ toUnfoldable adminUtxos)
     logInfo_ "createUnbondedPoolContract: Admin Utxos" adminUtxos
     -- Get the minting policy and currency symbol from the state NFT:
-    statePolicy <- liftedE $ mkStateNFTPolicy Unbonded txOutRef
+    statePolicy <- liftedE $ mkStateNFTPolicy Unbonded scriptVersion txOutRef
     stateNftCs <-
       liftContractM
         "createUnbondedPoolContract: Cannot get CurrencySymbol from /\
         \state NFT"
         $ scriptCurrencySymbol statePolicy
     -- Get the minting policy and currency symbol from the list NFT:
-    listPolicy <- liftedE $ mkListNFTPolicy Unbonded stateNftCs
+    listPolicy <- liftedE $ mkListNFTPolicy Unbonded scriptVersion stateNftCs
     assocListCs <-
       liftContractM
         "createUnbondedPoolContract: Cannot get CurrencySymbol from /\
@@ -126,7 +84,7 @@ createUnbondedPoolContract iup =
         iup
     -- Get the bonding validator and hash
     validator <- liftedE' "createUnbondedPoolContract: Cannot create validator"
-      $ mkUnbondedPoolValidator unbondedPoolParams
+      $ mkUnbondedPoolValidator unbondedPoolParams scriptVersion
     let
       valHash = validatorHash validator
       mintValue = singleton stateNftCs tokenName one
@@ -175,8 +133,9 @@ createUnbondedPoolContract iup =
 getUnbondedPoolsContract
   :: String
   -> InitialUnbondedParams
+  -> ScriptVersion
   -> Contract () (Array UnbondedPoolParams)
-getUnbondedPoolsContract addrStr ibp = do
+getUnbondedPoolsContract addrStr ibp scriptVersion = do
   -- Get all UTxOs locked in the protocol's address
   poolUtxos <- liftedM "(getUnbondedPoolsContract) Could not get pool UTxOs"
     $ utxosAt
@@ -201,7 +160,7 @@ getUnbondedPoolsContract addrStr ibp = do
     addListTokenCs
       :: CurrencySymbol -> Contract () (CurrencySymbol /\ CurrencySymbol)
     addListTokenCs stateNftCs = do
-      listPolicy <- liftedE (mkListNFTPolicy Unbonded stateNftCs)
+      listPolicy <- liftedE (mkListNFTPolicy Unbonded scriptVersion stateNftCs)
       listNftCs <-
         liftMaybe
           (Exception.error "Could not obtain currency symbol from list policy")

@@ -2,79 +2,29 @@ module UnbondedStaking.ClosePool (closeUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational ((%))
-import Contract.PlutusData
-  ( Datum(Datum)
-  , PlutusData
-  , Redeemer(Redeemer)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (Datum(Datum), PlutusData, Redeemer(Redeemer), fromData, getDatumByHash, toData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
+import Contract.Scripts (ValidatorHash)
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustIncludeDatum
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustIncludeDatum, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (:), (!!))
 import Data.Map (toUnfoldable)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings
-  ( unbondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Contract.Scripts (ValidatorHash)
-import UnbondedStaking.Types
-  ( Entry(Entry)
-  , UnbondedPoolParams(UnbondedPoolParams)
-  , UnbondedStakingAction(CloseAct)
-  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  )
-import UnbondedStaking.Utils
-  ( calculateRewards
-  , getAdminTime
-  )
-import Utils
-  ( getUtxoWithNFT
-  , mkOnchainAssocList
-  , logInfo_
-  , mkRatUnsafe
-  , roundUp
-  , splitByLength
-  , submitTransaction
-  , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (ScriptVersion)
+import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(CloseAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
+import UnbondedStaking.Utils (calculateRewards, getAdminTime)
+import Utils (getUtxoWithNFT, mkOnchainAssocList, logInfo_, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash)
 
 -- | Closes the unbonded pool and distributes final rewards to users
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -84,6 +34,7 @@ import Utils
 -- | deposited.
 closeUnbondedPoolContract
   :: UnbondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
@@ -95,6 +46,7 @@ closeUnbondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   batchSize
   depositList = do
   -- Fetch information related to the pool
@@ -115,7 +67,7 @@ closeUnbondedPoolContract
       utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "closeUnbondedPoolContract: Cannot create validator"
-    $ mkUnbondedPoolValidator params
+    $ mkUnbondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "closeUnbondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -147,7 +99,7 @@ closeUnbondedPoolContract
       $ fromData (unwrap poolDatum)
   -- Get the bonding range to use
   logInfo' "closeUnbondedPoolContract: Getting admin range..."
-  { currTime, range } <- getAdminTime params
+  { currTime, range } <- getAdminTime params scriptVersion
   logInfo_ "closeUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "closeUnbondedPoolContract: TX Range" range
   -- Update the association list

@@ -2,46 +2,16 @@ module CreatePool (createBondedPoolContract, getBondedPoolsContract) where
 
 import Contract.Prelude
 
-import Contract.Address
-  ( Bech32String
-  , addressToBech32
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (Bech32String, addressToBech32, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logAesonInfo, logWarn')
 import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
-import Contract.PlutusData
-  ( DataHash(..)
-  , Datum(Datum)
-  , OutputDatum(..)
-  , PlutusData
-  , datumHash
-  , fromData
-  , getDatumsByHashes
-  , toData
-  )
+import Contract.PlutusData (DataHash(..), Datum(Datum), OutputDatum(..), PlutusData, datumHash, fromData, getDatumsByHashes, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionOutputWithRefScript(..)
-  , balanceTx
-  , signTransaction
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustMintValue
-  , mustSpendPubKeyOutput
-  )
+import Contract.Transaction (BalancedSignedTransaction, TransactionOutputWithRefScript(..), balanceTx, signTransaction)
+import Contract.TxConstraints (TxConstraints, mustMintValue, mustSpendPubKeyOutput)
 import Contract.Utxos (utxosAt)
-import Contract.Value
-  ( CurrencySymbol
-  , Value
-  , flattenValue
-  , scriptCurrencySymbol
-  , singleton
-  )
+import Contract.Value (CurrencySymbol, Value, flattenValue, scriptCurrencySymbol, singleton)
 import Control.Monad.Error.Class (liftMaybe)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
@@ -49,35 +19,21 @@ import Effect.Exception as Exception
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
-import Settings
-  ( bondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Types
-  ( BondedPoolParams
-  , BondedStakingDatum(StateDatum)
-  , InitialBondedParams
-  , StakingType(Bonded)
-  )
-import Utils
-  ( addressFromBech32
-  , logInfo_
-  , mkBondedPoolParams
-  , mustPayToScript
-  , repeatUntilConfirmed
-  )
+import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (BondedPoolParams, BondedStakingDatum(StateDatum), InitialBondedParams, ScriptVersion, StakingType(Bonded))
+import Utils (addressFromBech32, logInfo_, mkBondedPoolParams, mustPayToScript, repeatUntilConfirmed)
 
 -- Sets up pool configuration, mints the state NFT and deposits
 -- in the pool validator's address
 createBondedPoolContract
   :: InitialBondedParams
+  -> ScriptVersion
   -> Contract ()
        { txId :: String
        , bondedPoolParams :: BondedPoolParams
        , address :: Bech32String
        }
-createBondedPoolContract ibp =
+createBondedPoolContract ibp scriptVersion =
   repeatUntilConfirmed confirmationTimeout submissionAttempts
     do
       adminPkh <- liftedM "createBondedPoolContract: Cannot get admin's pkh"
@@ -99,13 +55,13 @@ createBondedPoolContract ibp =
           <$> (Array.head $ toUnfoldable adminUtxos)
       logInfo_ "createBondedPoolContract: Admin Utxos" adminUtxos
       -- Get the minting policy and currency symbol from the state NFT:
-      statePolicy <- liftedE $ mkStateNFTPolicy Bonded txOutRef
+      statePolicy <- liftedE $ mkStateNFTPolicy Bonded scriptVersion txOutRef
       stateNftCs <-
         liftContractM
           "createBondedPoolContract: Cannot get CurrencySymbol from state NFT"
           $ scriptCurrencySymbol statePolicy
       -- Get the minting policy and currency symbol from the list NFT:
-      listPolicy <- liftedE $ mkListNFTPolicy Bonded stateNftCs
+      listPolicy <- liftedE $ mkListNFTPolicy Bonded scriptVersion stateNftCs
       assocListCs <-
         liftContractM
           "createBondedPoolContract: Cannot get CurrencySymbol from state NFT"
@@ -121,7 +77,7 @@ createBondedPoolContract ibp =
       -- Get the bonding validator and hash
       validator <-
         liftedE' "createBondedPoolContract: Cannot create validator"
-          $ mkBondedPoolValidator bondedPoolParams
+          $ mkBondedPoolValidator bondedPoolParams scriptVersion
       let
         valHash = validatorHash validator
         mintValue = singleton stateNftCs tokenName one
@@ -168,8 +124,9 @@ createBondedPoolContract ibp =
 getBondedPoolsContract
   :: String
   -> InitialBondedParams
+  -> ScriptVersion
   -> Contract () (Array BondedPoolParams)
-getBondedPoolsContract addrStr ibp = do
+getBondedPoolsContract addrStr ibp scriptVersion = do
   -- Get all UTxOs locked in the protocol's address
   poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool utxos"
     $ utxosAt
@@ -194,7 +151,7 @@ getBondedPoolsContract addrStr ibp = do
     addListTokenCs
       :: CurrencySymbol -> Contract () (CurrencySymbol /\ CurrencySymbol)
     addListTokenCs stateNftCs = do
-      listPolicy <- liftedE (mkListNFTPolicy Bonded stateNftCs)
+      listPolicy <- liftedE (mkListNFTPolicy Bonded scriptVersion stateNftCs)
       listNftCs <-
         liftMaybe
           (Exception.error "Could not obtain currency symbol from list policy")

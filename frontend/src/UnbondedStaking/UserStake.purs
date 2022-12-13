@@ -2,85 +2,33 @@ module UnbondedStaking.UserStake (userStakeUnbondedPoolContract) where
 
 import Contract.Prelude hiding (length)
 
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Natural (Natural, toBigInt)
-import Contract.PlutusData
-  ( PlutusData
-  , Datum(Datum)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionHash
-  , TransactionOutput
-  , BalancedSignedTransaction
-  , balanceTx
-  , signTransaction
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustMintValueWithRedeemer
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.Transaction (TransactionHash, TransactionOutput, BalancedSignedTransaction, balanceTx, signTransaction)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (head)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
+import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings
-  ( unbondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Types
-  ( ListAction(ListInsert)
-  , MintingAction(MintHead)
-  , StakingType(Unbonded)
-  )
-import Contract.PlutusData (Redeemer(Redeemer))
-import UnbondedStaking.Types
-  ( Entry(Entry)
-  , UnbondedStakingAction(StakeAct)
-  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  , UnbondedPoolParams(UnbondedPoolParams)
-  )
+import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (ListAction(ListInsert), MintingAction(MintHead), ScriptVersion, StakingType(Unbonded))
+import UnbondedStaking.Types (Entry(Entry), UnbondedStakingAction(StakeAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum), UnbondedPoolParams(UnbondedPoolParams))
 import UnbondedStaking.Utils (getUserTime)
-import Utils
-  ( findInsertUpdateElem
-  , getUtxoWithNFT
-  , hashPkh
-  , mkOnchainAssocList
-  , logInfo_
-  , repeatUntilConfirmed
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import Utils (findInsertUpdateElem, getUtxoWithNFT, hashPkh, mkOnchainAssocList, logInfo_, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
 
 -- Deposits a certain amount in the pool
 userStakeUnbondedPoolContract
   :: UnbondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Contract ()
        { txId :: String }
@@ -94,6 +42,7 @@ userStakeUnbondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   amt = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
   -- Fetch information related to the pool
   -- Get network ID
@@ -114,7 +63,7 @@ userStakeUnbondedPoolContract
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
-    $ mkUnbondedPoolValidator params
+    $ mkUnbondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "userStakeUnbondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -159,7 +108,7 @@ userStakeUnbondedPoolContract
   logInfo_ "userStakeUnbondedPoolContract: Hashed user PKH" hashedUserPkh
 
   -- Get the minting policy and currency symbol from the list NFT:
-  listPolicy <- liftedE $ mkListNFTPolicy Unbonded nftCs
+  listPolicy <- liftedE $ mkListNFTPolicy Unbonded scriptVersion nftCs
 
   -- Get the token name for the user by hashing
   assocListTn <-
@@ -171,7 +120,7 @@ userStakeUnbondedPoolContract
 
   -- Get the staking range to use
   logInfo' "userStakeUnbondedPoolContract: Getting user time range..."
-  { currTime, range } <- getUserTime params
+  { currTime, range } <- getUserTime params scriptVersion
   logInfo_ "userStakeUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "userStakeUnbondedPoolContract: TX Range" range
 

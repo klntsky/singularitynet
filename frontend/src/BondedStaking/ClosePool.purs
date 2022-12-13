@@ -3,70 +3,34 @@ module ClosePool (closeBondedPoolContract) where
 import Contract.Prelude
 
 import BondedStaking.TimeUtils (getClosingTime)
-import Contract.Address
-  ( getNetworkId
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Address (getNetworkId, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.PlutusData
-  ( Datum(..)
-  , PlutusData
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Numeric.Natural (Natural)
+import Contract.PlutusData (Datum(..), PlutusData, fromData, getDatumByHash, toData)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustIncludeDatum
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustIncludeDatum, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (!!))
 import Data.Map (toUnfoldable)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings
-  ( bondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Types
-  ( BondedPoolParams(BondedPoolParams)
-  , BondedStakingAction(CloseAct)
-  , BondedStakingDatum
-  )
-import Contract.Numeric.Natural (Natural)
-import Contract.PlutusData (Redeemer(Redeemer))
-import Utils
-  ( getUtxoWithNFT
-  , logInfo_
-  , splitByLength
-  , submitTransaction
-  , toIntUnsafe
-  , getUtxoDatumHash
-  )
+import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(CloseAct), BondedStakingDatum, ScriptVersion)
+import Utils (getUtxoWithNFT, logInfo_, splitByLength, submitTransaction, toIntUnsafe, getUtxoDatumHash)
 
 closeBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
 closeBondedPoolContract
   params@(BondedPoolParams { admin, nftCs })
+  scriptVersion
   batchSize
   closeList = do
   -- Fetch information related to the pool
@@ -80,7 +44,7 @@ closeBondedPoolContract
   logInfo_ "closeBondedPoolContract: Admin PaymentPubKeyHash" admin
   -- Get the bonded pool validator and hash
   validator <- liftedE' "closeBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "closeBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing

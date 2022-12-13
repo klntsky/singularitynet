@@ -3,93 +3,33 @@ module UserWithdraw (userWithdrawBondedPoolContract) where
 import Contract.Prelude hiding (length)
 
 import BondedStaking.TimeUtils (getWithdrawingTime)
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , ownStakePubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
-import Contract.Log
-  ( logInfo'
-  , logAesonInfo
-  )
-import Contract.PlutusData
-  ( PlutusData
-  , Datum(Datum)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, ownStakePubKeyHash, scriptHashAddress)
+import Contract.Log (logInfo', logAesonInfo)
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
+import Contract.Numeric.Rational (Rational, denominator, numerator)
+import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript
-  , BalancedSignedTransaction
-  , balanceTx
-  , signTransaction
-  , TransactionHash
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustMintValueWithRedeemer
-  , mustPayToPubKeyAddress
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript, BalancedSignedTransaction, balanceTx, signTransaction, TransactionHash)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustPayToPubKeyAddress, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (UtxoMap, utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (catMaybes, head)
 import Data.BigInt (BigInt)
 import Data.Map as Map
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings
-  ( bondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-
-import Types
-  ( BondedPoolParams(BondedPoolParams)
-  , BondedStakingAction(WithdrawAct)
-  , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  , BurningAction(BurnHead, BurnOther)
-  , Entry(Entry)
-  , ListAction(ListRemove)
-  , StakingType(Bonded)
-  )
-import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.PlutusData (Redeemer(Redeemer))
-import Utils
-  ( findRemoveOtherElem
-  , getAssetsToConsume
-  , mkAssetUtxosConstraints
-  , getUtxoWithNFT
-  , hashPkh
-  , logInfo_
-  , mkOnchainAssocList
-  , repeatUntilConfirmed
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(WithdrawAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), BurningAction(BurnHead, BurnOther), Entry(Entry), ListAction(ListRemove), ScriptVersion, StakingType(Bonded))
+import Utils (findRemoveOtherElem, getAssetsToConsume, mkAssetUtxosConstraints, getUtxoWithNFT, hashPkh, logInfo_, mkOnchainAssocList, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
 
 -- Deposits a certain amount in the pool
 userWithdrawBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Contract ()
        { txId :: String }
 userWithdrawBondedPoolContract
@@ -99,7 +39,8 @@ userWithdrawBondedPoolContract
         , nftCs
         , assocListCs
         }
-    ) = repeatUntilConfirmed confirmationTimeout submissionAttempts do
+    )
+  scriptVersion = repeatUntilConfirmed confirmationTimeout submissionAttempts do
   ---- FETCH BASIC INFORMATION ----
   -- Get network ID
   networkId <- getNetworkId
@@ -126,7 +67,7 @@ userWithdrawBondedPoolContract
   -- Get the bonded pool validator and hash
   validator <-
     liftedE' "userWithdrawBondedPoolContract: Cannot create validator"
-      $ mkBondedPoolValidator params
+      $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "userWithdrawBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -154,7 +95,7 @@ userWithdrawBondedPoolContract
   logInfo_ "userWithdrawnBondedPoolContract: Bonded Asset UTxOs"
     bondedAssetUtxos
   -- Get the minting policy and currency symbol from the list NFT:
-  listPolicy <- liftedE $ mkListNFTPolicy Bonded nftCs
+  listPolicy <- liftedE $ mkListNFTPolicy Bonded scriptVersion nftCs
   -- Get the token name for the user by hashing
   assocListTn <-
     liftContractM

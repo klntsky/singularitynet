@@ -40,11 +40,11 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (elemIndex, zip)
+import Data.Array (elemIndex, zip, (!!))
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Unfoldable (none)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
   ( unbondedStakingTokenName
@@ -57,6 +57,7 @@ import UnbondedStaking.Types
   , UnbondedStakingAction(AdminAct)
   , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   )
+import Types (ScriptVersion)
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
 import Utils
   ( getUtxoWithNFT
@@ -80,6 +81,7 @@ import Utils
 depositUnbondedPoolContract
   :: BigInt
   -> UnbondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
@@ -92,6 +94,7 @@ depositUnbondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   batchSize
   _depositList = do
   -- Fetch information related to the pool
@@ -112,7 +115,7 @@ depositUnbondedPoolContract
       utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "depositUnbondedPoolContract: Cannot create validator"
-    $ mkUnbondedPoolValidator params
+    $ mkUnbondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "depositUnbondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -144,7 +147,7 @@ depositUnbondedPoolContract
       $ fromData (unwrap poolDatum)
   -- Get the validitiy range to use
   logInfo' "depositUnbondedPoolContract: Getting admin range..."
-  { currTime, range } <- getAdminTime params
+  { currTime, range } <- getAdminTime params scriptVersion
   logInfo_ "depositUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "depositUnbondedPoolContract: TX Range" range
   -- Update the association list

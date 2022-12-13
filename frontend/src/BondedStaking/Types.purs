@@ -10,6 +10,7 @@ module Types
   , MintingAction(..)
   , PoolInfo(..)
   , StakingType(..)
+  , ScriptVersion(..)
   ) where
 
 import Contract.Prelude
@@ -368,6 +369,8 @@ instance Show Entry where
   show = genericShow
 
 data StakingType = Bonded | Unbonded
+
+data ScriptVersion = Production | DebugNoTimeChecks
 
 data ListAction
   = ListInsert MintingAction

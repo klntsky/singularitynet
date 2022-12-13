@@ -30,16 +30,7 @@ import Contract.Prelude
 
 import ClosePool (closeBondedPoolContract)
 import Contract.Address (PaymentPubKeyHash)
-import Contract.Config
-  ( ConfigParams
-  , WalletSpec
-      ( ConnectToNami
-      , ConnectToGero
-      , ConnectToFlint
-      , ConnectToLode
-      , ConnectToEternl
-      )
-  )
+import Contract.Config (ConfigParams, WalletSpec(ConnectToNami, ConnectToGero, ConnectToFlint, ConnectToLode, ConnectToEternl))
 import Contract.Monad (Contract, runContract)
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
 import Contract.Numeric.Natural (Natural, fromBigInt, toBigInt)
@@ -64,6 +55,8 @@ import Contract.Value
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
 import CreatePool (createBondedPoolContract, getBondedPoolsContract)
+import Ctl.Internal.Serialization.Address (intToNetworkId)
+import Ctl.Internal.Serialization.Hash (ed25519KeyHashFromBytes, ed25519KeyHashToBytes)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -84,12 +77,10 @@ import Types
   ( AssetClass(AssetClass)
   , BondedPoolParams(BondedPoolParams)
   , InitialBondedParams
+  , ScriptVersion(..)
   )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
-import UnbondedStaking.CreatePool
-  ( createUnbondedPoolContract
-  , getUnbondedPoolsContract
-  )
+import UnbondedStaking.CreatePool (createUnbondedPoolContract, getUnbondedPoolsContract)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
@@ -310,7 +301,7 @@ callCreateBondedPool
 callCreateBondedPool cfg iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialBondedArgs iba
   { bondedPoolParams: bpp, address, txId } <- runContract cfg $
-    createBondedPoolContract ibp
+    createBondedPoolContract ibp Production
   pure $ { args: toBondedPoolArgs bpp, address, txId }
 
 callGetBondedPools
@@ -320,7 +311,7 @@ callGetBondedPools
   -> Effect (Promise (Array BondedPoolArgs))
 callGetBondedPools cfg addrStr iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialBondedArgs iba
-  bpps <- runContract cfg $ getBondedPoolsContract addrStr ibp
+  bpps <- runContract cfg $ getBondedPoolsContract addrStr ibp Production
   pure $ map toBondedPoolArgs bpps
 
 callDepositBondedPool
@@ -333,7 +324,7 @@ callDepositBondedPool cfg bpa bi arr = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callDepositBondedPool: Invalid natural number")
     $ fromBigInt bi
-  depositBondedPoolContract upp nat arr
+  depositBondedPoolContract upp Production nat arr
 
 callCloseBondedPool
   :: ConfigParams ()
@@ -345,7 +336,7 @@ callCloseBondedPool cfg bpa bi arr = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callCloseBondedPool: Invalid natural number")
     $ fromBigInt bi
-  closeBondedPoolContract upp nat arr
+  closeBondedPoolContract upp Production nat arr
 
 callUserStakeBondedPool
   :: ConfigParams ()
@@ -356,14 +347,12 @@ callUserStakeBondedPool cfg bpa bi = Promise.fromAff $ runContract cfg do
   bpp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callUserStakeBondedPool: Invalid natural number")
     $ fromBigInt bi
-  userStakeBondedPoolContract bpp nat
-
--- pure unit
+  userStakeBondedPoolContract bpp Production nat
 
 callUserWithdrawBondedPool
   :: ConfigParams () -> BondedPoolArgs -> Effect (Promise { txId :: String })
 callUserWithdrawBondedPool =
-  callWithBondedPoolArgs userWithdrawBondedPoolContract
+  callWithBondedPoolArgs (\ubp -> userWithdrawBondedPoolContract ubp Production)
 
 callWithBondedPoolArgs
   :: (BondedPoolParams -> Contract () { txId :: String })
@@ -487,6 +476,7 @@ callCreateUnbondedPool cfg iba = Promise.fromAff do
   { unbondedPoolParams: upp, address, txId } <- runContract cfg $
     createUnbondedPoolContract
       iup
+      Production
   pure $ { args: toUnbondedPoolArgs upp, address, txId }
 
 callGetUnbondedPools
@@ -496,7 +486,7 @@ callGetUnbondedPools
   -> Effect (Promise (Array UnbondedPoolArgs))
 callGetUnbondedPools cfg addrStr iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialUnbondedArgs iba
-  ubpps <- runContract cfg $ getUnbondedPoolsContract addrStr ibp
+  ubpps <- runContract cfg $ getUnbondedPoolsContract addrStr ibp Production
   pure $ map toUnbondedPoolArgs ubpps
 
 callDepositUnbondedPool
@@ -511,7 +501,7 @@ callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg
     upp <- liftEither $ fromUnbondedPoolArgs upa
     nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
       $ fromBigInt bi
-    depositUnbondedPoolContract amt upp nat arr
+    depositUnbondedPoolContract amt upp Production nat arr
 
 callCloseUnbondedPool
   :: ConfigParams ()
@@ -523,7 +513,7 @@ callCloseUnbondedPool cfg upa bi arr = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callCloseUnbondedPool: Invalid natural number")
     $ fromBigInt bi
-  closeUnbondedPoolContract upp nat arr
+  closeUnbondedPoolContract upp Production nat arr
 
 callUserStakeUnbondedPool
   :: ConfigParams ()
@@ -537,7 +527,7 @@ callUserStakeUnbondedPool cfg upa bi = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callUserStakeUnbondedPool: Invalid natural number")
     $ fromBigInt bi
-  userStakeUnbondedPoolContract upp nat
+  userStakeUnbondedPoolContract upp Production nat
 
 callUserWithdrawUnbondedPool
   :: ConfigParams ()
@@ -547,7 +537,7 @@ callUserWithdrawUnbondedPool
            { txId :: String }
        )
 callUserWithdrawUnbondedPool =
-  callWithUnbondedPoolArgs userWithdrawUnbondedPoolContract
+  callWithUnbondedPoolArgs (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
 
 callWithUnbondedPoolArgs
   :: ( UnbondedPoolParams
@@ -582,7 +572,7 @@ callQueryAssocListUnbondedPool
   -> Effect (Promise (Array UserEntry))
 callQueryAssocListUnbondedPool cfg upa = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
-  entries <- queryAssocListUnbonded upp
+  entries <- queryAssocListUnbonded upp Production
   pure $ map
     ( \(Entry e) ->
         { key: e.key

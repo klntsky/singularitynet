@@ -16,33 +16,37 @@ import Contract.Scripts
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)
-import Types (BondedPoolParams)
+import Types (BondedPoolParams, ScriptVersion(..))
 import UnbondedStaking.Types (UnbondedPoolParams)
 import Utils (jsonReader)
 
 -- | This is the parameterized validator script. It still needs to receive a
 -- `BondedPoolParams` to become a minting policy
-bondedPoolValidator :: Either JsonDecodeError PlutusScript
-bondedPoolValidator = jsonReader "script" _bondedPoolValidator
+bondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
+bondedPoolValidator Production = jsonReader "script" _bondedPoolValidator
+bondedPoolValidator DebugNoTimeChecks = jsonReader "script" _bondedPoolValidatorNoTimeChecks
 
-unbondedPoolValidator :: Either JsonDecodeError PlutusScript
-unbondedPoolValidator = jsonReader "script" _unbondedPoolValidator
+unbondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
+unbondedPoolValidator Production = jsonReader "script" _unbondedPoolValidator
+unbondedPoolValidator DebugNoTimeChecks = jsonReader "script" _unbondedPoolValidatorNoTimeChecks
 
 -- | This function takes a `BondedPoolParams` and produces the `Validator`
 -- for the bonded pool
 mkBondedPoolValidator
   :: forall (r :: Row Type)
    . BondedPoolParams
+  -> ScriptVersion
   -> Contract r (Either ClientError Validator)
-mkBondedPoolValidator = mkValidator bondedPoolValidator
+mkBondedPoolValidator bpp sv = mkValidator (bondedPoolValidator sv) bpp
 
 -- | This function takes a `UnbondedPoolParams` and produces the `Validator`
 -- for the bonded pool
 mkUnbondedPoolValidator
   :: forall (r :: Row Type)
    . UnbondedPoolParams
+  -> ScriptVersion
   -> Contract r (Either ClientError Validator)
-mkUnbondedPoolValidator = mkValidator unbondedPoolValidator
+mkUnbondedPoolValidator ubp sv = mkValidator (unbondedPoolValidator sv) ubp
 
 mkValidator
   :: forall (a :: Type) (r :: Row Type)
@@ -56,3 +60,5 @@ mkValidator ps params = do
 
 foreign import _bondedPoolValidator :: Json
 foreign import _unbondedPoolValidator :: Json
+foreign import _bondedPoolValidatorNoTimeChecks :: Json
+foreign import _unbondedPoolValidatorNoTimeChecks :: Json

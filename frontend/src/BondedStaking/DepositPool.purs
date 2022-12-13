@@ -3,76 +3,34 @@ module DepositPool (depositBondedPoolContract) where
 import Contract.Prelude
 
 import BondedStaking.TimeUtils (getBondingTime)
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational, (%))
-import Contract.PlutusData
-  ( Datum(Datum)
-  , PlutusData
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (Datum(Datum), PlutusData, fromData, getDatumByHash, toData)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
+import Contract.Scripts (ValidatorHash)
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (!!))
 import Data.BigInt (BigInt)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings
-  ( bondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Types
-  ( BondedPoolParams(BondedPoolParams)
-  , BondedStakingAction(AdminAct)
-  , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  , Entry(Entry)
-  )
-import Contract.Numeric.Natural (Natural)
-import Contract.PlutusData (Redeemer(Redeemer))
-import Contract.Scripts (ValidatorHash)
-import Utils
-  ( getUtxoWithNFT
-  , logInfo_
-  , mkOnchainAssocList
-  , mkRatUnsafe
-  , roundUp
-  , splitByLength
-  , submitTransaction
-  , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(AdminAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), Entry(Entry), ScriptVersion)
+import Utils (getUtxoWithNFT, logInfo_, mkOnchainAssocList, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash)
 
 -- Deposits a certain amount in the pool
 depositBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
@@ -84,6 +42,7 @@ depositBondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   batchSize
   depositList = do
   -- Fetch information related to the pool
@@ -104,7 +63,7 @@ depositBondedPoolContract
       utxosAt adminAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "depositBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "depositBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing

@@ -3,84 +3,31 @@ module UserStake (userStakeBondedPoolContract) where
 import Contract.Prelude hiding (length)
 
 import BondedStaking.TimeUtils (getStakingTime)
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
-import Contract.Log
-  ( logInfo'
-  , logAesonInfo
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Log (logInfo', logAesonInfo)
+import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Natural (Natural, toBigInt)
-import Contract.PlutusData
-  ( PlutusData
-  , Datum(Datum)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( BalancedSignedTransaction
-  , balanceTx
-  , signTransaction
-  , TransactionHash
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustMintValueWithRedeemer
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
+import Contract.Transaction (BalancedSignedTransaction, balanceTx, signTransaction, TransactionHash)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustSpendScriptOutput, mustValidateIn)
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (head)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
+import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings
-  ( bondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import Types
-  ( BondedStakingAction(StakeAct)
-  , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  , BondedPoolParams(BondedPoolParams)
-  , Entry(Entry)
-  , ListAction(ListInsert)
-  , MintingAction(MintHead)
-  , StakingType(Bonded)
-  )
-import Contract.PlutusData (Redeemer(Redeemer))
-import Utils
-  ( findInsertUpdateElem
-  , getUtxoWithNFT
-  , hashPkh
-  , logInfo_
-  , mkOnchainAssocList
-  , repeatUntilConfirmed
-  , mustPayToScript
-  , getUtxoDatumHash
-  )
+import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(StakeAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), Entry(Entry), ListAction(ListInsert), MintingAction(MintHead), ScriptVersion, StakingType(Bonded))
+import Utils (findInsertUpdateElem, getUtxoWithNFT, hashPkh, logInfo_, mkOnchainAssocList, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
 
 -- Deposits a certain amount in the pool
 userStakeBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Contract ()
        { txId :: String }
@@ -94,6 +41,7 @@ userStakeBondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   amt = repeatUntilConfirmed confirmationTimeout submissionAttempts do
   -- Fetch information related to the pool
   -- Get network ID
@@ -111,7 +59,7 @@ userStakeBondedPoolContract
   logInfo_ "userStakeBondedPoolContract: User Address" userAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "userStakeBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "userStakeBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -150,7 +98,7 @@ userStakeBondedPoolContract
     assetTn = assetParams.tokenName
     stakeValue = singleton assetCs assetTn amtBigInt
   -- Get the minting policy and currency symbol from the list NFT:
-  listPolicy <- liftedE $ mkListNFTPolicy Bonded nftCs
+  listPolicy <- liftedE $ mkListNFTPolicy Bonded scriptVersion nftCs
   -- Get the token name for the user by hashing
   assocListTn <-
     liftContractM
