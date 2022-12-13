@@ -56,7 +56,7 @@ export type SdkConfig = {
 export type UserEntry = {
   key: string;
   deposited: BigInteger;
-  rewards: BigInteger
+  rewards: BigInteger;
 }
 
 // Bonded pool

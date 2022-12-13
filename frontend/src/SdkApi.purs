@@ -91,7 +91,7 @@ import UnbondedStaking.Types
   , InitialUnbondedParams
   , Entry
   )
-import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
+import UnbondedStaking.Utils (queryAssocListUnbonded)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 import UserStake (userStakeBondedPoolContract)
@@ -571,7 +571,7 @@ callQueryAssocListUnbondedPool
 callQueryAssocListUnbondedPool cfg upa = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   entries <- queryAssocListUnbonded upp
-  pure $ map (\e -> wrap $ (unwrap e) { rewards = calculateRewards e }) entries
+  pure entries
 
 toUnbondedPoolArgs :: UnbondedPoolParams -> UnbondedPoolArgs
 toUnbondedPoolArgs (UnbondedPoolParams upp) =

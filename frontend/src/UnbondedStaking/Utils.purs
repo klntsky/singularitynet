@@ -220,14 +220,14 @@ queryAssocListUnbonded
     ) = do
   -- Fetch information related to the pool
   -- Get the unbonded pool validator and hash
-  validator <- liftedE' "depositUnbondedPoolContract: Cannot create validator"
+  validator <- liftedE' "queryAssocListUnbonded: Cannot create validator"
     $ mkUnbondedPoolValidator params
   let valHash = validatorHash validator
   let poolAddr = scriptHashAddress valHash
   -- Get the unbonded pool's utxo
   unbondedPoolUtxos <-
     liftedM
-      "depositUnbondedPoolContract: Cannot get pool's utxos at pool address"
+      "queryAssocListUnbonded: Cannot get pool's utxos at pool address"
       $ utxosAt poolAddr
 
   let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
