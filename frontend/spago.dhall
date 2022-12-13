@@ -22,6 +22,7 @@ You can edit this file as you like.
   , "maybe"
   , "monad-logger"
   , "mote"
+  , "newtype"
   , "now"
   , "ordered-collections"
   , "partial"
