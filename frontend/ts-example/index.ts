@@ -33,14 +33,14 @@ const main = async () => {
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
   // Length of all periods (staking/withdraing, bonding and admin)
-  const periodLength = BigInteger(150000);
+  const periodLength = BigInteger(180000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
   const initialUnbondedArgs: InitialUnbondedArgs = {
     start: nodeTime.add(delay),
     userLength: periodLength,
-    bondingLength: periodLength,
+    bondingLength: BigInteger(1000),
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
@@ -84,7 +84,8 @@ const main = async () => {
   const userStakeAmt = BigInteger(40000);
   const r0 = await unbondedPool.userStake(userStakeAmt);
   console.log(JSON.stringify(r0))
-
+  const l = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l))
   // Admin deposits to pool, waiting for userLength to end
   await logSwitchAndCountdown(
     admin,
@@ -95,7 +96,19 @@ const main = async () => {
   const adminDeposit = BigInteger(40000);
   const r1 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
   console.log(JSON.stringify(r1));
-
+  const l1 = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l1))
+  await logSwitchAndCountdown(
+    user,
+    "staking/withdrawing  period",
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength)
+  );
+  const r2 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
+  console.log(JSON.stringify(r2));
+  const l2 = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l2))
   // User withdraws during bonding period, waiting for adminLength to finish
   // await logSwitchAndCountdown(
   //   user,

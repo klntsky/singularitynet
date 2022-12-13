@@ -1,28 +1,29 @@
 module SdkApi
-  ( SdkConfig
-  , SdkServerConfig
-  , SdkInterest
-  , SdkAssetClass
-  , buildContractConfig
-  , callGetNodeTime
-  -- Bonded
-  , BondedPoolArgs
+  ( BondedPoolArgs
   , InitialBondedArgs
-  , callCloseBondedPool
-  , callCreateBondedPool
-  , callGetBondedPools
-  , callDepositBondedPool
-  , callUserStakeBondedPool
-  , callUserWithdrawBondedPool
-  -- Unbonded
-  , UnbondedPoolArgs
   , InitialUnbondedArgs
+  , SdkAssetClass
+  , SdkConfig
+  , SdkInterest
+  , SdkServerConfig
+  , buildContractConfig
+  , callCloseBondedPool
   , callCloseUnbondedPool
+  , callCreateBondedPool
   , callCreateUnbondedPool
-  , callGetUnbondedPools
+  , callDepositBondedPool
   , callDepositUnbondedPool
+  , callGetBondedPools
+  , callGetNodeTime
+  , callGetUnbondedPools
+  , callHashPkh
+  , callQueryAssocListUnbondedPool
+  , callUserStakeBondedPool
   , callUserStakeUnbondedPool
+  , callUserWithdrawBondedPool
   , callUserWithdrawUnbondedPool
+  , fromSdkLogLevel
+  , toUnbondedPoolArgs
   ) where
 
 import Contract.Prelude
@@ -48,6 +49,7 @@ import Contract.Prim.ByteArray
   , byteArrayToHex
   , byteArrayToIntArray
   , hexToByteArray
+  , ByteArray
   )
 import Contract.Value
   ( CurrencySymbol
@@ -88,12 +90,14 @@ import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
   , InitialUnbondedParams
+  , Entry(..)
   )
+import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
-import Utils (currentRoundedTime)
+import Utils (currentRoundedTime, hashPkh)
 
 -- | Configuation needed to call contracts from JS.
 type SdkConfig =
@@ -492,11 +496,12 @@ callDepositUnbondedPool
   -> BigInt
   -> Array Int
   -> Effect (Promise (Array Int))
-callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg do
-  upp <- liftEither $ fromUnbondedPoolArgs upa
-  nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
-    $ fromBigInt bi
-  depositUnbondedPoolContract amt upp nat arr
+callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg
+  do
+    upp <- liftEither $ fromUnbondedPoolArgs upa
+    nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
+      $ fromBigInt bi
+    depositUnbondedPoolContract amt upp nat arr
 
 callCloseUnbondedPool
   :: ConfigParams ()
@@ -548,6 +553,35 @@ callWithUnbondedPoolArgs
 callWithUnbondedPoolArgs contract cfg = callWithArgs fromUnbondedPoolArgs
   contract
   cfg
+
+type UserEntry =
+  { key :: ByteArray
+  , deposited :: BigInt
+  , rewards :: Rational
+  , nextCycleRewards :: Rational
+  }
+
+callHashPkh :: String -> Effect (Promise ByteArray)
+callHashPkh pkh = Promise.fromAff $ do
+  p <- liftEither $ fromSdkAdmin "callHashPkh" pkh
+  hashPkh p
+
+callQueryAssocListUnbondedPool
+  :: ConfigParams ()
+  -> UnbondedPoolArgs
+  -> Effect (Promise (Array UserEntry))
+callQueryAssocListUnbondedPool cfg upa = Promise.fromAff $ runContract cfg do
+  upp <- liftEither $ fromUnbondedPoolArgs upa
+  entries <- queryAssocListUnbonded upp
+  pure $ map
+    ( \(Entry e) ->
+        { key: e.key
+        , deposited: e.deposited
+        , rewards: e.rewards
+        , nextCycleRewards: calculateRewards (wrap e)
+        }
+    )
+    entries
 
 toUnbondedPoolArgs :: UnbondedPoolParams -> UnbondedPoolArgs
 toUnbondedPoolArgs (UnbondedPoolParams upp) =

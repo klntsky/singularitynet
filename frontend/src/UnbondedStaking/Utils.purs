@@ -4,19 +4,44 @@ module UnbondedStaking.Utils
   , getBondingTime
   , getUserTime
   , mkUnbondedPoolParams
+  , queryAssocListUnbonded
   ) where
 
 import Contract.Prelude hiding (length)
 
-import Contract.Address (PaymentPubKeyHash)
-import Contract.Monad (Contract, liftContractM, throwContractError)
+import Contract.Address (PaymentPubKeyHash, getNetworkId, scriptHashAddress)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , throwContractError
+  , liftedE'
+  , liftedM
+  )
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.Value (CurrencySymbol)
+import Contract.Scripts (validatorHash)
+import Contract.Prim.ByteArray (ByteArray)
+import Contract.Utxos (utxosAt)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
+import Contract.PlutusData (getDatumByHash, fromData)
 import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
+import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Types.Interval (POSIXTime(POSIXTime), POSIXTimeRange, interval)
-import UnbondedStaking.Types (UnbondedPoolParams(UnbondedPoolParams), InitialUnbondedParams(InitialUnbondedParams), Entry(..))
-import Utils (big, currentRoundedTime, mkRatUnsafe)
+import UnbondedStaking.Types
+  ( UnbondedPoolParams(UnbondedPoolParams)
+  , InitialUnbondedParams(InitialUnbondedParams)
+  , Entry(..)
+  , UnbondedStakingDatum(..)
+  )
+import Utils
+  ( big
+  , currentRoundedTime
+  , mkRatUnsafe
+  , getUtxoDatumHash
+  , mkOnchainAssocList
+  , hashPkh
+  )
 
 -- | Admin deposit/closing
 getAdminTime
@@ -175,9 +200,63 @@ calculateRewards (Entry e) = do
   -- New users will have zero total deposited for the first cycle
   if e.totalDeposited == zero then
     zero
-  else let
-    lhs = mkRatUnsafe $ e.totalRewards % e.totalDeposited
-    rhs = e.rewards + mkRatUnsafe (e.deposited % one)
-    rhs' = rhs - mkRatUnsafe (e.newDeposit % one)
-    f = rhs' * lhs
-    in e.rewards + f
+  else
+    let
+      lhs = mkRatUnsafe $ e.totalRewards % e.totalDeposited
+      rhs = e.rewards + mkRatUnsafe (e.deposited % one)
+      rhs' = rhs - mkRatUnsafe (e.newDeposit % one)
+      f = rhs' * lhs
+    in
+      e.rewards + f
+
+queryAssocListUnbonded
+  :: UnbondedPoolParams
+  -> Contract () (Array Entry)
+queryAssocListUnbonded
+  params@
+    ( UnbondedPoolParams
+        { assocListCs
+        }
+    ) = do
+  -- Fetch information related to the pool
+  -- Get the unbonded pool validator and hash
+  validator <- liftedE' "queryAssocListUnbonded: Cannot create validator"
+    $ mkUnbondedPoolValidator params
+  let valHash = validatorHash validator
+  let poolAddr = scriptHashAddress valHash
+  -- Get the unbonded pool's utxo
+  unbondedPoolUtxos <-
+    liftedM
+      "queryAssocListUnbonded: Cannot get pool's utxos at pool address"
+      $ utxosAt poolAddr
+
+  let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
+  getListDatums assocList
+
+-- | Get all entries' datums
+getListDatums
+  :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
+  -> Contract () (Array Entry)
+getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
+  -- Get the entry's datum
+  dHash <-
+    liftContractM
+      "getListDatums: Could not get entry's datum hash"
+      $ getUtxoDatumHash txOut
+  dat <-
+    liftedM
+      "getListDatums: Cannot get entry's datum" $ getDatumByHash dHash
+  -- Parse it
+  unbondedListDatum :: UnbondedStakingDatum <-
+    liftContractM
+      "getListDatums: Cannot parse entry's datum"
+      $ fromData (unwrap dat)
+  -- The get the entry datum
+  case unbondedListDatum of
+    EntryDatum { entry } -> pure entry
+    StateDatum _ ->
+      throwContractError
+        "getListDatums: Expected a list datum but found a state datum"
+    AssetDatum ->
+      throwContractError
+        "getListDatums: Expected an list datum but found an asset datum"

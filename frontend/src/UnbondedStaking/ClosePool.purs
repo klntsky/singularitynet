@@ -310,8 +310,9 @@ mkEntryUpdateList
   -- The get the entry datum
   case unbondedListDatum of
     EntryDatum { entry } -> do
-      let e = unwrap entry
-          calculatedRewards = calculateRewards entry
+      let
+        e = unwrap entry
+        calculatedRewards = calculateRewards entry
       -- Get the token name for the user by hashing
       assocListTn <-
         liftContractM
