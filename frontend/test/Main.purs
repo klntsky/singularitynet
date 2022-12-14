@@ -2,34 +2,13 @@ module Test.Main (main) where
 
 import Contract.Prelude
 
-import Contract.Address (PaymentPubKeyHash(..), getWalletAddress, toPubKeyHash)
 import Contract.Config (emptyHooks)
-import Contract.Log (logInfo')
-import Contract.Monad (launchAff_, liftedE, liftedM)
-import Contract.ScriptLookups (ScriptLookups, unspentOutputs, mkUnbalancedTx)
-import Contract.Test.Plutip
-  ( PlutipConfig
-  , testPlutipContracts
-  , withKeyWallet
-  , withWallets
-  )
-import Contract.Transaction
-  ( awaitTxConfirmed
-  , balanceTx
-  , signTransaction
-  , submit
-  )
-import Contract.TxConstraints (mustPayToPubKey)
-import Contract.Utxos (getWalletUtxos)
-import Contract.Value (lovelaceValueOf)
-import Control.Monad.Error.Class (liftMaybe)
+import Contract.Monad (launchAff_)
+import Contract.Test.Plutip (PlutipConfig, testPlutipContracts)
 import Ctl.Internal.Test.TestPlanM (TestPlanM, interpret)
-import Data.BigInt (BigInt)
-import Data.BigInt as BigInt
 import Data.UInt as UInt
-import Effect.Exception (error)
 import Mote (group, test)
-
+import Test.Unit.Admin.Close as Close
 import Test.Unit.Admin.Open as Open
 
 suite :: TestPlanM (Aff Unit) Unit
@@ -37,25 +16,7 @@ suite = testPlutipContracts localPlutipCfg do
     group "Unit Tests" do
         group "Admin" do
             test "Open/Create Pool" Open.test
-    --test "Plutip setup test" do
-    --    let distribution :: (Array BigInt /\ Array BigInt)
-    --        distribution = [BigInt.fromInt 5000000, BigInt.fromInt 500000000] /\ []
-    --    withWallets distribution \(aliceWallet /\ bobWallet) -> do
-    --        bobAddr <- withKeyWallet bobWallet $ liftedM "Could not get Bob's address" $
-    --           getWalletAddress
-    --        withKeyWallet aliceWallet do
-    --           bobPkh <- PaymentPubKeyHash <$>
-    --              liftMaybe (error "Could not get Bob's PKH") (toPubKeyHash bobAddr)
-    --           aliceUtxos <- liftedM "Could not get Alice's utxos" getWalletUtxos
-    --           let constraints = mustPayToPubKey bobPkh (lovelaceValueOf $ BigInt.fromInt 10000000)
-    --               lookups :: ScriptLookups Void
-    --               lookups = unspentOutputs aliceUtxos
-    --           ubTx <- liftedE $ mkUnbalancedTx lookups constraints
-    --           bTx <- liftedE $ balanceTx ubTx
-    --           signedTx <- signTransaction bTx
-    --           txId <- submit signedTx
-    --           logInfo' $ "TX ID: " <> show txId
-    --           awaitTxConfirmed txId
+            test "Close Pool" Close.test
 
 main :: Effect Unit
 main = launchAff_ $ interpret suite
@@ -91,7 +52,7 @@ localPlutipCfg =
        , password: "ctxlib" 
        , dbname: "ctxlib" 
        } 
-   , suppressLogs: true 
+   , suppressLogs: true
    , customLogger: Nothing 
    , hooks: emptyHooks 
    }
