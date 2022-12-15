@@ -17,6 +17,7 @@ You can edit this file as you like.
   , "datetime"
   , "effect"
   , "exceptions"
+  , "foldable-traversable"
   , "integers"
   , "math"
   , "maybe"
@@ -31,6 +32,7 @@ You can edit this file as you like.
   , "record"
   , "strings"
   , "transformers"
+  , "tuples"
   , "uint"
   , "unfoldable"
   ]
