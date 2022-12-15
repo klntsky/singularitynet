@@ -12,6 +12,7 @@ import Test.Unit.Admin.Close as Close
 import Test.Unit.Admin.DepositEmpty as DepositEmpty
 import Test.Unit.Admin.Deposit1User as Deposit1User
 import Test.Unit.Admin.Open as Open
+import Test.Unit.User.Stake as Stake
 
 suite :: TestPlanM (Aff Unit) Unit
 suite = testPlutipContracts localPlutipCfg do
@@ -23,6 +24,8 @@ suite = testPlutipContracts localPlutipCfg do
             -- there are no stakers in the pool
             skip $ test "Deposit to empty pool" DepositEmpty.test
             test "Deposit to pool with 1 user's stake" Deposit1User.test
+        group "User" do
+            test "Stake" Stake.test
 
 main :: Effect Unit
 main = launchAff_ $ interpret suite
