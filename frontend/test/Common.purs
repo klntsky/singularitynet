@@ -4,22 +4,24 @@ module Test.Common(
        testInitialParamsNoTimeChecks,
        withWalletsAndPool,
        getAdminWallet,
-       getUserWallet) where
+       getUserWallet,
+       getWalletFakegix,
+       getPoolFakegix) where
 
 import Prelude
 
-import Contract.Address (PaymentPubKeyHash, ownPaymentPubKeyHash)
+import Contract.Address (PaymentPubKeyHash, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Monad (Contract, liftedE, liftedM)
 import Contract.Numeric.Rational ((%))
 import Contract.Prelude (mconcat)
 import Contract.Prim.ByteArray (byteArrayFromAscii)
 import Contract.ScriptLookups (ScriptLookups, mintingPolicy, mkUnbalancedTx, unspentOutputs)
-import Contract.Scripts (MintingPolicy)
+import Contract.Scripts (MintingPolicy, validatorHash)
 import Contract.Test.Plutip (PlutipTest, InitialUTxOs, withKeyWallet, withWallets)
 import Contract.Transaction (awaitTxConfirmed, balanceTx, signTransaction, submit)
 import Contract.TxConstraints (TxConstraints, mustMintValue, mustPayToPubKey)
-import Contract.Utxos (getWalletUtxos)
-import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton)
+import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
+import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton, valueOf)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
 import Data.Array as Array
@@ -33,6 +35,7 @@ import Data.Traversable (traverse)
 import Data.Tuple (fst, snd, uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception as Exception
+import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
@@ -128,6 +131,20 @@ getUserWallet :: Int -> Array KeyWallet -> Contract () KeyWallet
 getUserWallet idx ws = liftMaybe (Exception.error $ "Could not get user wallet " <> show idx)
    <<< Array.index ws $ idx + 1
 
+-- | Obtain the total amount of FAKEGIX in the wallet
+getWalletFakegix :: Contract () BigInt
+getWalletFakegix = do
+   utxosFakegix <=< liftedM "(getWalletFakegix) Could not get wallet utxos" $ getWalletUtxos
+
+-- | Obtain the total amount of FAKEGIX in the pool
+getPoolFakegix :: UnbondedPoolParams -> ScriptVersion -> Contract () BigInt
+getPoolFakegix ubp scriptVersion = do
+    validator <- liftedE $ mkUnbondedPoolValidator ubp scriptVersion
+    let valHash = validatorHash validator
+        poolAddr = scriptHashAddress valHash Nothing
+    utxosFakegix <=< liftedM "depositUnbondedPoolContract: Cannot get pool's utxos at pool address"
+        $ utxosAt poolAddr
+
 -- | Mint the necessay FAKEGIX and distribute it to admin and users
 mintAndDistributeFakegix :: BigInt -> Array (PaymentPubKeyHash /\ BigInt) -> Contract () Unit
 mintAndDistributeFakegix adminFakegix users = do
@@ -152,3 +169,9 @@ mintAndDistributeFakegix adminFakegix users = do
     txId <- submit tx
     awaitTxConfirmed txId
 
+
+utxosFakegix :: UtxoMap -> Contract () BigInt
+utxosFakegix utxos = do
+   (_ /\ cs /\ tn) <- getFakegixData
+   pure <<< valueOf' cs tn <<< foldMap (_.amount <<< unwrap <<< _.output <<< unwrap) $ utxos
+   where valueOf' cs tn v = valueOf v cs tn
