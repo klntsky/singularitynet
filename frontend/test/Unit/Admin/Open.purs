@@ -5,6 +5,6 @@ import Prelude
 import Contract.Test.Plutip (PlutipTest)
 import Test.Common (testInitialParams, withWalletsAndPool)
 
--- | It doesn't do anything because `withWalletsAndPool` handles pool creation.
+-- | The admin opens the pool
 test :: PlutipTest
 test = withWalletsAndPool testInitialParams [] \_ _ -> pure unit
