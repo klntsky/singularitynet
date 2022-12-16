@@ -11,6 +11,7 @@ import Mote (group, skip, test)
 import Test.Unit.Admin.Close as Close
 import Test.Unit.Admin.DepositEmpty as DepositEmpty
 import Test.Unit.Admin.Deposit1User as Deposit1User
+import Test.Unit.Admin.DepositNUser as DepositNUser
 import Test.Unit.Admin.Open as Open
 import Test.Unit.User.Stake as Stake
 
@@ -24,6 +25,16 @@ suite = testPlutipContracts localPlutipCfg do
             -- there are no stakers in the pool
             skip $ test "Deposit to empty pool" DepositEmpty.test
             test "Deposit to pool with 1 user's stake" Deposit1User.test
+            -- We skip this one until batching behaviour is fixed. Only the
+            -- first batch succeeds.
+            (let n = 5
+                 b = 3
+             in skip $ test ("Deposit to pool with " <> show n <> " users' stake") $ DepositNUser.test n b)
+            -- We skip this one until batching behaviour is fixed. Only the
+            -- first batch succeeds.
+            (let n = 5
+                 b = 2
+             in test ("Close pool with " <> show n <> " users' stake") $ DepositNUser.test n b)
         group "User" do
             test "Stake" Stake.test
 
