@@ -22,6 +22,7 @@ module Utils
   , splitByLength
   , submitTransaction
   , toIntUnsafe
+  , valueOf'
   , repeatUntilConfirmed
   , mustPayToScript
   , getUtxoDatumHash
@@ -570,3 +571,7 @@ addressFromBech32 str = do
   when (networkId /= SA.addressNetworkId cslAddress)
     (throwError $ error "addressFromBech32: address has wrong NetworkId")
   pure address
+
+-- | `valueOf` but with sane argument ordering.
+valueOf' :: CurrencySymbol -> TokenName -> Value -> BigInt
+valueOf' cs tn v = valueOf v cs tn
