@@ -18,7 +18,7 @@
       repo = "cardano-transaction-lib";
       # NOTE
       # Keep this in sync with the rev in `frontend/packages.dhall`
-      rev = "767e1f35b8b1f243f31ed3360d85a59ef695262b";
+      rev = "362c651cc9af7d40e2f8e4054a58fd209e81d2c3";
     };
   };
 
@@ -33,7 +33,12 @@
     }:
     let
       # GENERAL
-      supportedSystems = with nixpkgs.lib.systems.supported; tier1 ++ tier2 ++ tier3;
+      supportedSystems = [
+        "x86_64-linux"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
       perSystem = nixpkgs.lib.genAttrs supportedSystems;
 
       nixpkgsFor = system: import nixpkgs {

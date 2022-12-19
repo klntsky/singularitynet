@@ -25,37 +25,11 @@ import Effect.Aff (delay)
 import Effect.Exception (error)
 import Settings (testInitBondedParams)
 import Types (BondedPoolParams(..))
-import Types.Interval (POSIXTime(..))
-import Types.Natural as Natural
+import Contract.Time (POSIXTime(..))
+import Contract.Numeric.Natural as Natural
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (logInfo_, countdownTo)
-
--- import Settings (testInitUnbondedParams)
--- import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
--- import UnbondedStaking.CreatePool (createUnbondedPoolContract)
--- import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
--- import UnbondedStaking.Types
---   ( InitialUnbondedParams(InitialUnbondedParams)
---   , UnbondedPoolParams(..)
---   )
--- import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
--- import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
--- import Utils (currentRoundedTime)
--- import Types.Interval (POSIXTime(POSIXTime))
-
--- main :: Effect Unit
--- main = launchAff_ $ do
---   cfg <- mkConfig
---   runContract_ cfg $ do
---     initParams <- liftContractM "main: Cannot initiate bonded parameters"
---       testInitBondedParams
---     bondedParams <- createBondedPoolContract initParams
---     -- sleep in order to wait for tx
---     liftAff $ delay $ wrap $ toNumber 80_000
---     depositBondedPoolContract bondedParams
---     liftAff $ delay $ wrap $ toNumber 80_000
---     closeBondedPoolContract bondedParams
 
 main :: Effect Unit
 main = testBonded -- write here the desired test
@@ -241,6 +215,12 @@ runContract_ contract = do
     , customLogger: Nothing
     , suppressLogs: false
     , extraConfig: {}
+    , hooks:
+        { beforeInit: Nothing
+        , beforeSign: Nothing
+        , onError: Nothing
+        , onSuccess: Nothing
+        }
     }
     contract
 

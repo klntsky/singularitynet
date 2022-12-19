@@ -49,6 +49,8 @@ import Contract.Prim.ByteArray
   , byteArrayToHex
   , byteArrayToIntArray
   , hexToByteArray
+  , hexToRawBytes
+  , rawBytesToHex
   , ByteArray
   )
 import Contract.Value
@@ -73,14 +75,16 @@ import DepositPool (depositBondedPoolContract)
 import Effect.Aff (error)
 import Effect.Exception (Error)
 import Partial.Unsafe (unsafePartial)
-import Serialization.Address (intToNetworkId)
-import Serialization.Hash (ed25519KeyHashFromBytes, ed25519KeyHashToBytes)
+import Ctl.Internal.Serialization.Address (intToNetworkId)
+import Ctl.Internal.Serialization.Hash
+  ( ed25519KeyHashFromBytes
+  , ed25519KeyHashToBytes
+  )
 import Types
   ( AssetClass(AssetClass)
   , BondedPoolParams(BondedPoolParams)
   , InitialBondedParams
   )
-import Types.RawBytes (hexToRawBytes, rawBytesToHex)
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
@@ -171,6 +175,12 @@ buildContractConfig cfg = Promise.fromAff $ do
     , customLogger: Nothing
     , suppressLogs: false
     , extraConfig: {}
+    , hooks:
+        { beforeInit: Nothing
+        , beforeSign: Nothing
+        , onError: Nothing
+        , onSuccess: Nothing
+        }
     }
   where
   errorWithContext :: String -> Error

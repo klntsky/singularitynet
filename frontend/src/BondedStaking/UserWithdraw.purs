@@ -37,7 +37,8 @@ import Contract.Transaction
   ( TransactionInput
   , TransactionOutputWithRefScript
   , BalancedSignedTransaction
-  , balanceAndSignTx
+  , balanceTx
+  , signTransaction
   , TransactionHash
   )
 import Contract.TxConstraints
@@ -53,7 +54,7 @@ import Contract.Value (Value, mkTokenName, singleton)
 import Data.Array (catMaybes, head)
 import Data.BigInt (BigInt)
 import Data.Map as Map
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
@@ -71,8 +72,8 @@ import Types
   , ListAction(ListRemove)
   , StakingType(Bonded)
   )
-import Types.Rational (Rational, denominator, numerator)
-import Types.Redeemer (Redeemer(Redeemer))
+import Contract.Numeric.Rational (Rational, denominator, numerator)
+import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( findRemoveOtherElem
   , getAssetsToConsume
@@ -119,8 +120,8 @@ userWithdrawBondedPoolContract
       getWalletAddress
   -- Get utxos at the wallet address
   userUtxos <-
-    liftedM "userWithdrawBondedPoolContract: Cannot get user Utxos"
-      $ utxosAt userAddr
+    liftedM "userWithdrawBondedPoolContract: could not get user utxos" $
+      utxosAt userAddr
   ---- FETCH POOL DATA ----
   -- Get the bonded pool validator and hash
   validator <-
@@ -128,15 +129,13 @@ userWithdrawBondedPoolContract
       $ mkBondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "userWithdrawBondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "userWithdrawBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
   bondedPoolUtxos <-
-    liftedM
-      "userWithdrawBondedPoolContract: Cannot get pool's\
-      \ utxos at pool address"
-      $ utxosAt poolAddr
+    liftedM "userWithdrawBondedPoolContract: could not get pool utxos" $
+      utxosAt poolAddr
   logInfo_ "userWithdrawBondedPoolContract: Pool UTxOs" bondedPoolUtxos
   tokenName <- liftContractM
     "userWithdrawBondedPoolContract: Cannot create TokenName"
@@ -417,11 +416,8 @@ userWithdrawBondedPoolContract
   unattachedBalancedTx <-
     liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
   logAesonInfo unattachedBalancedTx
-  signedTx <-
-    liftedM
-      "userWithdrawBondedPoolContract: Cannot balance, reindex redeemers, attach \
-      \datums redeemers and sign"
-      $ balanceAndSignTx unattachedBalancedTx
+  bTx <- liftedE $ balanceTx unattachedBalancedTx
+  signedTx <- signTransaction bTx
   pure { signedTx }
 
 -- | This function filters all the asset UTxOs from a `UtxoMap`

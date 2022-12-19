@@ -24,13 +24,13 @@ import Contract.PlutusData
   , genericFromData
   , genericToData
   , toData
+  , S
+  , Z
   )
-import Contract.Transaction (TransactionHash)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Value (CurrencySymbol)
 import Data.BigInt (BigInt)
 import Types (AssetClass, BurningAction, MintingAction)
-import TypeLevel.Nat (S, Z)
 
 -- TODO: Add missing `ToData` instances for POSIXTime and NatRatio.
 newtype UnbondedPoolParams =

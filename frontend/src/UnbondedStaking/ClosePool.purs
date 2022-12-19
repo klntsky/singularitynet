@@ -45,14 +45,14 @@ import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Data.Array (elemIndex, (:), (!!))
 import Data.Map (toUnfoldable)
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
   ( unbondedStakingTokenName
   , confirmationTimeout
   , submissionAttempts
   )
-import Types.Scripts (ValidatorHash)
+import Contract.Scripts (ValidatorHash)
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedPoolParams(UnbondedPoolParams)
@@ -118,7 +118,7 @@ closeUnbondedPoolContract
     $ mkUnbondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "closeUnbondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "closeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the unbonded pool's utxo

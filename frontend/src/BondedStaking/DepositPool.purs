@@ -41,7 +41,7 @@ import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
 import Data.Array (elemIndex, (!!))
 import Data.BigInt (BigInt)
-import Plutus.Conversion (fromPlutusAddress)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
   ( bondedStakingTokenName
@@ -54,9 +54,9 @@ import Types
   , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   , Entry(Entry)
   )
-import Types.Natural (Natural)
-import Types.Redeemer (Redeemer(Redeemer))
-import Types.Scripts (ValidatorHash)
+import Contract.Numeric.Natural (Natural)
+import Contract.PlutusData (Redeemer(Redeemer))
+import Contract.Scripts (ValidatorHash)
 import Utils
   ( getUtxoWithNFT
   , logInfo_
@@ -99,22 +99,21 @@ depositBondedPoolContract
     liftedM "depositBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <-
-    liftedM "depositBondedPoolContract: Cannot get user Utxos"
-      $ utxosAt adminAddr
+  adminUtxos <- liftedM "depositBondedPoolContract: coudl not get admin's utxos"
+    $
+      utxosAt adminAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "depositBondedPoolContract: Cannot create validator"
     $ mkBondedPoolValidator params
   let valHash = validatorHash validator
   logInfo_ "depositBondedPoolContract: validatorHash" valHash
-  let poolAddr = scriptHashAddress valHash
+  let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "depositBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
   bondedPoolUtxos <-
-    liftedM
-      "depositBondedPoolContract: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+    liftedM "depositBondedPoolContract: could not get pool utxos" $
+      utxosAt poolAddr
   logInfo_ "depositBondedPoolContract: Pool UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "depositBondedPoolContract: Cannot create TokenName"

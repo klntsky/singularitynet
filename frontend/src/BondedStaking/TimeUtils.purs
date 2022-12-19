@@ -27,13 +27,13 @@ import Types
   ( BondedPoolParams(BondedPoolParams)
   , InitialBondedParams(InitialBondedParams)
   )
-import Types.Interval
+import Contract.Time
   ( POSIXTime(POSIXTime)
   , POSIXTimeRange
   , interval
-  , posixTimeRangeToTransactionValidity
   )
-import Types.Natural (Natural)
+import Ctl.Internal.Types.Interval (posixTimeRangeToTransactionValidity)
+import Contract.Numeric.Natural (Natural)
 import Utils (big, bigIntRange, currentRoundedTime)
 
 -- | Get the time-range that includes the current (approximate) time and the
