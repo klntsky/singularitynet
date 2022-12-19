@@ -1,49 +1,39 @@
 module UnbondedStaking.Utils
   ( calculateRewards
   , getAdminTime
-  , getBondingTime
+  , getUserOrBondingTime
   , getUserTime
+  , getContainingPeriodRange
+  , getPeriodRange
+  , getNextPeriodRange
   , mkUnbondedPoolParams
   , queryAssocListUnbonded
+  , queryStateUnbonded
   ) where
 
 import Contract.Prelude hiding (length)
 
 import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , throwContractError
-  , liftedE'
-  , liftedM
-  )
 import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, throwContractError, liftedE', liftedM)
 import Contract.Numeric.Rational (Rational, (%))
-import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, always, interval)
-import Contract.Value (CurrencySymbol)
-import Contract.Scripts (validatorHash)
-import Contract.Prim.ByteArray (ByteArray)
-import Contract.Utxos (utxosAt)
-import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.PlutusData (getDatumByHash, fromData)
-import Data.Array (filter, head, takeWhile, (..))
-import Data.BigInt (BigInt, quot, toInt)
+import Contract.Prim.ByteArray (ByteArray)
+import Contract.Scripts (validatorHash)
+import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, always, interval)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
+import Contract.Utxos (utxosAt)
+import Contract.Value (CurrencySymbol)
+--import Data.Array ((..))
+import Data.Array as Array
+import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
+import Data.Map as Map
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
-  , InitialUnbondedParams(InitialUnbondedParams)
-  , Entry(..)
-  , UnbondedStakingDatum(..)
-  )
-import Utils
-  ( big
-  , currentRoundedTime
-  , mkRatUnsafe
-  , getUtxoDatumHash
-  , mkOnchainAssocList
-  )
+import Settings (unbondedStakingTokenName)
 import Types (ScriptVersion(..))
+import UnbondedStaking.Types (Entry(..), InitialUnbondedParams(InitialUnbondedParams), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingDatum(..))
+import Utils (big, currentRoundedTime, getUtxoDatumHash, mkOnchainAssocList, mkRatUnsafe, valueOf')
 
 -- | Admin deposit/closing
 getAdminTime
@@ -61,13 +51,13 @@ getAdminTime (UnbondedPoolParams upp) = case _ of
       cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
 
       adminStart :: BigInt
-      adminStart = upp.start + upp.userLength
+      adminStart = upp.userLength
 
       adminEnd :: BigInt
       adminEnd = adminStart + upp.adminLength - big 1000
     -- Return range
     start /\ end <- liftContractM "getAdminTime: this is not a admin period" $
-      isWithinPeriod currTime' cycleLength adminStart adminEnd
+      getContainingPeriodRange currTime' upp.start cycleLength adminStart adminEnd
     pure
       { currTime
       , range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
@@ -90,24 +80,24 @@ getUserTime (UnbondedPoolParams upp) = case _ of
        cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
 
        userStart :: BigInt
-       userStart = upp.start
+       userStart = zero
 
        userEnd :: BigInt
        userEnd = userStart + upp.userLength - big 1000
      -- Return range
      start /\ end <- liftContractM "getUserTime: this is not a user period" $
-       isWithinPeriod currTime' cycleLength userStart userEnd
+       getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
      pure { currTime, range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1) }
   DebugNoTimeChecks -> noTimeChecks "getUserTime"
 
 -- | User withdrawals only
 -- | Note: Period can either be in bonding period or user period
-getBondingTime
+getUserOrBondingTime
   :: forall (r :: Row Type)
   . UnbondedPoolParams
   -> ScriptVersion
   -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
-getBondingTime (UnbondedPoolParams upp) = case _ of
+getUserOrBondingTime (UnbondedPoolParams upp) = case _ of
   Production -> do
      -- Get time and round it up to the nearest second
      currTime@(POSIXTime currTime') <- currentRoundedTime
@@ -117,19 +107,19 @@ getBondingTime (UnbondedPoolParams upp) = case _ of
        cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
    
        userStart :: BigInt
-       userStart = upp.start
+       userStart = zero
    
        userEnd :: BigInt
        userEnd = userStart + upp.userLength - big 1000
    
        bondingStart :: BigInt
-       bondingStart = upp.start + upp.userLength + upp.adminLength
+       bondingStart = userEnd + upp.adminLength
    
        bondingEnd :: BigInt
        bondingEnd = bondingStart + upp.bondingLength - big 1000
        -- Period ranges
-       userPeriod = isWithinPeriod currTime' cycleLength userStart userEnd
-       bondingPeriod = isWithinPeriod currTime' cycleLength bondingStart bondingEnd
+       userPeriod = getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
+       bondingPeriod = getContainingPeriodRange currTime' upp.start cycleLength bondingStart bondingEnd
    
        getPeriod
          :: Maybe (Tuple BigInt BigInt)
@@ -146,42 +136,51 @@ getBondingTime (UnbondedPoolParams upp) = case _ of
      pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
   DebugNoTimeChecks -> noTimeChecks "getBondingTime"
 
--- | Returns the current/previous period and the next valid period in the
--- | future from the current time
-isWithinPeriod
+-- | Returns the period's range if it contain the `currentTime`.
+--
+-- The period is defined by its `startOffset` and `endOffset`, while
+-- `baseOffset` and `cycleLength` are parameters of the pool. If the `currTime`
+-- is not contained within the period's range of the current interval, it fails.
+getContainingPeriodRange
   :: forall (r :: Row Type)
    . BigInt
   -> BigInt
   -> BigInt
   -> BigInt
+  -> BigInt
   -> Maybe (Tuple BigInt BigInt)
-isWithinPeriod currTime cycleLength start end =
-  let
-    currentIteration :: Int
-    currentIteration = fromMaybe 0 $ toInt (start `quot` cycleLength)
+getContainingPeriodRange currentTime baseOffset cycleLength startOffset endOffset =
+  if start <= currentTime && currentTime < end
+     then Just periodRange
+     else Nothing
+  where periodRange@(start /\ end) =
+           getPeriodRange
+              currentTime
+              baseOffset
+              cycleLength
+              startOffset
+              endOffset
 
-    upperBound :: Int
-    upperBound = 1 + currentIteration
+    --upperBound :: Int
+    --upperBound = currentIteration + 1
 
-    possibleRanges :: Array (Tuple BigInt BigInt)
-    possibleRanges =
-      ( \i -> (cycleLength * big (i - 1) + start)
-          /\ (cycleLength * big (i - 1) + end)
-      )
-        <$> 1 .. upperBound
+    -- possibleRanges :: Array (Tuple BigInt BigInt)
+    -- possibleRanges =
+    --   ( \i -> (cycleLength * big (i - 1) + startOffset)
+    --       /\ (cycleLength * big (i - 1) + endOffset)
+    --   )
+    --     <$> 1 .. upperBound
 
-    periods :: Array (Tuple BigInt BigInt)
-    periods =
-      takeWhile (\(start' /\ _) -> currTime >= start')
-        possibleRanges
+    -- periods :: Array (Tuple BigInt BigInt)
+    -- periods =
+    --   Array.takeWhile (\(startOffset' /\ _) -> currTime >= startOffset')
+    --     possibleRanges
 
-    currentPeriod :: Array (Tuple BigInt BigInt)
-    currentPeriod =
-      filter
-        (\(start' /\ end') -> start' <= currTime && currTime < end')
-        periods
-  in
-    if null currentPeriod then Nothing else head currentPeriod
+    -- currentPeriod :: Array (Tuple BigInt BigInt)
+    -- currentPeriod =
+    --   Array.filter
+    --     (\(startOffset' /\ endOffset') -> startOffset' <= currTime && currTime < endOffset')
+    --     periods
 
 -- | Creates the `UnbondedPoolParams` from the `InitialUnbondedParams` and
 -- | runtime parameters from the user.
@@ -249,6 +248,42 @@ queryAssocListUnbonded
   let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
   getListDatums assocList
 
+queryStateUnbonded
+  :: UnbondedPoolParams
+  -> ScriptVersion
+  -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
+queryStateUnbonded
+  params@
+     ( UnbondedPoolParams
+        { nftCs
+        }
+     )
+  scriptVersion = do
+  -- Fetch information related to the pool
+  validator <- liftedE' "queryStateUnbonded: Cannot create validator"
+    $ mkUnbondedPoolValidator params scriptVersion
+  nftTn <- liftContractM "queryStateUnbonded: Could not get staking token name"
+      unbondedStakingTokenName
+  let valHash = validatorHash validator
+      poolAddr = scriptHashAddress valHash Nothing
+  -- Get the state UTxO's datum
+  unbondedPoolUtxos <-
+    liftedM
+      "queryStateUnbonded: Cannot get pool's utxos at pool address"
+      $ utxosAt poolAddr
+  let hasStateNft :: TransactionOutputWithRefScript -> Boolean
+      hasStateNft = unwrap >>> _.output >>> unwrap >>> _.amount >>> valueOf' nftCs nftTn >>> (_ == one)
+  stateTxOut <- liftContractM "queryStateUnbonded: Could not find state utxo"
+     <<< Array.head <<< Array.fromFoldable $ Map.filter hasStateNft unbondedPoolUtxos
+  getDatum stateTxOut
+  where getDatum :: TransactionOutputWithRefScript -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
+        getDatum txOut = do
+            dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash txOut
+            case fromData $ unwrap dat of
+                Just (StateDatum r) -> pure r
+                Just _ -> throwContractError "queryStateUnbonded: Expected a state datum"
+                Nothing -> throwContractError "queryStateUnbonded: Could not parse datum"
+
 -- | Get all entries' datums
 getListDatums
   :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
@@ -284,3 +319,31 @@ noTimeChecks fnName = do
     logInfo' $ fnName <> ": Time checks deactivated - omitting check"
     currTime <- currentRoundedTime
     pure { currTime, range: always }
+
+-- | Gets the period's range for the given time
+getPeriodRange
+  :: forall (r :: Row Type)
+   . BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt /\ BigInt
+getPeriodRange time baseOffset cycleLength startOffset endOffset =
+  let
+    iteration :: BigInt
+    iteration = (time - baseOffset) `BigInt.quot` cycleLength
+  in (baseOffset + cycleLength * iteration + startOffset)
+     /\ (baseOffset + cycleLength * iteration + endOffset)
+
+-- | Gets the period's range for the next cycle
+getNextPeriodRange
+  :: forall (r :: Row Type)
+   . BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt
+  -> BigInt /\ BigInt
+getNextPeriodRange time baseOffset cycleLength startOffset endOffset =
+    getPeriodRange (time + cycleLength) baseOffset cycleLength startOffset endOffset

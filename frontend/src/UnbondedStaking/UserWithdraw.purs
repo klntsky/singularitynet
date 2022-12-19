@@ -25,7 +25,7 @@ import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
 import Types (BurningAction(BurnHead, BurnOther, BurnSingle), ListAction(ListRemove), ScriptVersion, StakingType(Unbonded))
 import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(WithdrawAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
-import UnbondedStaking.Utils (getBondingTime)
+import UnbondedStaking.Utils (getUserOrBondingTime)
 import Utils (findRemoveOtherElem, getAssetsToConsume, mkAssetUtxosConstraints, getUtxoWithNFT, hashPkh, logInfo_, mkOnchainAssocList, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
 
 -- Deposits a certain amount in the pool
@@ -107,7 +107,7 @@ userWithdrawUnbondedPoolContract
 
   -- Get the staking range to use
   logInfo' "userWithdrawUnbondedPoolContract: Getting user range..."
-  { currTime, range } <- getBondingTime params scriptVersion
+  { currTime, range } <- getUserOrBondingTime params scriptVersion
   logInfo_ "userWithdrawUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "userWithdrawUnbondedPoolContract: TX Range" range
 
