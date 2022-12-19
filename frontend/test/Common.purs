@@ -3,6 +3,8 @@ module Test.Common(
        testInitialParams,
        testInitialParamsNoTimeChecks,
        withWalletsAndPool,
+       waitFor,
+       waitForNext,
        getAdminWallet,
        getUserWallet,
        getWalletFakegix,
@@ -11,7 +13,8 @@ module Test.Common(
 import Prelude
 
 import Contract.Address (PaymentPubKeyHash, ownPaymentPubKeyHash, scriptHashAddress)
-import Contract.Monad (Contract, liftedE, liftedM)
+import Contract.Log (logDebug')
+import Contract.Monad (Contract, liftedE, liftedM, throwContractError)
 import Contract.Numeric.Rational ((%))
 import Contract.Prelude (mconcat)
 import Contract.Prim.ByteArray (byteArrayFromAscii)
@@ -30,17 +33,20 @@ import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Foldable (foldMap, sum)
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (unwrap, wrap)
 import Data.Traversable (traverse)
 import Data.Tuple (fst, snd, uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
+import Effect.Aff (delay)
+import Effect.Aff.Class (liftAff)
 import Effect.Exception as Exception
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
-import UnbondedStaking.Types (InitialUnbondedParams(..), UnbondedPoolParams)
-import Utils (currentTime, nat)
+import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), UnbondedPoolParams(..))
+import UnbondedStaking.Utils (getNextPeriodRange, getPeriodRange, queryStateUnbonded)
+import Utils (currentRoundedTime, currentTime, nat)
 
 
 type TestInitialParams = {
@@ -67,7 +73,7 @@ testInitialParams = do
     (_ /\ fakegixCs /\ fakegixTn) <- getFakegixData
     let periodLen = BigInt.fromInt 30_000
     interest <- liftMaybe (Exception.error "testInitialParams: could not make Rational") $ 1 % 100
-    start <- unwrap <$> currentTime
+    start <- unwrap <$> currentRoundedTime
     pure
       {
         initialUnbondedParams: InitialUnbondedParams {
@@ -93,6 +99,72 @@ testInitialParamsNoTimeChecks = do
 adminInitialUtxos :: InitialUTxOs /\ BigInt
 adminInitialUtxos =  (BigInt.fromInt <$> [ 10_000_000, 200_000_000]) /\ BigInt.fromInt 1_000_000
 
+-- Wait for the given period in the *next* cycle to start.
+waitForNext :: Period -> UnbondedPoolParams -> ScriptVersion -> Contract () Unit
+waitForNext period params sv = waitFor' period params sv true
+
+-- Wait for the given period to start.
+waitFor :: Period -> UnbondedPoolParams -> ScriptVersion -> Contract () Unit
+waitFor period params sv = waitFor' period params sv false
+
+-- Wait for a given period to start. It can either wait for the period in the
+-- current cycle of the next one.
+waitFor' :: Period -> UnbondedPoolParams -> ScriptVersion -> Boolean -> Contract () Unit
+waitFor' _ _ DebugNoTimeChecks _ = pure unit
+waitFor' period params@(UnbondedPoolParams ubp) Production skipCurrent = do
+    -- Get current time and add a cycle length if skipping the current period
+    -- is desired.
+    let cycleLength :: BigInt
+        cycleLength = ubp.userLength + ubp.adminLength + ubp.bondingLength
+    currTime <- (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$> currentRoundedTime
+    { open: isOpen } <- queryStateUnbonded params Production
+    when (period /= ClosedPeriod && not isOpen) $
+       throwContractError "Waiting for period that will not come because pool is already closed"
+    case period of
+        UserPeriod    -> waitFor'' currTime ubp.start cycleLength zero ubp.userLength
+        AdminPeriod   -> waitFor'' currTime ubp.start cycleLength ubp.userLength (ubp.userLength + ubp.adminLength)
+        BondingPeriod -> waitFor'' currTime ubp.start cycleLength (ubp.userLength + ubp.adminLength) (ubp.userLength + ubp.adminLength + ubp.bondingLength)
+        ClosedPeriod  -> waitUntilClosed params Production
+
+-- Wait for a given period to start. The period is defined with its start and
+-- end offsets.
+waitFor'' :: BigInt -> BigInt -> BigInt -> BigInt -> BigInt -> Contract () Unit
+waitFor'' time baseOffset cycleLength startOffset endOffset =
+    let (start /\ end) =
+           getPeriodRange
+              time
+              baseOffset
+              cycleLength
+              startOffset
+              endOffset
+        (start' /\ _) =
+            getNextPeriodRange
+              time
+              baseOffset
+              cycleLength
+              startOffset
+              endOffset
+    in case time of
+        t | t >= start && t <= end -> waitUntil start
+          | t < start' -> waitUntil start'
+          | otherwise ->
+              throwContractError
+                "Something went wrong when obtaining the ranges"
+
+waitUntil :: BigInt -> Contract () Unit
+waitUntil limit = do
+    t <- unwrap <$> currentTime
+    if t < limit
+        then (liftAff $ delay $ wrap 20_000.0) *> waitUntil limit
+        else pure unit
+
+waitUntilClosed :: UnbondedPoolParams -> ScriptVersion -> Contract () Unit
+waitUntilClosed ubp sv = do
+    isOpen <- _.open <$> queryStateUnbonded ubp sv
+    if isOpen
+        then pure unit
+        else (liftAff $ delay $ wrap 20_000.0) *> waitUntilClosed ubp sv
+
 -- | Helper for running contracts that interact with a pool created from the
 -- given `InitialUnbondedParams`. The admin wallet is also preprended to the
 -- passed wallets.
@@ -108,10 +180,14 @@ withWalletsAndPool initParamsContract distr contract =
         -- Mint and distribute FAKEGIX
         withKeyWallet adminW $
            mintAndDistributeFakegix (snd adminInitialUtxos) $ Array.zip userPkhs $ snd <$> distr
+        logDebug' "FAKEGIX distributed succesfully!"
         -- Create pool
         { initialUnbondedParams, scriptVersion } <- initParamsContract
-        { unbondedPoolParams } <- withKeyWallet adminW $
+        { unbondedPoolParams, address } <- withKeyWallet adminW $
            createUnbondedPoolContract initialUnbondedParams scriptVersion
+        logDebug' "Pool created succesfully!"
+        logDebug' $ "Pool parameters: " <> show unbondedPoolParams
+        logDebug' $ "Pool address: " <> show address
         contract wallets unbondedPoolParams
     where getUserPkh :: KeyWallet -> Contract () PaymentPubKeyHash
           getUserPkh w =

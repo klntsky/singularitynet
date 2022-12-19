@@ -1,5 +1,6 @@
 module UnbondedStaking.Types
-  ( Entry(..)
+  ( Period(..)
+  , Entry(..)
   , InitialUnbondedParams(..)
   , UnbondedPoolParams(..)
   , UnbondedStakingAction(..)
@@ -31,6 +32,20 @@ import Contract.Prim.ByteArray (ByteArray)
 import Contract.Value (CurrencySymbol)
 import Data.BigInt (BigInt)
 import Types (AssetClass, BurningAction, MintingAction)
+
+-- | This datatype is only used in offchain. It is used to specify a period to
+-- wait for. These match the three non-overlapping time intervals that conform
+-- a given cycle according to the spec. Additionally, there is a
+-- `ClosedPeriod`, which is used to wait until the pool is closed. Since the
+-- unbonded pool does not have an end time, this can wait an indefinite amount
+-- of time.
+data Period = UserPeriod | AdminPeriod | BondingPeriod | ClosedPeriod
+
+derive instance Eq Period
+derive instance Generic Period _
+
+instance Show Period where
+    show = genericShow
 
 -- TODO: Add missing `ToData` instances for POSIXTime and NatRatio.
 newtype UnbondedPoolParams =
