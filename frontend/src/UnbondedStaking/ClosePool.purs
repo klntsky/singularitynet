@@ -14,7 +14,7 @@ import Contract.Scripts (ValidatorHash)
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustIncludeDatum, mustSpendScriptOutput, mustValidateIn)
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (:), (!!))
@@ -24,7 +24,7 @@ import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttemp
 import Types (ScriptVersion)
 import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(CloseAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
-import Utils (getUtxoWithNFT, mkOnchainAssocList, logInfo_, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash)
+import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, mkOnchainAssocList, mkRatUnsafe, mustPayToScript, roundUp, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe)
 
 -- | Closes the unbonded pool and distributes final rewards to users
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -133,27 +133,12 @@ closeUnbondedPoolContract
         lookups :: ScriptLookups.ScriptLookups PlutusData
         lookups =
           ScriptLookups.validator validator
-            <> ScriptLookups.unspentOutputs adminUtxos
             <> ScriptLookups.unspentOutputs unbondedPoolUtxos
+            -- We deliberately omit the admin utxos, since batching includes
+            -- them automatically before every batch.
 
-        submitBatch
-          :: Array
-               ( Tuple
-                   (TxConstraints Unit Unit)
-                   (ScriptLookups.ScriptLookups PlutusData)
-               )
-          -> Contract ()
-               ( Array
-                   ( Tuple
-                       (TxConstraints Unit Unit)
-                       (ScriptLookups.ScriptLookups PlutusData)
-                   )
-               )
-        submitBatch txBatch = do
-          submitTransaction constraints lookups txBatch confirmationTimeout
-            submissionAttempts
-      -- Get list of users to deposit rewards too
-      updateList <-
+      -- Get list of users to deposit rewards to
+      entryUpdates <-
         if null depositList then do
           updateList' <- traverse (mkEntryUpdateList params valHash) assocList
           pure $ stateDatumConstraintsLookups : updateList'
@@ -168,11 +153,20 @@ closeUnbondedPoolContract
       -- Submit transaction with possible batching
       failedDeposits <-
         if batchSize == zero then
-          submitBatch updateList
+          submitTransaction
+            constraints
+            (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+            confirmationTimeout
+            submissionAttempts
+            entryUpdates
         else do
-          let updateBatches = splitByLength (toIntUnsafe batchSize) updateList
-          failedDeposits' <- traverse submitBatch updateBatches
-          pure $ mconcat failedDeposits'
+          let entryUpdateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
+          submitBatchesSequentially
+            constraints
+            lookups
+            confirmationTimeout
+            submissionAttempts
+            entryUpdateBatches
       logInfo_
         "closeUnbondedPoolContract: Closed pool and finished updating /\
         \pool entries. Entries with failed updates"
@@ -181,14 +175,14 @@ closeUnbondedPoolContract
         liftContractM
           "closeUnbondedPoolContract: Failed to create /\
           \failedDepositsIndicies list" $
-          traverse (flip elemIndex updateList) failedDeposits
+          traverse (flip elemIndex entryUpdates) failedDeposits
       pure failedDepositsIndicies
     -- Closing pool with no users
     StateDatum { maybeEntryName: Nothing, open: true } -> do
       logInfo'
         "closeUnbondedPoolContract: STAKE TYPE - StateDatum is \
         \StateDatum { maybeEntryName: Nothing, open: true }"
-      -- Bulid constraints/lookups
+      -- Build constraints/lookups
       let
         redeemer = Redeemer $ toData CloseAct
 
@@ -207,9 +201,13 @@ closeUnbondedPoolContract
           [ ScriptLookups.validator validator
           , ScriptLookups.unspentOutputs unbondedPoolUtxos
           ]
-      failedDeposits <- submitTransaction constraints lookups []
-        confirmationTimeout
-        submissionAttempts
+      failedDeposits <-
+        submitTransaction
+          constraints
+          lookups
+          confirmationTimeout
+          submissionAttempts
+          []
       logInfo_
         "closeUnbondedPoolContract: Pool closed. Failed updates"
         failedDeposits

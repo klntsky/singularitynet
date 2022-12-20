@@ -2,75 +2,32 @@ module UnbondedStaking.DepositPool (depositUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftedE'
-  , liftedM
-  , throwContractError
-  )
+import Contract.Monad (Contract, liftContractM, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Natural (Natural, fromBigInt')
 import Contract.Numeric.Rational (Rational)
-import Contract.PlutusData
-  ( PlutusData
-  , Datum(Datum)
-  , Redeemer(Redeemer)
-  , fromData
-  , getDatumByHash
-  , toData
-  )
+import Contract.PlutusData (PlutusData, Datum(Datum), Redeemer(Redeemer), fromData, getDatumByHash, toData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (ValidatorHash, validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints
-  ( TxConstraints
-  , mustBeSignedBy
-  , mustSpendScriptOutput
-  , mustValidateIn
-  )
-import Contract.Utxos (utxosAt)
+import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustSpendScriptOutput, mustValidateIn)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (elemIndex, zip, (!!))
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
+import Data.Array (elemIndex, zip, (!!))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Unfoldable (none)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings
-  ( unbondedStakingTokenName
-  , confirmationTimeout
-  , submissionAttempts
-  )
-import UnbondedStaking.Types
-  ( Entry(Entry)
-  , UnbondedPoolParams(UnbondedPoolParams)
-  , UnbondedStakingAction(AdminAct)
-  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  )
+import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
 import Types (ScriptVersion)
+import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(AdminAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
-import Utils
-  ( getUtxoWithNFT
-  , mkOnchainAssocList
-  , logInfo_
-  , roundUp
-  , splitByLength
-  , submitTransaction
-  , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
-  , toRational
-  )
+import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, mkOnchainAssocList, mustPayToScript, roundUp, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe, toRational)
 
 -- | Deposits a certain amount in the pool
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -201,33 +158,26 @@ depositUnbondedPoolContract
         lookups =
           ScriptLookups.validator validator
             <> ScriptLookups.unspentOutputs unbondedPoolUtxos
-            <> ScriptLookups.unspentOutputs adminUtxos
-
-        submitBatch
-          :: Array
-               ( Tuple
-                   (TxConstraints Unit Unit)
-                   (ScriptLookups.ScriptLookups PlutusData)
-               )
-          -> Contract ()
-               ( Array
-                   ( Tuple
-                       (TxConstraints Unit Unit)
-                       (ScriptLookups.ScriptLookups PlutusData)
-                   )
-               )
-        submitBatch txBatch = do
-          submitTransaction constraints lookups txBatch confirmationTimeout
-            submissionAttempts
+            -- We deliberately omit the admin utxos, since batching includes
+            -- them automatically before every batch.
 
       -- Submit transaction with possible batching
       failedDeposits <-
         if batchSize == zero then
-          submitBatch entryUpdates
+          submitTransaction
+            constraints
+            (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+            confirmationTimeout
+            submissionAttempts
+            entryUpdates
         else do
-          let updateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
-          failedDeposits' <- traverse submitBatch updateBatches
-          pure $ mconcat failedDeposits'
+          let entryUpdateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
+          submitBatchesSequentially
+            constraints
+            lookups
+            confirmationTimeout
+            submissionAttempts
+            entryUpdateBatches
       logInfo_
         "depositUnbondedPoolContract: Finished updating pool entries. /\
         \Entries with failed updates"

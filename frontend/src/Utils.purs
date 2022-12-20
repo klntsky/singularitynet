@@ -21,6 +21,7 @@ module Utils
   , roundUp
   , splitByLength
   , submitTransaction
+  , submitBatchesSequentially
   , toIntUnsafe
   , valueOf'
   , repeatUntilConfirmed
@@ -34,59 +35,20 @@ import Contract.Prelude hiding (length)
 import Contract.Address (Address, Bech32String, PaymentPubKeyHash, getNetworkId)
 import Contract.Hashing (blake2b256Hash)
 import Contract.Log (logInfo, logInfo', logAesonInfo)
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftedE
-  , tag
-  , throwContractError
-  )
+import Contract.Monad (Contract, liftContractM, liftedE, liftedM, tag, throwContractError)
 import Contract.Numeric.Natural (Natural, fromBigInt', toBigInt)
 import Contract.Numeric.Rational (Rational, denominator, numerator, (%))
-import Contract.PlutusData
-  ( Datum
-  , DataHash
-  , PlutusData
-  , Redeemer
-  , OutputDatum(OutputDatumHash)
-  )
+import Contract.PlutusData (Datum, DataHash, PlutusData, Redeemer, OutputDatum(OutputDatumHash))
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray, byteArrayToHex)
+import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript, ValidatorHash)
-import Contract.Time
-  ( ChainTip(..)
-  , Tip(..)
-  , POSIXTime(POSIXTime)
-  , getEraSummaries
-  , getSystemStart
-  , getTip
-  , slotToPosixTime
-  )
-import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionInput
-  , TransactionOutputWithRefScript(TransactionOutputWithRefScript)
-  , awaitTxConfirmedWithTimeout
-  , balanceTx
-  , plutusV1Script
-  , signTransaction
-  , submit
-  )
-import Contract.TxConstraints
-  ( TxConstraints
-  , DatumPresence(DatumWitness)
-  , mustSpendScriptOutput
-  )
+import Contract.Time (ChainTip(..), Tip(..), POSIXTime(POSIXTime), getEraSummaries, getSystemStart, getTip, slotToPosixTime)
+import Contract.Transaction (BalancedSignedTransaction, TransactionInput, TransactionOutputWithRefScript(TransactionOutputWithRefScript), awaitTxConfirmedWithTimeout, balanceTx, plutusV1Script, signTransaction, submit)
+import Contract.TxConstraints (TxConstraints, DatumPresence(DatumWitness), mustSpendScriptOutput)
 import Contract.TxConstraints as TxConstraints
-import Contract.Utxos (UtxoMap)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  , Value
-  , flattenNonAdaAssets
-  , getTokenName
-  , valueOf
-  )
+import Contract.Utxos (UtxoMap, getWalletUtxos)
+import Contract.Value (CurrencySymbol, TokenName, Value, flattenNonAdaAssets, getTokenName, valueOf)
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
 import Ctl.Internal.Plutus.Conversion (toPlutusAddress)
@@ -95,19 +57,9 @@ import Ctl.Internal.Serialization.Hash (ed25519KeyHashToBytes)
 import Data.Argonaut.Core (Json, caseJsonObject)
 import Data.Argonaut.Decode.Combinators (getField) as Json
 import Data.Argonaut.Decode.Error (JsonDecodeError(TypeMismatch))
-import Data.Array
-  ( filter
-  , head
-  , last
-  , length
-  , partition
-  , mapMaybe
-  , slice
-  , sortBy
-  , (..)
-  )
+import Data.Array (filter, head, last, length, partition, mapMaybe, slice, sortBy, (..))
 import Data.Array as Array
-import Data.Bifunctor (lmap)
+import Data.Bifunctor (lmap, rmap)
 import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
@@ -119,12 +71,7 @@ import Effect.Exception (error, throw)
 import Math (ceil)
 import Prim.Row (class Lacks)
 import Record (insert, delete)
-import Types
-  ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
-  , MintingAction(MintEnd, MintInBetween)
-  )
+import Types (AssetClass(AssetClass), BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams), MintingAction(MintEnd, MintInBetween))
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
 -- typed validator
@@ -466,17 +413,18 @@ splitByLength size array
         map (\i -> slice (i * size) ((i * size) + size) array) $
           0 .. sublistCount
 
--- | Submits a transaction with the given list of constraints/lookups
+-- | Submits a transaction with the given list of constraints/lookups. It
+-- returns the same constraints/lookups if it fails.
 submitTransaction
   :: TxConstraints Unit Unit
   -> ScriptLookups.ScriptLookups PlutusData
+  -> Seconds
+  -> Int
   -> Array
        ( Tuple
            (TxConstraints Unit Unit)
            (ScriptLookups.ScriptLookups PlutusData)
        )
-  -> Seconds
-  -> Int
   -> Contract ()
        ( Array
            ( Tuple
@@ -484,7 +432,7 @@ submitTransaction
                (ScriptLookups.ScriptLookups PlutusData)
            )
        )
-submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
+submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
   do
     let
       constraintList = fst <$> updateList
@@ -505,6 +453,34 @@ submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
         pure updateList
       Right _ ->
         pure []
+
+-- Submits a series of batches to be executed sequentially, where each batch
+-- is defined by a given list of constraints/lookups. Importantly, for each
+-- batch the wallet's UTxOs are fetched and added to the lookups.
+submitBatchesSequentially
+  ::
+  TxConstraints Unit Unit
+  -> ScriptLookups PlutusData
+  -> Seconds
+  -> Int
+  -> Array (Array
+       ( Tuple
+           (TxConstraints Unit Unit)
+           (ScriptLookups.ScriptLookups PlutusData)
+       ))
+  -> Contract ()
+       ( Array
+           ( Tuple
+               (TxConstraints Unit Unit)
+               (ScriptLookups.ScriptLookups PlutusData)
+           )
+       )
+submitBatchesSequentially constraints lookups confirmationTimeout submissionAttempts batches = do
+  mconcat <$> traverse submitTransaction' batches
+  where submitTransaction' batch = do
+           utxos <- liftedM "submitBatchesSequentially: could not get wallet utxos" $ getWalletUtxos
+           let lookups' = lookups <> ScriptLookups.unspentOutputs utxos
+           submitTransaction constraints lookups' confirmationTimeout submissionAttempts batch
 
 -- | This function executes a `Contract` that returns a `BalancedSignedTransaction`,
 -- | submits it, and waits `timeout` seconds for it to succeed. If it does not,

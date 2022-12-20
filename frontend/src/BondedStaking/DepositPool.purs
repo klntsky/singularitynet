@@ -25,7 +25,7 @@ import Data.BigInt (BigInt)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
 import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(AdminAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), Entry(Entry), ScriptVersion)
-import Utils (getUtxoWithNFT, logInfo_, mkOnchainAssocList, mkRatUnsafe, roundUp, splitByLength, submitTransaction, toIntUnsafe, mustPayToScript, getUtxoDatumHash)
+import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, mkOnchainAssocList, mkRatUnsafe, mustPayToScript, roundUp, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe)
 
 -- Deposits a certain amount in the pool
 depositBondedPoolContract
@@ -117,7 +117,6 @@ depositBondedPoolContract
         lookups :: ScriptLookups.ScriptLookups PlutusData
         lookups =
           ScriptLookups.validator validator
-            <> ScriptLookups.unspentOutputs adminUtxos
             <> ScriptLookups.unspentOutputs bondedPoolUtxos
 
       -- If depositList is null, update all entries in assocList
@@ -133,15 +132,20 @@ depositBondedPoolContract
       -- Submit transaction with possible batching
       failedDeposits <-
         if batchSize == zero then
-          submitTransaction constraints lookups updateList confirmationTimeout
+          submitTransaction
+            constraints
+            lookups
+            confirmationTimeout
             submissionAttempts
-        else
-          let
-            updateBatches = splitByLength (toIntUnsafe batchSize) updateList
-          in
-            mconcat <$> for updateBatches \txBatch ->
-              submitTransaction constraints lookups txBatch confirmationTimeout
-                submissionAttempts
+            updateList
+        else do
+          let updateBatches = splitByLength (toIntUnsafe batchSize) updateList
+          submitBatchesSequentially
+            constraints
+            lookups
+            confirmationTimeout
+            submissionAttempts
+            updateBatches
       logInfo_
         "depositBondedPoolContract: Finished updating pool entries. /\
         \Entries with failed updates"
