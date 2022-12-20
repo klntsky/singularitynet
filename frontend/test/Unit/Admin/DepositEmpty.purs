@@ -2,21 +2,23 @@ module Test.Unit.Admin.DepositEmpty (test) where
 
 import Prelude
 
-import Contract.Monad (throwContractError)
+import Contract.Monad (Contract, throwContractError)
 import Contract.Test.Plutip (PlutipTest)
 import Control.Monad.Reader (ask, lift)
 import Data.Array as Array
 import Data.BigInt as BigInt
-import Test.Common (getAdminWallet, getWalletFakegix, testInitialParamsNoTimeChecks, withWalletsAndPool, withKeyWallet)
+import Test.Common (getAdminWallet, getWalletFakegix, waitFor, withKeyWallet, withWalletsAndPool)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
+import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import Utils (nat)
 
 -- | The admin deposits to an empty pool
-test :: PlutipTest
-test = withWalletsAndPool testInitialParamsNoTimeChecks [] \wallets -> do
+test :: Contract () SnetInitialParams -> PlutipTest
+test initParams = withWalletsAndPool initParams [] \wallets -> do
     adminWallet <- getAdminWallet wallets
     { unbondedPoolParams, scriptVersion } <- ask
     withKeyWallet adminWallet do
+        waitFor AdminPeriod
         initialFakegix <- getWalletFakegix
         failedIndices <- lift $ depositUnbondedPoolContract (BigInt.fromInt 2000) unbondedPoolParams scriptVersion (nat 0) []
         when (not $ Array.null failedIndices) $

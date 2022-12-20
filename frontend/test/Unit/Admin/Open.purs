@@ -2,9 +2,11 @@ module Test.Unit.Admin.Open (test) where
 
 import Prelude
 
+import Contract.Monad (Contract)
 import Contract.Test.Plutip (PlutipTest)
-import Test.Common (testInitialParams, withWalletsAndPool)
+import Test.Common (withWalletsAndPool)
+import UnbondedStaking.Types (SnetInitialParams)
 
 -- | The admin opens the pool
-test :: PlutipTest
-test = withWalletsAndPool testInitialParams [] \_ -> pure unit
+test :: Contract () SnetInitialParams -> PlutipTest
+test initParams = withWalletsAndPool initParams [] \_ -> pure unit

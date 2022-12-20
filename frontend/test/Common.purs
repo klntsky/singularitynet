@@ -88,6 +88,8 @@ testInitialParams = do
         , scriptVersion: Production
       }
 
+-- | Identical to `testInitialParams`, but uses scripts with no time
+-- validation.
 testInitialParamsNoTimeChecks :: Contract () SnetInitialParams
 testInitialParamsNoTimeChecks = do
     initParams <- testInitialParams
