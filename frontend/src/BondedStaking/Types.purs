@@ -372,6 +372,12 @@ data StakingType = Bonded | Unbonded
 
 data ScriptVersion = Production | DebugNoTimeChecks
 
+derive instance Eq ScriptVersion
+derive instance Generic ScriptVersion _
+
+instance Show ScriptVersion where
+    show = genericShow
+
 data ListAction
   = ListInsert MintingAction
   | ListRemove BurningAction

@@ -1,8 +1,9 @@
 module Test.Common(
-       fakegixTokenName,
+      fakegixTokenName,
        testInitialParams,
        testInitialParamsNoTimeChecks,
        withWalletsAndPool,
+       withKeyWallet,
        waitFor,
        waitForNext,
        getAdminWallet,
@@ -20,13 +21,15 @@ import Contract.Prelude (mconcat)
 import Contract.Prim.ByteArray (byteArrayFromAscii)
 import Contract.ScriptLookups (ScriptLookups, mintingPolicy, mkUnbalancedTx, unspentOutputs)
 import Contract.Scripts (MintingPolicy, validatorHash)
-import Contract.Test.Plutip (PlutipTest, InitialUTxOs, withKeyWallet, withWallets)
+import Contract.Test.Plutip (PlutipTest, InitialUTxOs, withWallets)
+import Contract.Test.Plutip as Plutip
 import Contract.Transaction (awaitTxConfirmed, balanceTx, signTransaction, submit)
 import Contract.TxConstraints (TxConstraints, mustMintValue, mustPayToPubKey)
 import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
 import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton, valueOf)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
+import Control.Monad.Reader (ReaderT(..), ask, lift, runReaderT)
 import Data.Array as Array
 import Data.Bifunctor (rmap)
 import Data.BigInt (BigInt)
@@ -44,15 +47,9 @@ import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
-import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), UnbondedPoolParams(..))
+import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), SnetInitialParams, UnbondedPoolParams(..), SnetContract)
 import UnbondedStaking.Utils (getNextPeriodRange, getPeriodRange, queryStateUnbonded)
 import Utils (currentRoundedTime, currentTime, nat)
-
-
-type TestInitialParams = {
-   initialUnbondedParams :: InitialUnbondedParams
-   , scriptVersion :: ScriptVersion
-}
 
 fakegixTokenName :: Contract () TokenName
 fakegixTokenName = liftMaybe (Exception.error "Could not make FAKEGIX token name") $
@@ -68,10 +65,10 @@ getFakegixData = do
 
 -- | Initial parameters for pool that starts at `currentTime` that uses FAKEGIX
 -- as staking token.
-testInitialParams :: Contract () TestInitialParams
+testInitialParams :: Contract () SnetInitialParams
 testInitialParams = do
     (_ /\ fakegixCs /\ fakegixTn) <- getFakegixData
-    let periodLen = BigInt.fromInt 30_000
+    let periodLen = BigInt.fromInt 5_000
     interest <- liftMaybe (Exception.error "testInitialParams: could not make Rational") $ 1 % 100
     start <- unwrap <$> currentRoundedTime
     pure
@@ -91,7 +88,7 @@ testInitialParams = do
         , scriptVersion: Production
       }
 
-testInitialParamsNoTimeChecks :: Contract () TestInitialParams
+testInitialParamsNoTimeChecks :: Contract () SnetInitialParams
 testInitialParamsNoTimeChecks = do
     initParams <- testInitialParams
     pure $ initParams { scriptVersion = DebugNoTimeChecks }
@@ -99,36 +96,40 @@ testInitialParamsNoTimeChecks = do
 adminInitialUtxos :: InitialUTxOs /\ BigInt
 adminInitialUtxos =  (BigInt.fromInt <$> [ 10_000_000, 200_000_000]) /\ BigInt.fromInt 1_000_000
 
--- Wait for the given period in the *next* cycle to start.
-waitForNext :: Period -> UnbondedPoolParams -> ScriptVersion -> Contract () Unit
-waitForNext period params sv = waitFor' period params sv true
+-- | Wait for the given period in the *next* cycle to start.
+waitForNext :: Period -> SnetContract Unit
+waitForNext period = waitFor' period true
 
--- Wait for the given period to start.
-waitFor :: Period -> UnbondedPoolParams -> ScriptVersion -> Contract () Unit
-waitFor period params sv = waitFor' period params sv false
+-- | Wait for the given period to start.
+waitFor :: Period -> SnetContract Unit
+waitFor period = waitFor' period false
 
 -- Wait for a given period to start. It can either wait for the period in the
 -- current cycle of the next one.
-waitFor' :: Period -> UnbondedPoolParams -> ScriptVersion -> Boolean -> Contract () Unit
-waitFor' _ _ DebugNoTimeChecks _ = pure unit
-waitFor' period params@(UnbondedPoolParams ubp) Production skipCurrent = do
+waitFor' :: Period -> Boolean -> SnetContract Unit
+waitFor' period skipCurrent = do
+    { unbondedPoolParams, scriptVersion: sv } <- ask
+    let (UnbondedPoolParams ubp) = unbondedPoolParams
+    -- We don't wait at all if the script version doesn't have time checks
+    when (sv == DebugNoTimeChecks) $
+       pure unit
     -- Get current time and add a cycle length if skipping the current period
     -- is desired.
     let cycleLength :: BigInt
         cycleLength = ubp.userLength + ubp.adminLength + ubp.bondingLength
-    currTime <- (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$> currentRoundedTime
-    { open: isOpen } <- queryStateUnbonded params Production
+    currTime <- lift $ (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$> currentRoundedTime
+    { open: isOpen } <- lift $ queryStateUnbonded unbondedPoolParams sv
     when (period /= ClosedPeriod && not isOpen) $
-       throwContractError "Waiting for period that will not come because pool is already closed"
+       lift $ throwContractError "Waiting for period that will not come because pool is already closed"
     case period of
         UserPeriod    -> waitFor'' currTime ubp.start cycleLength zero ubp.userLength
         AdminPeriod   -> waitFor'' currTime ubp.start cycleLength ubp.userLength (ubp.userLength + ubp.adminLength)
         BondingPeriod -> waitFor'' currTime ubp.start cycleLength (ubp.userLength + ubp.adminLength) (ubp.userLength + ubp.adminLength + ubp.bondingLength)
-        ClosedPeriod  -> waitUntilClosed params Production
+        ClosedPeriod  -> waitUntilClosed
 
 -- Wait for a given period to start. The period is defined with its start and
 -- end offsets.
-waitFor'' :: BigInt -> BigInt -> BigInt -> BigInt -> BigInt -> Contract () Unit
+waitFor'' :: BigInt -> BigInt -> BigInt -> BigInt -> BigInt -> SnetContract Unit
 waitFor'' time baseOffset cycleLength startOffset endOffset =
     let (start /\ end) =
            getPeriodRange
@@ -148,77 +149,87 @@ waitFor'' time baseOffset cycleLength startOffset endOffset =
         t | t >= start && t <= end -> waitUntil start
           | t < start' -> waitUntil start'
           | otherwise ->
-              throwContractError
+              lift <<< throwContractError $
                 "Something went wrong when obtaining the ranges"
 
-waitUntil :: BigInt -> Contract () Unit
+waitUntil :: BigInt -> SnetContract Unit
 waitUntil limit = do
-    t <- unwrap <$> currentTime
+    t <- lift $ unwrap <$> currentTime
     if t < limit
-        then (liftAff $ delay $ wrap 20_000.0) *> waitUntil limit
+        then (liftAff $ delay $ wrap 1_000.0) *> waitUntil limit
         else pure unit
 
-waitUntilClosed :: UnbondedPoolParams -> ScriptVersion -> Contract () Unit
-waitUntilClosed ubp sv = do
-    isOpen <- _.open <$> queryStateUnbonded ubp sv
+waitUntilClosed :: SnetContract Unit
+waitUntilClosed = do
+    { unbondedPoolParams: ubp, scriptVersion: sv} <- ask
+    isOpen <- lift $ _.open <$> queryStateUnbonded ubp sv
     if isOpen
         then pure unit
-        else (liftAff $ delay $ wrap 20_000.0) *> waitUntilClosed ubp sv
+        else (liftAff $ delay $ wrap 1_000.0) *> waitUntilClosed
 
 -- | Helper for running contracts that interact with a pool created from the
 -- given `InitialUnbondedParams`. The admin wallet is also preprended to the
 -- passed wallets.
 withWalletsAndPool ::
-   Contract () TestInitialParams ->
+   Contract () SnetInitialParams ->
    Array (InitialUTxOs /\ BigInt) ->
-   (Array KeyWallet -> UnbondedPoolParams -> Contract () Unit) ->
+   (Array KeyWallet -> SnetContract Unit) ->
    PlutipTest
 withWalletsAndPool initParamsContract distr contract =
     withWallets (fst <$> Array.cons adminInitialUtxos distr) \wallets -> do
-        adminW <- getAdminWallet wallets
+        adminW <- liftMaybe (Exception.error "Could not get admin wallet") $ Array.head wallets
         userPkhs <- dropMaybe <$> (traverse <<< traverse) getUserPkh (Array.tail wallets)
         -- Mint and distribute FAKEGIX
-        withKeyWallet adminW $
+        Plutip.withKeyWallet adminW $
            mintAndDistributeFakegix (snd adminInitialUtxos) $ Array.zip userPkhs $ snd <$> distr
         logDebug' "FAKEGIX distributed succesfully!"
         -- Create pool
         { initialUnbondedParams, scriptVersion } <- initParamsContract
-        { unbondedPoolParams, address } <- withKeyWallet adminW $
+        { unbondedPoolParams, address } <- Plutip.withKeyWallet adminW $
            createUnbondedPoolContract initialUnbondedParams scriptVersion
         logDebug' "Pool created succesfully!"
         logDebug' $ "Pool parameters: " <> show unbondedPoolParams
         logDebug' $ "Pool address: " <> show address
-        contract wallets unbondedPoolParams
+        runReaderT (contract wallets) { unbondedPoolParams, scriptVersion }
     where getUserPkh :: KeyWallet -> Contract () PaymentPubKeyHash
           getUserPkh w =
-              withKeyWallet w <<<
+              Plutip.withKeyWallet w <<<
               liftedM "(getUserPkh) Could not user's PKH" $
               ownPaymentPubKeyHash
           dropMaybe :: forall a . Maybe (Array a) -> Array a
           dropMaybe (Just arr) = arr
           dropMaybe Nothing = []
 
+-- Our own wrapper for `withKeyWallet` that takes `SnetContract` instead of
+-- `Contract`
+withKeyWallet :: forall a . KeyWallet -> SnetContract a -> SnetContract a
+withKeyWallet wallet contract = do
+    env <- ask
+    lift $ Plutip.withKeyWallet wallet $ runReaderT contract env
+
+
 -- | Obtains the admin wallet.
-getAdminWallet :: Array KeyWallet -> Contract () KeyWallet
+getAdminWallet :: Array KeyWallet -> SnetContract KeyWallet
 getAdminWallet = liftMaybe (Exception.error "Could not get admin wallet") <<< Array.head
 
 -- | Obtain the wallet given by index
-getUserWallet :: Int -> Array KeyWallet -> Contract () KeyWallet
+getUserWallet :: Int -> Array KeyWallet -> SnetContract KeyWallet
 getUserWallet idx ws = liftMaybe (Exception.error $ "Could not get user wallet " <> show idx)
    <<< Array.index ws $ idx + 1
 
 -- | Obtain the total amount of FAKEGIX in the wallet
-getWalletFakegix :: Contract () BigInt
+getWalletFakegix :: SnetContract BigInt
 getWalletFakegix = do
-   utxosFakegix <=< liftedM "(getWalletFakegix) Could not get wallet utxos" $ getWalletUtxos
+   lift $ utxosFakegix <=< liftedM "(getWalletFakegix) Could not get wallet utxos" $ getWalletUtxos
 
 -- | Obtain the total amount of FAKEGIX in the pool
-getPoolFakegix :: UnbondedPoolParams -> ScriptVersion -> Contract () BigInt
-getPoolFakegix ubp scriptVersion = do
-    validator <- liftedE $ mkUnbondedPoolValidator ubp scriptVersion
+getPoolFakegix :: SnetContract BigInt
+getPoolFakegix = do
+    { unbondedPoolParams: ubp, scriptVersion: sv } <- ask
+    validator <- lift $ liftedE $ mkUnbondedPoolValidator ubp sv
     let valHash = validatorHash validator
         poolAddr = scriptHashAddress valHash Nothing
-    utxosFakegix <=< liftedM "depositUnbondedPoolContract: Cannot get pool's utxos at pool address"
+    lift $ utxosFakegix <=< liftedM "depositUnbondedPoolContract: Cannot get pool's utxos at pool address"
         $ utxosAt poolAddr
 
 -- | Mint the necessay FAKEGIX and distribute it to admin and users

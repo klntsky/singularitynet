@@ -7,4 +7,4 @@ import Test.Common (testInitialParams, withWalletsAndPool)
 
 -- | The admin opens the pool
 test :: PlutipTest
-test = withWalletsAndPool testInitialParams [] \_ _ -> pure unit
+test = withWalletsAndPool testInitialParams [] \_ -> pure unit

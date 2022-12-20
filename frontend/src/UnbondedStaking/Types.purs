@@ -1,5 +1,8 @@
 module UnbondedStaking.Types
-  ( Period(..)
+  ( SnetInitialParams
+  , SnetContractEnv
+  , SnetContract
+  , Period(..)
   , Entry(..)
   , InitialUnbondedParams(..)
   , UnbondedPoolParams(..)
@@ -10,28 +13,29 @@ module UnbondedStaking.Types
 import Contract.Prelude
 
 import Contract.Address (PaymentPubKeyHash)
+import Contract.Monad (Contract(..))
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
-import Contract.PlutusData
-  ( class FromData
-  , class HasPlutusSchema
-  , class ToData
-  , type (:+)
-  , type (:=)
-  , type (@@)
-  , I
-  , PlutusData(Constr)
-  , PNil
-  , genericFromData
-  , genericToData
-  , toData
-  , S
-  , Z
-  )
+import Contract.PlutusData (class FromData, class HasPlutusSchema, class ToData, type (:+), type (:=), type (@@), I, PlutusData(Constr), PNil, genericFromData, genericToData, toData, S, Z)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Value (CurrencySymbol)
+import Control.Monad.Reader (ReaderT(..))
 import Data.BigInt (BigInt)
-import Types (AssetClass, BurningAction, MintingAction)
+import Types (AssetClass, BurningAction, MintingAction, ScriptVersion)
+
+-- | The necessary data for initialising a pool.
+type SnetInitialParams = {
+   initialUnbondedParams :: InitialUnbondedParams
+   , scriptVersion :: ScriptVersion
+}
+
+-- | The environment for executing any SNet contract
+type SnetContractEnv = {
+   unbondedPoolParams :: UnbondedPoolParams
+   , scriptVersion :: ScriptVersion
+}
+
+type SnetContract a = ReaderT SnetContractEnv (Contract ()) a
 
 -- | This datatype is only used in offchain. It is used to specify a period to
 -- wait for. These match the three non-overlapping time intervals that conform
