@@ -14,36 +14,36 @@ import BigInteger = require("big-integer");
 
 // Runs all of the operations defined for a `BondedPool` and simulates the
 // entire pool lifecycle
-//
 // Make sure to switch wallets as directed
 const main = async () => {
   // some helpers for logging directions to switch wallets
   const admin = "ADMIN";
-  const user = "USER";
+  const user1 = "USER1";
+  const user2 = "USER2";
 
   // Admin creates pool
   console.log(`STARTING AS ${admin}`);
-  const nodeTime = await singularitynet.getNodeTime(localHostSdkConfig);
+  const nodeTime = await singularitynet.getNodeTime(mlabsSdkConfig);
   console.log(nodeTime);
   const date = new Date(nodeTime);
   const delay = BigInteger(10000);
   console.log(
     `Bonded pool creation: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
   );
-  // Length of all periods (staking/withdraing, bonding and admin)
-  const periodLength = BigInteger(180000);
+
+  const cycleLength = BigInteger(240000 + 1000 + 180000);
 
   // The initial arguments of the pool. The rest of the parameters are obtained
   // during pool creation.
   const initialUnbondedArgs: InitialUnbondedArgs = {
     start: nodeTime.add(delay),
-    userLength: periodLength,
+    userLength: BigInteger(300000),
     bondingLength: BigInteger(1000),
+    interestLength: BigInteger(1000),
+    adminLength: BigInteger(180000),
     interest: { numerator: BigInteger(10), denominator: BigInteger(100) },
     minStake: BigInteger(1),
     maxStake: BigInteger(50000),
-    adminLength: periodLength,
-    interestLength: periodLength,
     increments: BigInteger(1),
     unbondedAssetClass: {
       currencySymbol:
@@ -53,7 +53,7 @@ const main = async () => {
   };
 
   let unbondedPool: UnbondedPool = await singularitynet.createUnbondedPool(
-    localHostSdkConfig,
+    mlabsSdkConfig,
     initialUnbondedArgs
   );
   const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
@@ -66,7 +66,7 @@ const main = async () => {
   // possible to create many pools with the same `InitialBondedArgs`. But this
   // is unlikely if the `start` parameter is different for every pool.
   const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
-    localHostSdkConfig,
+    mlabsSdkConfig,
     unbondedPool.address,
     initialUnbondedArgs
   );
@@ -77,60 +77,68 @@ const main = async () => {
   const unbondedPoolCopy = unbondedPoolsArray[0];
   unbondedPool = unbondedPoolCopy;
 
-  // User stakes, waiting for pool start
-  await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
-  const userStakeAmt = BigInteger(40000);
-  const r0 = await unbondedPool.userStake(userStakeAmt);
+  // User 1 stakes
+  await logSwitchAndCountdown(user1, "cycle #0, user period #0", unbondedPoolArgs.start);
+  const userStakeAmt1 = BigInteger(40000);
+  const r0 = await unbondedPool.userStake(userStakeAmt1);
   console.log(JSON.stringify(r0))
-  const l = await unbondedPool.getAssocList()
-  console.log(JSON.stringify(l))
-  // Admin deposits to pool, waiting for userLength to end
+  const l0 = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l0))
+
+  // User 2 stakes
+  await logSwitchAndCountdown(user2, "cycle #0, user period #0", unbondedPoolArgs.start);
+  const userStakeAmt2 = BigInteger(20000);
+  const r1 = await unbondedPool.userStake(userStakeAmt2);
+  console.log(JSON.stringify(r0))
+  const l1 = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l0))
+
+  // Admin deposits to pool
+  // The admin does not deposit anything (since no promise has been made yet),
+  // but promises to deposit 40_000 AGIX to the users currently present in the
+  // pool if they keep their stakes until the next cycle's admin period.
   await logSwitchAndCountdown(
     admin,
-    "bonding period",
+    "cycle #0, admin period #1",
     unbondedPoolArgs.start.add(unbondedPoolArgs.userLength)
   );
   const depositBatchSize = BigInteger(0);
   const adminDeposit = BigInteger(40000);
-  const r1 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
-  console.log(JSON.stringify(r1));
-  const l1 = await unbondedPool.getAssocList()
-  console.log(JSON.stringify(l1))
-  await logSwitchAndCountdown(
-    user,
-    "staking/withdrawing  period",
-    unbondedPoolArgs.start.add(
-      unbondedPoolArgs.userLength).add(
-      unbondedPoolArgs.adminLength)
-  );
   const r2 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
   console.log(JSON.stringify(r2));
   const l2 = await unbondedPool.getAssocList()
   console.log(JSON.stringify(l2))
-  // User withdraws during bonding period, waiting for adminLength to finish
+
+  // User 1 withdraws during user period
+  // Since the user did not stay for a full cycle, they will get zero rewards.
   await logSwitchAndCountdown(
-    user,
-    "staking/withdrawing  period",
+    user1,
+    "cycle #1, user period #3",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
-      unbondedPoolArgs.adminLength)
-  );
-  const r2 = await unbondedPool.userWithdraw();
-  console.log(JSON.stringify(r2));
+      unbondedPoolArgs.adminLength).add(
+      unbondedPoolArgs.bondingLength));
+  const r3 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r3));
+  const l3 = await unbondedPool.getAssocList()
+  console.log(JSON.stringify(l3))
 
-  // User stakes during user period, waiting for bondingLength to finish
+  // User 2 stakes during user period
+  // This new stake will only count for the reward *after* the next one.
+  // However, we will soon see that there will be no more rewards after
+  // the next one because the admin will close the pool.
   await logSwitchAndCountdown(
-    user,
-    "staking/withdrawing  period",
+    user2,
+    "cycle #1, user period #3",
     unbondedPoolArgs.start.add(
       unbondedPoolArgs.userLength).add(
       unbondedPoolArgs.adminLength).add(
       unbondedPoolArgs.bondingLength)
   );
-  const r3 = await unbondedPool.userStake(userStakeAmt);
-  console.log(JSON.stringify(r3));
+  const r4 = await unbondedPool.userStake(userStakeAmt2);
+  console.log(JSON.stringify(r4));
 
-  // Admin closes pool, waiting for userLength to finish
+  // Admin closes pool
   await logSwitchAndCountdown(
       admin,
       "admin period",
@@ -141,12 +149,12 @@ const main = async () => {
         unbondedPoolArgs.userLength));
 
   const closeBatchSize = BigInteger(10);
-  const r4 = await unbondedPool.close(closeBatchSize, []);
-  console.log(JSON.stringify(r4));
+  const r5 = await unbondedPool.close(closeBatchSize, []);
+  console.log(JSON.stringify(r5));
 
-  // The user withdraws their rewards after pool closure.
+  // User 2 withdraws their rewards and stake after pool closure.
   await logSwitchAndCountdown(
-      admin,
+      user2,
       "admin period",
       unbondedPoolArgs.start.add(
         unbondedPoolArgs.userLength).add(
@@ -155,28 +163,34 @@ const main = async () => {
         unbondedPoolArgs.userLength).add(
         unbondedPoolArgs.adminLength));
 
-  const r5 = await unbondedPool.userWithdraw();
-  console.log(JSON.stringify(r5));
+  const r6 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r6));
 
 };
 
-const localHostSdkConfig: SdkConfig = {
+const mlabsSdkConfig: SdkConfig = {
   ctlServerConfig: {
-    host: "35.175.138.251",
-    port: 8081,
-    secure: false,
+    host: "ctl-server.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
   ogmiosConfig: {
-    host: "35.175.138.251",
-    port: 1337,
-    secure: false,
+    host: "ogmios.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
+    path: "",
+  },
+  kupoConfig: {
+    host: "kupo.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
   datumCacheConfig: {
-    host: "35.175.138.251",
-    port: 9999,
-    secure: false,
+    host: "ogmios-datum-cache.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
   networkId: 0,
@@ -187,7 +201,7 @@ const localHostSdkConfig: SdkConfig = {
 // Helpers
 
 const logSwitchAndCountdown = async (
-  who: "USER" | "ADMIN", // the wallet to switch to
+  who: "USER1" | "USER2" | "ADMIN", // the wallet to switch to
   what: string, // what we're waiting for
   time: BigInteger.BigInteger // how long to wait
 ) => {
@@ -198,15 +212,13 @@ const logSwitchAndCountdown = async (
 };
 
 const countdownTo = async (tf: number) => {
-  let now = await singularitynet.getNodeTime(localHostSdkConfig);
+  let now = await singularitynet.getNodeTime(mlabsSdkConfig);
   while (now <= tf) {
-    console.log(`${now} <= ${tf}`);
-    console.log(`Countdown: ${showSecondsDiff(tf, now)}`);
+    console.log(`Countdown: ${showSecondsDiff(tf, now)}s`);
     await sleep(20000);
-    now = await singularitynet.getNodeTime(localHostSdkConfig);
+    now = await singularitynet.getNodeTime(mlabsSdkConfig);
   }
-  console.log(`${now} > ${tf}`);
-  console.log(`0`);
+  console.log(`Countdown over`);
 };
 
 const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
