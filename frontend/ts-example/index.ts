@@ -2,9 +2,7 @@
 // operate a bonded pool across the entire application lifecycle
 import {
   SdkConfig,
-  BondedPool,
   InitialUnbondedArgs,
-  BondedPoolArgs,
   UnbondedPool,
   UnbondedPoolArgs,
 } from "singularitynet";
@@ -67,17 +65,17 @@ const main = async () => {
   // Note that more than one pool may be found at a given address, since it's
   // possible to create many pools with the same `InitialBondedArgs`. But this
   // is unlikely if the `start` parameter is different for every pool.
-  // const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
-  //   localHostSdkConfig,
-  //   unbondedPool.address,
-  //   initialUnbondedArgs
-  // );
+  const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
+    localHostSdkConfig,
+    unbondedPool.address,
+    initialUnbondedArgs
+  );
 
   // We get the first pool of the list (which should be the only one)
   // and we use it instead of the first object. This should not make a
   // difference, the objects are identical.
-  // const unbondedPoolCopy = unbondedPoolsArray[0];
-  // unbondedPool = unbondedPoolCopy;
+  const unbondedPoolCopy = unbondedPoolsArray[0];
+  unbondedPool = unbondedPoolCopy;
 
   // User stakes, waiting for pool start
   await logSwitchAndCountdown(user, "pool start", unbondedPoolArgs.start);
@@ -110,42 +108,29 @@ const main = async () => {
   const l2 = await unbondedPool.getAssocList()
   console.log(JSON.stringify(l2))
   // User withdraws during bonding period, waiting for adminLength to finish
-  // await logSwitchAndCountdown(
-  //   user,
-  //   "staking/withdrawing  period",
-  //   unbondedPoolArgs.start.add(
-  //     unbondedPoolArgs.userLength).add(
-  //     unbondedPoolArgs.adminLength)
-  // );
-  // const r2 = await unbondedPool.userWithdraw();
-  // console.log(JSON.stringify(r2));
+  await logSwitchAndCountdown(
+    user,
+    "staking/withdrawing  period",
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength)
+  );
+  const r2 = await unbondedPool.userWithdraw();
+  console.log(JSON.stringify(r2));
 
   // User stakes during user period, waiting for bondingLength to finish
-  // await logSwitchAndCountdown(
-  //   user,
-  //   "staking/withdrawing  period",
-  //   unbondedPoolArgs.start.add(
-  //     unbondedPoolArgs.userLength).add(
-  //     unbondedPoolArgs.adminLength).add(
-  //     unbondedPoolArgs.bondingLength)
-  // );
-  // const r3 = await unbondedPool.userStake(userStakeAmt);
-  // console.log(JSON.stringify(r3));
+  await logSwitchAndCountdown(
+    user,
+    "staking/withdrawing  period",
+    unbondedPoolArgs.start.add(
+      unbondedPoolArgs.userLength).add(
+      unbondedPoolArgs.adminLength).add(
+      unbondedPoolArgs.bondingLength)
+  );
+  const r3 = await unbondedPool.userStake(userStakeAmt);
+  console.log(JSON.stringify(r3));
 
   // Admin closes pool, waiting for userLength to finish
-  //await logSwitchAndCountdown(
-  //    admin,
-  //    "admin period",
-  //    unbondedPoolArgs.start.add(
-  //      unbondedPoolArgs.userLength).add(
-  //      unbondedPoolArgs.adminLength).add(
-  //      unbondedPoolArgs.bondingLength).add(
-  //      unbondedPoolArgs.userLength));
-
-  //const closeBatchSize = BigInteger(10);
-  //const r4 = await unbondedPool.close(closeBatchSize, []);
-  //console.log(JSON.stringify(r4));
-
   await logSwitchAndCountdown(
       admin,
       "admin period",
@@ -155,8 +140,8 @@ const main = async () => {
         unbondedPoolArgs.bondingLength).add(
         unbondedPoolArgs.userLength));
 
-  const closeBatchSize = BigInteger(0);
-  const r4 = await unbondedPool.deposit(BigInteger(0), closeBatchSize, []);
+  const closeBatchSize = BigInteger(10);
+  const r4 = await unbondedPool.close(closeBatchSize, []);
   console.log(JSON.stringify(r4));
 
   // The user withdraws their rewards after pool closure.
@@ -204,10 +189,10 @@ const localHostSdkConfig: SdkConfig = {
 const logSwitchAndCountdown = async (
   who: "USER" | "ADMIN", // the wallet to switch to
   what: string, // what we're waiting for
-  time: BigInteger // how long to wait
+  time: BigInteger.BigInteger // how long to wait
 ) => {
   console.log(`SWITCH WALLETS NOW - CHANGE TO ${who}`);
-  const _input = prompt("Press OK after switching.");
+  prompt("Press OK after switching.");
   console.log(`Waiting for ${what}...`);
   await countdownTo(Number(time));
 };

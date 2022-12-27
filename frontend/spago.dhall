@@ -21,6 +21,7 @@ You can edit this file as you like.
   , "math"
   , "maybe"
   , "monad-logger"
+  , "mote"
   , "now"
   , "ordered-collections"
   , "partial"
