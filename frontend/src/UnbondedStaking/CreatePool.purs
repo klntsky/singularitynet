@@ -94,9 +94,7 @@ createUnbondedPoolContract iup =
     logInfo_ "createUnbondedPoolContract: User Address"
       =<< addressToBech32 adminAddr
     -- Get utxos at the wallet address
-    adminUtxos <-
-      liftedM "createUnbondedPoolContract: Cannot get user Utxos"
-        $ utxosAt adminAddr
+    adminUtxos <- utxosAt adminAddr
     txOutRef <-
       liftContractM "createUnbondedPoolContract: Could not get head UTXO"
         $ fst
@@ -178,9 +176,7 @@ getUnbondedPoolsContract
   -> Contract () (Array UnbondedPoolParams)
 getUnbondedPoolsContract addrStr ibp = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getUnbondedPoolsContract) Could not get pool UTxOs"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getUnbondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'UnbondedStakingToken')

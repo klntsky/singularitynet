@@ -110,9 +110,7 @@ closeUnbondedPoolContract
     liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <-
-    liftedM "depositUnbondedPoolContract: Cannot get user Utxos" $
-      utxosAt adminAddr
+  adminUtxos <- utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "closeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params
@@ -122,10 +120,7 @@ closeUnbondedPoolContract
   logInfo_ "closeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "closeUnbondedPoolContract: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "closeUnbondedPoolContract: Cannot create TokenName"

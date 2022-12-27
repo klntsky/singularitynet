@@ -108,9 +108,7 @@ userStakeUnbondedPoolContract
       getWalletAddress
 
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos" $
-      utxosAt userAddr
+  userUtxos <- utxosAt userAddr
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
@@ -122,9 +120,7 @@ userStakeUnbondedPoolContract
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's datum and utxos
-  unbondedPoolUtxos <-
-    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userStakeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "userStakeUnbondedPoolContract: Cannot create TokenName"

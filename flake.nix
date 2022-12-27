@@ -18,7 +18,7 @@
       repo = "cardano-transaction-lib";
       # NOTE
       # Keep this in sync with the rev in `frontend/packages.dhall`
-      rev = "362c651cc9af7d40e2f8e4054a58fd209e81d2c3";
+      rev = "d8da415144bcfa6ed4f8fc1ccb4dd4792fea8a12";
     };
   };
 

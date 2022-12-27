@@ -87,9 +87,7 @@ closeBondedPoolContract
   logInfo_ "closeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "closeBondedPoolContract: could not obtain pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeBondedPoolContract: Pool's UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "closeBondedPoolContract: Cannot create TokenName"

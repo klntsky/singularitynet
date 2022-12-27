@@ -11,29 +11,17 @@ module BondedStaking.TimeUtils
 
 import Contract.Prelude
 
-import Contract.Monad
-  ( Contract
-  , liftContractE
-  , liftContractM
-  , throwContractError
-  )
+import Contract.Monad (Contract, liftContractE, liftContractM, throwContractError)
+import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Natural (toBigInt)
-import Contract.Time (Slot, getEraSummaries, getSystemStart, slotToPosixTime)
+import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange)
+import Contract.Time (Slot, getEraSummaries, getSystemStart, mkFiniteInterval, slotToPosixTime)
 import Control.Alternative (guard)
+import Ctl.Internal.Types.Interval (posixTimeRangeToTransactionValidity)
 import Data.Array (head)
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
-import Types
-  ( BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
-  )
-import Contract.Time
-  ( POSIXTime(POSIXTime)
-  , POSIXTimeRange
-  , interval
-  )
-import Ctl.Internal.Types.Interval (posixTimeRangeToTransactionValidity)
-import Contract.Numeric.Natural (Natural)
+import Types (BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams))
 import Utils (big, bigIntRange, currentRoundedTime)
 
 -- | Get the time-range that includes the current (approximate) time and the
@@ -62,19 +50,19 @@ getStakingTime (BondedPoolParams bpp) = do
       n <- bigIntRange $ toBigInt bpp.iterations
       -- Calculate start and end of the range
       let
-        range@(_start /\ end) = (bpp.start + n * cycleLength) /\
+        range@(start /\ end) = (bpp.start + n * cycleLength) /\
           (bpp.start + n * cycleLength + bpp.userLength - big 1000)
       -- Discard range if end < currTime
       guard $ currTime' <= end
       -- NOTE: We don't discard these ranges yet because it's easier to debug when CTL submits
       -- the TX and fails loudly
-      ---- Discard range if currTime < start
-      --guard $ currTime' >= start
+      -- Discard range if currTime < start
+      guard $ currTime' >= start
       pure range
   -- Return first range
   start /\ end <- liftContractM "getStakingTime: this is not a staking period" $
     head possibleRanges
-  pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+  pure { currTime, range: mkFiniteInterval (POSIXTime start) (POSIXTime end) }
 
 -- | Get the time-range that includes the current (approximate) time and the
 -- | pool accepts as a valid deposit period. If there is no such range,
@@ -112,7 +100,7 @@ getBondingTime (BondedPoolParams bpp) = do
   -- Return first range
   start /\ end <- liftContractM "getBondingTime: this is not a bonding period" $
     head possibleRanges
-  pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+  pure { currTime, range: mkFiniteInterval (POSIXTime start) (POSIXTime end) }
 
 -- | Get the time-range that includes the current (approximate) time and the
 -- | pool accepts as a withdrawing period. These periods are the same
@@ -133,7 +121,7 @@ getWithdrawingTime (BondedPoolParams bpp) = do
   -- check all the staking periods
   if (currTime' > bpp.end - bpp.userLength) then pure
     { currTime
-    , range: interval (POSIXTime $ bpp.end - bpp.userLength)
+    , range: mkFiniteInterval (POSIXTime $ bpp.end - bpp.userLength)
         (POSIXTime $ bpp.end - big 1000)
     }
   else do
@@ -159,7 +147,7 @@ getWithdrawingTime (BondedPoolParams bpp) = do
     start /\ end <- liftContractM "getBondingTime: this is not a bonding period"
       $
         head possibleRanges
-    pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+    pure { currTime, range: mkFiniteInterval (POSIXTime start) (POSIXTime end) }
 
 -- | Get the time-range that includes the current (approximate) time and the
 -- | pool accepts as the valid closing period. If there is no such range,
@@ -179,7 +167,7 @@ getClosingTime (BondedPoolParams bpp) = do
   -- will fail if it detects that.
   pure
     { currTime
-    , range: interval (POSIXTime bpp.end)
+    , range: mkFiniteInterval (POSIXTime bpp.end)
         (POSIXTime $ bpp.end + BigInt.fromInt 3_600_000)
     }
 

@@ -42,6 +42,12 @@ plutipCfg =
       , secure: false
       , path: Nothing
       }
+  , kupoConfig:
+      { port: UInt.fromInt 1443
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
   , ogmiosDatumCacheConfig:
       { port: UInt.fromInt 10000
       , host: "127.0.0.1"
