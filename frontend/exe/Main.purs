@@ -11,7 +11,6 @@ import Contract.Monad
   ( Contract
   , defaultDatumCacheWsConfig
   , defaultOgmiosWsConfig
-  , defaultServerConfig
   , launchAff_
   , liftContractM
   , runContract
@@ -208,7 +207,6 @@ runContract_ contract = do
   runContract
     { ogmiosConfig: defaultOgmiosWsConfig
     , datumCacheConfig: defaultDatumCacheWsConfig
-    , ctlServerConfig: Just defaultServerConfig
     , kupoConfig: defaultKupoServerConfig
     , networkId: TestnetId
     , logLevel: Info

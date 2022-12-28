@@ -105,8 +105,7 @@ import Utils (currentRoundedTime, hashPkh)
 
 -- | Configuration needed to call contracts from JS.
 type SdkConfig =
-  { ctlServerConfig :: SdkServerConfig
-  , ogmiosConfig :: SdkServerConfig
+  { ogmiosConfig :: SdkServerConfig
   , kupoConfig :: SdkServerConfig
   , datumCacheConfig :: SdkServerConfig
   , networkId :: Number -- converts to Int
@@ -155,8 +154,6 @@ fromSdkPath s = Just s
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
-  ctlServerConfig <- map Just $ liftEither $ fromSdkServerConfig "ctl-server"
-    cfg.ctlServerConfig
   ogmiosConfig <- liftEither $ fromSdkServerConfig "ogmios" cfg.ogmiosConfig
   kupoConfig <- liftEither $ fromSdkServerConfig "kupo" cfg.kupoConfig
   datumCacheConfig <- liftEither $ fromSdkServerConfig "ogmios-datum-cache"
@@ -171,7 +168,6 @@ buildContractConfig cfg = Promise.fromAff $ do
     { ogmiosConfig
     , kupoConfig
     , datumCacheConfig
-    , ctlServerConfig
     , logLevel
     , networkId
     , walletSpec
