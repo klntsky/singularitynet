@@ -2,29 +2,73 @@ module UnbondedStaking.ClosePool (closeUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational ((%))
-import Contract.PlutusData (Datum(Datum), PlutusData, Redeemer(Redeemer), fromData, getDatumByHash, toData)
+import Contract.PlutusData
+  ( Datum(Datum)
+  , PlutusData
+  , Redeemer(Redeemer)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
-import Contract.Scripts (ValidatorHash)
-import Contract.Scripts (validatorHash)
+import Contract.Scripts (ValidatorHash, validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustIncludeDatum, mustSpendScriptOutput, mustValidateIn)
-import Contract.Utxos (getWalletUtxos, utxosAt)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustIncludeDatum
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
+import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (:), (!!))
 import Data.Map (toUnfoldable)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Settings
+  ( unbondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
 import Types (ScriptVersion)
-import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(CloseAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
+import UnbondedStaking.Types
+  ( Entry(Entry)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  , UnbondedStakingAction(CloseAct)
+  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  )
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
-import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, mkOnchainAssocList, mkRatUnsafe, mustPayToScript, roundUp, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe)
+import Utils
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
+  , logInfo_
+  , mkOnchainAssocList
+  , mkRatUnsafe
+  , mustPayToScript
+  , roundUp
+  , splitByLength
+  , submitBatchesSequentially
+  , submitTransaction
+  , toIntUnsafe
+  )
 
 -- | Closes the unbonded pool and distributes final rewards to users
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -62,9 +106,7 @@ closeUnbondedPoolContract
     liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <-
-    liftedM "depositUnbondedPoolContract: Cannot get user Utxos" $
-      utxosAt adminAddr
+  adminUtxos <- utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "closeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
@@ -74,10 +116,7 @@ closeUnbondedPoolContract
   logInfo_ "closeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "closeUnbondedPoolContract: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "closeUnbondedPoolContract: Cannot create TokenName"
@@ -134,8 +173,8 @@ closeUnbondedPoolContract
         lookups =
           ScriptLookups.validator validator
             <> ScriptLookups.unspentOutputs unbondedPoolUtxos
-            -- We deliberately omit the admin utxos, since batching includes
-            -- them automatically before every batch.
+      -- We deliberately omit the admin utxos, since batching includes
+      -- them automatically before every batch.
 
       -- Get list of users to deposit rewards to
       entryUpdates <-
@@ -160,7 +199,9 @@ closeUnbondedPoolContract
             submissionAttempts
             entryUpdates
         else do
-          let entryUpdateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
+          let
+            entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
+              entryUpdates
           submitBatchesSequentially
             constraints
             lookups

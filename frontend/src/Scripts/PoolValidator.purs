@@ -24,11 +24,13 @@ import Utils (jsonReader)
 -- `BondedPoolParams` to become a minting policy
 bondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
 bondedPoolValidator Production = jsonReader "script" _bondedPoolValidator
-bondedPoolValidator DebugNoTimeChecks = jsonReader "script" _bondedPoolValidatorNoTimeChecks
+bondedPoolValidator DebugNoTimeChecks = jsonReader "script"
+  _bondedPoolValidatorNoTimeChecks
 
 unbondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
 unbondedPoolValidator Production = jsonReader "script" _unbondedPoolValidator
-unbondedPoolValidator DebugNoTimeChecks = jsonReader "script" _unbondedPoolValidatorNoTimeChecks
+unbondedPoolValidator DebugNoTimeChecks = jsonReader "script"
+  _unbondedPoolValidatorNoTimeChecks
 
 -- | This function takes a `BondedPoolParams` and produces the `Validator`
 -- for the bonded pool

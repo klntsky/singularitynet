@@ -13,27 +13,42 @@ module UnbondedStaking.Types
 import Contract.Prelude
 
 import Contract.Address (PaymentPubKeyHash)
-import Contract.Monad (Contract(..))
+import Contract.Monad (Contract)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
-import Contract.PlutusData (class FromData, class HasPlutusSchema, class ToData, type (:+), type (:=), type (@@), I, PlutusData(Constr), PNil, genericFromData, genericToData, toData, S, Z)
+import Contract.PlutusData
+  ( class FromData
+  , class HasPlutusSchema
+  , class ToData
+  , type (:+)
+  , type (:=)
+  , type (@@)
+  , I
+  , PlutusData(Constr)
+  , PNil
+  , genericFromData
+  , genericToData
+  , toData
+  , S
+  , Z
+  )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Value (CurrencySymbol)
-import Control.Monad.Reader (ReaderT(..))
+import Control.Monad.Reader (ReaderT)
 import Data.BigInt (BigInt)
 import Types (AssetClass, BurningAction, MintingAction, ScriptVersion)
 
 -- | The necessary data for initialising a pool.
-type SnetInitialParams = {
-   initialUnbondedParams :: InitialUnbondedParams
-   , scriptVersion :: ScriptVersion
-}
+type SnetInitialParams =
+  { initialUnbondedParams :: InitialUnbondedParams
+  , scriptVersion :: ScriptVersion
+  }
 
 -- | The environment for executing any SNet contract
-type SnetContractEnv = {
-   unbondedPoolParams :: UnbondedPoolParams
-   , scriptVersion :: ScriptVersion
-}
+type SnetContractEnv =
+  { unbondedPoolParams :: UnbondedPoolParams
+  , scriptVersion :: ScriptVersion
+  }
 
 type SnetContract a = ReaderT SnetContractEnv (Contract ()) a
 
@@ -49,7 +64,7 @@ derive instance Eq Period
 derive instance Generic Period _
 
 instance Show Period where
-    show = genericShow
+  show = genericShow
 
 -- TODO: Add missing `ToData` instances for POSIXTime and NatRatio.
 newtype UnbondedPoolParams =

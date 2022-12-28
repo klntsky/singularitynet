@@ -376,7 +376,7 @@ derive instance Eq ScriptVersion
 derive instance Generic ScriptVersion _
 
 instance Show ScriptVersion where
-    show = genericShow
+  show = genericShow
 
 data ListAction
   = ListInsert MintingAction

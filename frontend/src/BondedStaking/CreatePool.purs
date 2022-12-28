@@ -2,16 +2,36 @@ module CreatePool (createBondedPoolContract, getBondedPoolsContract) where
 
 import Contract.Prelude
 
-import Contract.Address (Bech32String, addressToBech32, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( Bech32String
+  , addressToBech32
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logAesonInfo, logWarn')
 import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
-import Contract.PlutusData (DataHash(..), Datum(Datum), OutputDatum(..), PlutusData, datumHash, fromData, getDatumsByHashes, toData)
+import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (BalancedSignedTransaction, TransactionOutputWithRefScript(..), balanceTx, signTransaction)
-import Contract.TxConstraints (TxConstraints, mustMintValue, mustSpendPubKeyOutput)
+import Contract.Transaction
+  ( TransactionOutputWithRefScript
+  , balanceTx
+  , signTransaction
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustMintValue
+  , mustSpendPubKeyOutput
+  )
 import Contract.Utxos (utxosAt)
-import Contract.Value (CurrencySymbol, Value, flattenValue, scriptCurrencySymbol, singleton)
+import Contract.Value
+  ( CurrencySymbol
+  , Value
+  , flattenValue
+  , scriptCurrencySymbol
+  , singleton
+  )
 import Control.Monad.Error.Class (liftMaybe)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
@@ -19,9 +39,25 @@ import Effect.Exception as Exception
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
-import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types (BondedPoolParams, BondedStakingDatum(StateDatum), InitialBondedParams, ScriptVersion, StakingType(Bonded))
-import Utils (addressFromBech32, logInfo_, mkBondedPoolParams, mustPayToScript, repeatUntilConfirmed)
+import Settings
+  ( bondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import Types
+  ( BondedPoolParams
+  , BondedStakingDatum(StateDatum)
+  , InitialBondedParams
+  , ScriptVersion
+  , StakingType(Bonded)
+  )
+import Utils
+  ( addressFromBech32
+  , logInfo_
+  , mkBondedPoolParams
+  , mustPayToScript
+  , repeatUntilConfirmed
+  )
 
 -- Sets up pool configuration, mints the state NFT and deposits
 -- in the pool validator's address
@@ -46,9 +82,7 @@ createBondedPoolContract ibp scriptVersion =
       logInfo_ "createBondedPoolContract: Admin Address"
         =<< addressToBech32 adminAddr
       -- Get utxos at the wallet address
-      adminUtxos <-
-        liftedM "createBondedPoolContract: could not get admin's utxos" $
-          utxosAt adminAddr
+      adminUtxos <- utxosAt adminAddr
       txOutRef <-
         liftContractM "createBondedPoolContract: Could not get head UTXO"
           $ fst
@@ -128,9 +162,7 @@ getBondedPoolsContract
   -> Contract () (Array BondedPoolParams)
 getBondedPoolsContract addrStr ibp scriptVersion = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool utxos"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getBondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'BondedStakingToken')

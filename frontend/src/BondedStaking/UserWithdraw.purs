@@ -3,17 +3,48 @@ module UserWithdraw (userWithdrawBondedPoolContract) where
 import Contract.Prelude hiding (length)
 
 import BondedStaking.TimeUtils (getWithdrawingTime)
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, ownStakePubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , ownStakePubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo', logAesonInfo)
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
-import Contract.PlutusData (Redeemer(Redeemer))
+import Contract.PlutusData
+  ( PlutusData
+  , Redeemer(Redeemer)
+  , Datum(Datum)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript, BalancedSignedTransaction, balanceTx, signTransaction, TransactionHash)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustPayToPubKeyAddress, mustSpendScriptOutput, mustValidateIn)
+import Contract.Transaction
+  ( TransactionInput
+  , TransactionOutputWithRefScript
+  , balanceTx
+  , signTransaction
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustMintValueWithRedeemer
+  , mustPayToPubKeyAddress
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
 import Contract.Utxos (UtxoMap, utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
@@ -22,9 +53,33 @@ import Data.BigInt (BigInt)
 import Data.Map as Map
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(WithdrawAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), BurningAction(BurnHead, BurnOther), Entry(Entry), ListAction(ListRemove), ScriptVersion, StakingType(Bonded))
-import Utils (findRemoveOtherElem, getAssetsToConsume, mkAssetUtxosConstraints, getUtxoWithNFT, hashPkh, logInfo_, mkOnchainAssocList, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
+import Settings
+  ( bondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import Types
+  ( BondedPoolParams(BondedPoolParams)
+  , BondedStakingAction(WithdrawAct)
+  , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  , BurningAction(BurnHead, BurnOther)
+  , Entry(Entry)
+  , ListAction(ListRemove)
+  , ScriptVersion
+  , StakingType(Bonded)
+  )
+import Utils
+  ( findRemoveOtherElem
+  , getAssetsToConsume
+  , mkAssetUtxosConstraints
+  , getUtxoWithNFT
+  , hashPkh
+  , logInfo_
+  , mkOnchainAssocList
+  , repeatUntilConfirmed
+  , mustPayToScript
+  , getUtxoDatumHash
+  )
 
 -- Deposits a certain amount in the pool
 userWithdrawBondedPoolContract
@@ -60,9 +115,7 @@ userWithdrawBondedPoolContract
     liftedM "userWithdrawBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userWithdrawBondedPoolContract: could not get user utxos" $
-      utxosAt userAddr
+  userUtxos <- utxosAt userAddr
   ---- FETCH POOL DATA ----
   -- Get the bonded pool validator and hash
   validator <-
@@ -74,9 +127,7 @@ userWithdrawBondedPoolContract
   logInfo_ "userWithdrawBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "userWithdrawBondedPoolContract: could not get pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userWithdrawBondedPoolContract: Pool UTxOs" bondedPoolUtxos
   tokenName <- liftContractM
     "userWithdrawBondedPoolContract: Cannot create TokenName"

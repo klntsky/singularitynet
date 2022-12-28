@@ -5,9 +5,17 @@ import Contract.Prelude
 import BondedStaking.TimeUtils (startPoolFromNow)
 import ClosePool (closeBondedPoolContract)
 import Contract.Address (NetworkId(TestnetId))
-import Contract.Config (WalletSpec(..))
+import Contract.Config (WalletSpec(..), defaultKupoServerConfig)
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, defaultDatumCacheWsConfig, defaultOgmiosWsConfig, defaultServerConfig, launchAff_, liftContractM, runContract)
+import Contract.Monad
+  ( Contract
+  , defaultDatumCacheWsConfig
+  , defaultOgmiosWsConfig
+  , defaultServerConfig
+  , launchAff_
+  , liftContractM
+  , runContract
+  )
 import Contract.Numeric.Natural as Natural
 import Contract.Time (POSIXTime(..))
 import CreatePool (createBondedPoolContract)
@@ -202,6 +210,7 @@ runContract_ contract = do
     { ogmiosConfig: defaultOgmiosWsConfig
     , datumCacheConfig: defaultDatumCacheWsConfig
     , ctlServerConfig: Just defaultServerConfig
+    , kupoConfig: defaultKupoServerConfig
     , networkId: TestnetId
     , logLevel: Info
     , walletSpec: Just ConnectToNami

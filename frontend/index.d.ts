@@ -47,6 +47,7 @@ export type Ratio = {
 export type SdkConfig = {
   ctlServerConfig: SdkServerConfig;
   ogmiosConfig: SdkServerConfig;
+  kupoConfig: SdkServerConfig;
   datumCacheConfig: SdkServerConfig;
   networkId: NetworkId; // int
   logLevel: LogLevel;

@@ -24,8 +24,10 @@ import Utils (jsonReader)
 nftPolicy :: StakingType -> ScriptVersion -> Either JsonDecodeError PlutusScript
 nftPolicy Bonded Production = jsonReader "script" _bondedStateNFT
 nftPolicy Unbonded Production = jsonReader "script" _unbondedStateNFT
-nftPolicy Bonded DebugNoTimeChecks = jsonReader "script" _bondedStateNFTNoTimeChecks
-nftPolicy Unbonded DebugNoTimeChecks = jsonReader "script" _unbondedStateNFTNoTimeChecks
+nftPolicy Bonded DebugNoTimeChecks = jsonReader "script"
+  _bondedStateNFTNoTimeChecks
+nftPolicy Unbonded DebugNoTimeChecks = jsonReader "script"
+  _unbondedStateNFTNoTimeChecks
 
 -- | This function takes a `TransactionInput` and produces the `MintingPolicy` for
 -- the state NFT

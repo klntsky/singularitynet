@@ -30,7 +30,16 @@ import Contract.Prelude
 
 import ClosePool (closeBondedPoolContract)
 import Contract.Address (PaymentPubKeyHash)
-import Contract.Config (ConfigParams, WalletSpec(ConnectToNami, ConnectToGero, ConnectToFlint, ConnectToLode, ConnectToEternl))
+import Contract.Config
+  ( ConfigParams
+  , WalletSpec
+      ( ConnectToNami
+      , ConnectToGero
+      , ConnectToFlint
+      , ConnectToLode
+      , ConnectToEternl
+      )
+  )
 import Contract.Monad (Contract, runContract)
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
 import Contract.Numeric.Natural (Natural, fromBigInt, toBigInt)
@@ -56,7 +65,10 @@ import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
 import CreatePool (createBondedPoolContract, getBondedPoolsContract)
 import Ctl.Internal.Serialization.Address (intToNetworkId)
-import Ctl.Internal.Serialization.Hash (ed25519KeyHashFromBytes, ed25519KeyHashToBytes)
+import Ctl.Internal.Serialization.Hash
+  ( ed25519KeyHashFromBytes
+  , ed25519KeyHashToBytes
+  )
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -68,11 +80,6 @@ import DepositPool (depositBondedPoolContract)
 import Effect.Aff (error)
 import Effect.Exception (Error)
 import Partial.Unsafe (unsafePartial)
-import Ctl.Internal.Serialization.Address (intToNetworkId)
-import Ctl.Internal.Serialization.Hash
-  ( ed25519KeyHashFromBytes
-  , ed25519KeyHashToBytes
-  )
 import Types
   ( AssetClass(AssetClass)
   , BondedPoolParams(BondedPoolParams)
@@ -80,7 +87,10 @@ import Types
   , ScriptVersion(..)
   )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
-import UnbondedStaking.CreatePool (createUnbondedPoolContract, getUnbondedPoolsContract)
+import UnbondedStaking.CreatePool
+  ( createUnbondedPoolContract
+  , getUnbondedPoolsContract
+  )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
@@ -94,10 +104,11 @@ import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (currentRoundedTime, hashPkh)
 
--- | Configuation needed to call contracts from JS.
+-- | Configuration needed to call contracts from JS.
 type SdkConfig =
   { ctlServerConfig :: SdkServerConfig
   , ogmiosConfig :: SdkServerConfig
+  , kupoConfig :: SdkServerConfig
   , datumCacheConfig :: SdkServerConfig
   , networkId :: Number -- converts to Int
   , logLevel :: String -- "Trace", "Debug", "Info", "Warn", "Error"
@@ -148,6 +159,7 @@ buildContractConfig cfg = Promise.fromAff $ do
   ctlServerConfig <- map Just $ liftEither $ fromSdkServerConfig "ctl-server"
     cfg.ctlServerConfig
   ogmiosConfig <- liftEither $ fromSdkServerConfig "ogmios" cfg.ogmiosConfig
+  kupoConfig <- liftEither $ fromSdkServerConfig "kupo" cfg.kupoConfig
   datumCacheConfig <- liftEither $ fromSdkServerConfig "ogmios-datum-cache"
     cfg.datumCacheConfig
   networkIdInt <- liftM (errorWithContext "invalid `NetworkId`")
@@ -158,6 +170,7 @@ buildContractConfig cfg = Promise.fromAff $ do
   walletSpec <- Just <$> liftEither (fromSdkWalletSpec cfg.walletSpec)
   pure
     { ogmiosConfig
+    , kupoConfig
     , datumCacheConfig
     , ctlServerConfig
     , logLevel
@@ -537,7 +550,8 @@ callUserWithdrawUnbondedPool
            { txId :: String }
        )
 callUserWithdrawUnbondedPool =
-  callWithUnbondedPoolArgs (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
+  callWithUnbondedPoolArgs
+    (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
 
 callWithUnbondedPoolArgs
   :: ( UnbondedPoolParams

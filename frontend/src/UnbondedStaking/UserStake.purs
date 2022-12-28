@@ -2,16 +2,40 @@ module UnbondedStaking.UserStake (userStakeUnbondedPoolContract) where
 
 import Contract.Prelude hiding (length)
 
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural, toBigInt)
-import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
-import Contract.PlutusData (Redeemer(Redeemer))
+import Contract.PlutusData
+  ( PlutusData
+  , Redeemer(Redeemer)
+  , Datum(Datum)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (TransactionHash, TransactionOutput, BalancedSignedTransaction, balanceTx, signTransaction)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustSpendScriptOutput, mustValidateIn)
+import Contract.Transaction (TransactionOutput, balanceTx, signTransaction)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustMintValueWithRedeemer
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
 import Contract.Utxos (utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
@@ -19,11 +43,34 @@ import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types (ListAction(ListInsert), MintingAction(MintHead), ScriptVersion, StakingType(Unbonded))
-import UnbondedStaking.Types (Entry(Entry), UnbondedStakingAction(StakeAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum), UnbondedPoolParams(UnbondedPoolParams))
+import Settings
+  ( unbondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import Types
+  ( ListAction(ListInsert)
+  , MintingAction(MintHead)
+  , ScriptVersion
+  , StakingType(Unbonded)
+  )
+import UnbondedStaking.Types
+  ( Entry(Entry)
+  , UnbondedStakingAction(StakeAct)
+  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  )
 import UnbondedStaking.Utils (getUserTime)
-import Utils (findInsertUpdateElem, getUtxoWithNFT, hashPkh, mkOnchainAssocList, logInfo_, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
+import Utils
+  ( findInsertUpdateElem
+  , getUtxoWithNFT
+  , hashPkh
+  , mkOnchainAssocList
+  , logInfo_
+  , repeatUntilConfirmed
+  , mustPayToScript
+  , getUtxoDatumHash
+  )
 
 -- Deposits a certain amount in the pool
 userStakeUnbondedPoolContract
@@ -57,9 +104,7 @@ userStakeUnbondedPoolContract
       getWalletAddress
 
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos" $
-      utxosAt userAddr
+  userUtxos <- utxosAt userAddr
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
@@ -71,9 +116,7 @@ userStakeUnbondedPoolContract
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's datum and utxos
-  unbondedPoolUtxos <-
-    liftedM "userStakeUnbondedPoolContract: could not obtain user utxos"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userStakeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "userStakeUnbondedPoolContract: Cannot create TokenName"
@@ -498,7 +541,7 @@ userStakeUnbondedPoolContract
           -- Get the constraints for the second assoc. list element
           lastConstraints /\ lastLookups <- case secondOutput, secondInput of
             Nothing, Nothing -> pure $ mempty /\ mempty
-            Just so, Just si -> do --
+            Just so, Just _si -> do
               dh <-
                 liftContractM
                   "userStakeUnbondedPoolContract: Could not get Entry Datum Hash"
@@ -527,12 +570,6 @@ userStakeUnbondedPoolContract
                   \lookup"
                   $ ScriptLookups.datum lastEntryDatum
               let
-                secondTxOutput :: TransactionOutput
-                secondTxOutput = (unwrap so).output
-
-                secondTxValue :: Value
-                secondTxValue = (unwrap secondTxOutput).amount
-
                 constr = mempty
                 lu = mconcat
                   [ lastEntryDatumLookup

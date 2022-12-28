@@ -19,65 +19,79 @@ import UnbondedStaking.Types (SnetInitialParams)
 
 suite :: TestPlanM (Aff Unit) Unit
 suite = testPlutipContracts localPlutipCfg do
-    group "Debug - No time checks" $ allTests testInitialParamsNoTimeChecks
-    -- We skip timed checks until we can have a work-around for this:
-    skip $ group "Debug" $ allTests testInitialParams
+  group "Debug - No time checks" $ allTests testInitialParamsNoTimeChecks
+  -- We skip timed checks until we can have a work-around for this:
+  skip $ group "Debug" $ allTests testInitialParams
 
 allTests :: Contract () SnetInitialParams -> MoteT Aff PlutipTest Aff Unit
 allTests initParams =
-    group "Unit Tests" do
-        group "Admin" do
-            test "Open/Create Pool" $ Open.test initParams
-            test "Close Pool" $ Close.test initParams
-            -- We skip this until we decide if it's a good idea to fail when
-            -- there are no stakers in the pool
-            skip $ test "Deposit to empty pool" $ DepositEmpty.test initParams
-            test "Deposit to pool with 1 user's stake" $ Deposit1User.test initParams
-            (let n = 10
-                 b = 5
-             in test ("Deposit to pool with " <> show n <> " users' stake") $ DepositNUser.test initParams n b)
-            (let n = 10
-                 b = 5
-             in test ("Close pool with " <> show n <> " users' stake") $ DepositNUser.test initParams n b)
-        group "User" do
-            test "Stake" $ Stake.test initParams
+  group "Unit Tests" do
+    group "Admin" do
+      test "Open/Create Pool" $ Open.test initParams
+      test "Close Pool" $ Close.test initParams
+      -- We skip this until we decide if it's a good idea to fail when
+      -- there are no stakers in the pool
+      skip $ test "Deposit to empty pool" $ DepositEmpty.test initParams
+      test "Deposit to pool with 1 user's stake" $ Deposit1User.test initParams
+      ( let
+          n = 10
+          b = 5
+        in
+          test ("Deposit to pool with " <> show n <> " users' stake") $
+            DepositNUser.test initParams n b
+      )
+      ( let
+          n = 10
+          b = 5
+        in
+          test ("Close pool with " <> show n <> " users' stake") $
+            DepositNUser.test initParams n b
+      )
+    group "User" do
+      test "Stake" $ Stake.test initParams
 
 main :: Effect Unit
 main = launchAff_ $ interpret suite
 
 localPlutipCfg :: PlutipConfig
 localPlutipCfg =
-  { host: "127.0.0.1" 
-   , port: UInt.fromInt 8082 
-   , logLevel: Trace 
-   -- Server configs are used to deploy the corresponding services. 
-   , ogmiosConfig: 
-       { port: UInt.fromInt 1338 
-       , host: "127.0.0.1" 
-       , secure: false
-       , path: Nothing 
-       } 
-   , ogmiosDatumCacheConfig: 
-       { port: UInt.fromInt 10000 
-       , host: "127.0.0.1" 
-       , secure: false 
-       , path: Nothing 
-       } 
-   , ctlServerConfig: Just 
-       { port: UInt.fromInt 8083 
-       , host: "127.0.0.1" 
-       , secure: false 
-       , path: Nothing 
-       } 
-   , postgresConfig: 
-       { host: "127.0.0.1" 
-       , port: UInt.fromInt 5433 
-       , user: "ctxlib" 
-       , password: "ctxlib" 
-       , dbname: "ctxlib" 
-       } 
-   , suppressLogs: true
-   , customLogger: Nothing 
-   , hooks: emptyHooks 
-   }
+  { host: "127.0.0.1"
+  , port: UInt.fromInt 8082
+  , logLevel: Trace
+  -- Server configs are used to deploy the corresponding services. 
+  , ogmiosConfig:
+      { port: UInt.fromInt 1338
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , kupoConfig:
+      { port: UInt.fromInt 1443
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , ogmiosDatumCacheConfig:
+      { port: UInt.fromInt 10000
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , ctlServerConfig: Just
+      { port: UInt.fromInt 8083
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , postgresConfig:
+      { host: "127.0.0.1"
+      , port: UInt.fromInt 5433
+      , user: "ctxlib"
+      , password: "ctxlib"
+      , dbname: "ctxlib"
+      }
+  , suppressLogs: true
+  , customLogger: Nothing
+  , hooks: emptyHooks
+  }
 

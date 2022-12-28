@@ -3,16 +3,40 @@ module UserStake (userStakeBondedPoolContract) where
 import Contract.Prelude hiding (length)
 
 import BondedStaking.TimeUtils (getStakingTime)
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo', logAesonInfo)
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural, toBigInt)
-import Contract.PlutusData (PlutusData, Datum(Datum), fromData, getDatumByHash, toData)
-import Contract.PlutusData (Redeemer(Redeemer))
+import Contract.PlutusData
+  ( PlutusData
+  , Redeemer(Redeemer)
+  , Datum(Datum)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (BalancedSignedTransaction, balanceTx, signTransaction, TransactionHash)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustMintValueWithRedeemer, mustSpendScriptOutput, mustValidateIn)
+import Contract.Transaction (balanceTx, signTransaction)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustMintValueWithRedeemer
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
@@ -20,9 +44,31 @@ import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(StakeAct), BondedStakingDatum(AssetDatum, EntryDatum, StateDatum), Entry(Entry), ListAction(ListInsert), MintingAction(MintHead), ScriptVersion, StakingType(Bonded))
-import Utils (findInsertUpdateElem, getUtxoWithNFT, hashPkh, logInfo_, mkOnchainAssocList, repeatUntilConfirmed, mustPayToScript, getUtxoDatumHash)
+import Settings
+  ( bondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import Types
+  ( BondedPoolParams(BondedPoolParams)
+  , BondedStakingAction(StakeAct)
+  , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  , Entry(Entry)
+  , ListAction(ListInsert)
+  , MintingAction(MintHead)
+  , ScriptVersion
+  , StakingType(Bonded)
+  )
+import Utils
+  ( findInsertUpdateElem
+  , getUtxoWithNFT
+  , hashPkh
+  , logInfo_
+  , mkOnchainAssocList
+  , repeatUntilConfirmed
+  , mustPayToScript
+  , getUtxoDatumHash
+  )
 
 -- Deposits a certain amount in the pool
 userStakeBondedPoolContract
@@ -54,8 +100,7 @@ userStakeBondedPoolContract
     liftedM "userStakeBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  userUtxos <- liftedM "userStakeBondedPoolContract: cannot get user utxos" $
-    utxosAt userAddr
+  userUtxos <- utxosAt userAddr
   logInfo_ "userStakeBondedPoolContract: User Address" userAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "userStakeBondedPoolContract: Cannot create validator"
@@ -66,9 +111,7 @@ userStakeBondedPoolContract
   logInfo_ "userStakeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "userStakeBondedPoolContract: could not get pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userStakeBondedPoolContract: Pool UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "userStakeBondedPoolContract: Cannot create TokenName"

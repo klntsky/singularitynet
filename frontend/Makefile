@@ -17,8 +17,9 @@ ps-build:
 js-build:
 	@$(call build,${js-bundle},./index.js)
 
-check-format:
+check:
 	@purs-tidy check ${ps-sources}
+	spago build --purs-args "--stash --censor-lib --censor-codes=UserDefinedWarning --strict"
 
 format:
 	@purs-tidy format-in-place ${ps-sources}

@@ -13,11 +13,15 @@ import Utils (nat)
 
 test :: Contract () SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [] \wallets -> do
-    adminWallet <- getAdminWallet wallets
-    withKeyWallet adminWallet do
-        waitFor AdminPeriod
-        { unbondedPoolParams, scriptVersion } <- ask
-        failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams scriptVersion (nat 0) []
-        -- Make sure that return value is empty list
-        when (not $ Array.null failedIndices) $
-           lift $ throwContractError "Some entries failed to be updated"
+  adminWallet <- getAdminWallet wallets
+  withKeyWallet adminWallet do
+    waitFor AdminPeriod
+    { unbondedPoolParams, scriptVersion } <- ask
+    failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams
+      scriptVersion
+      (nat 0)
+      []
+    -- Make sure that return value is empty list
+    when (not $ Array.null failedIndices)
+      $ lift
+      $ throwContractError "Some entries failed to be updated"

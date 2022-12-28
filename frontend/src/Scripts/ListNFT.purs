@@ -21,11 +21,14 @@ import Utils (jsonReader)
 
 -- | This is the parameterized minting policy. It still needs to receive a
 -- `CurrencySymbol` to become a minting policy
-listNFTPolicy :: StakingType -> ScriptVersion -> Either JsonDecodeError PlutusScript
+listNFTPolicy
+  :: StakingType -> ScriptVersion -> Either JsonDecodeError PlutusScript
 listNFTPolicy Bonded Production = jsonReader "script" _bondedListNFT
 listNFTPolicy Unbonded Production = jsonReader "script" _unbondedListNFT
-listNFTPolicy Bonded DebugNoTimeChecks = jsonReader "script" _bondedListNFTNoTimeChecks
-listNFTPolicy Unbonded DebugNoTimeChecks = jsonReader "script" _unbondedListNFTNoTimeChecks
+listNFTPolicy Bonded DebugNoTimeChecks = jsonReader "script"
+  _bondedListNFTNoTimeChecks
+listNFTPolicy Unbonded DebugNoTimeChecks = jsonReader "script"
+  _unbondedListNFTNoTimeChecks
 
 -- | This function takes a `CurrencySymbol` and produces the `MintingPolicy` for
 -- the list NFT

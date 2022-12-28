@@ -15,16 +15,26 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, throwContractError, liftedE', liftedM)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , throwContractError
+  , liftedE'
+  , liftedM
+  )
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.PlutusData (getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Scripts (validatorHash)
-import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, always, interval)
+import Contract.Time
+  ( POSIXTime(POSIXTime)
+  , POSIXTimeRange
+  , always
+  , mkFiniteInterval
+  )
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.Utxos (utxosAt)
 import Contract.Value (CurrencySymbol)
---import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
@@ -32,8 +42,20 @@ import Data.Map as Map
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings (unbondedStakingTokenName)
 import Types (ScriptVersion(..))
-import UnbondedStaking.Types (Entry(..), InitialUnbondedParams(InitialUnbondedParams), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingDatum(..))
-import Utils (big, currentRoundedTime, getUtxoDatumHash, mkOnchainAssocList, mkRatUnsafe, valueOf')
+import UnbondedStaking.Types
+  ( Entry(..)
+  , InitialUnbondedParams(InitialUnbondedParams)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  , UnbondedStakingDatum(..)
+  )
+import Utils
+  ( big
+  , currentRoundedTime
+  , getUtxoDatumHash
+  , mkOnchainAssocList
+  , mkRatUnsafe
+  , valueOf'
+  )
 
 -- | Admin deposit/closing
 getAdminTime
@@ -57,10 +79,12 @@ getAdminTime (UnbondedPoolParams upp) = case _ of
       adminEnd = adminStart + upp.adminLength - big 1000
     -- Return range
     start /\ end <- liftContractM "getAdminTime: this is not a admin period" $
-      getContainingPeriodRange currTime' upp.start cycleLength adminStart adminEnd
+      getContainingPeriodRange currTime' upp.start cycleLength adminStart
+        adminEnd
     pure
       { currTime
-      , range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
+      , range: mkFiniteInterval (POSIXTime start)
+          (POSIXTime $ end + BigInt.fromInt 1)
       }
   DebugNoTimeChecks -> noTimeChecks "getAdminTime"
 
@@ -72,68 +96,81 @@ getUserTime
   -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
 getUserTime (UnbondedPoolParams upp) = case _ of
   Production -> do
-     -- Get time and round it up to the nearest second
-     currTime@(POSIXTime currTime') <- currentRoundedTime
-     -- Get timerange in which the staking should be done
-     let
-       cycleLength :: BigInt
-       cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
+    -- Get time and round it up to the nearest second
+    currTime@(POSIXTime currTime') <- currentRoundedTime
+    -- Get timerange in which the staking should be done
+    let
+      cycleLength :: BigInt
+      cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
 
-       userStart :: BigInt
-       userStart = zero
+      userStart :: BigInt
+      userStart = zero
 
-       userEnd :: BigInt
-       userEnd = userStart + upp.userLength - big 1000
-     -- Return range
-     start /\ end <- liftContractM "getUserTime: this is not a user period" $
-       getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
-     pure { currTime, range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1) }
+      userEnd :: BigInt
+      userEnd = userStart + upp.userLength - big 1000
+    -- Return range
+    start /\ end <- liftContractM "getUserTime: this is not a user period" $
+      getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
+    pure
+      { currTime
+      , range: mkFiniteInterval (POSIXTime start)
+          (POSIXTime $ end + BigInt.fromInt 1)
+      }
   DebugNoTimeChecks -> noTimeChecks "getUserTime"
 
 -- | User withdrawals only
 -- | Note: Period can either be in bonding period or user period
 getUserOrBondingTime
   :: forall (r :: Row Type)
-  . UnbondedPoolParams
+   . UnbondedPoolParams
   -> ScriptVersion
   -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
 getUserOrBondingTime (UnbondedPoolParams upp) = case _ of
   Production -> do
-     -- Get time and round it up to the nearest second
-     currTime@(POSIXTime currTime') <- currentRoundedTime
-     -- Get timerange in which the staking should be done
-     let
-       cycleLength :: BigInt
-       cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
-   
-       userStart :: BigInt
-       userStart = zero
-   
-       userEnd :: BigInt
-       userEnd = userStart + upp.userLength - big 1000
-   
-       bondingStart :: BigInt
-       bondingStart = userEnd + upp.adminLength
-   
-       bondingEnd :: BigInt
-       bondingEnd = bondingStart + upp.bondingLength - big 1000
-       -- Period ranges
-       userPeriod = getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
-       bondingPeriod = getContainingPeriodRange currTime' upp.start cycleLength bondingStart bondingEnd
-   
-       getPeriod
-         :: Maybe (Tuple BigInt BigInt)
-         -> Maybe (Tuple BigInt BigInt)
-         -> Maybe (Tuple BigInt BigInt)
-       getPeriod user bonding = case user /\ bonding of
-         user' /\ Nothing -> user'
-         Nothing /\ bonding' -> bonding'
-         _ /\ _ -> Nothing
-     -- Return range
-     start /\ end <- liftContractM "getUserTime: this is not a user/bonding period"
-       $
-         getPeriod userPeriod bondingPeriod
-     pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+    -- Get time and round it up to the nearest second
+    currTime@(POSIXTime currTime') <- currentRoundedTime
+    -- Get timerange in which the staking should be done
+    let
+      cycleLength :: BigInt
+      cycleLength = upp.userLength + upp.adminLength + upp.bondingLength
+
+      userStart :: BigInt
+      userStart = zero
+
+      userEnd :: BigInt
+      userEnd = userStart + upp.userLength - big 1000
+
+      bondingStart :: BigInt
+      bondingStart = userEnd + upp.adminLength
+
+      bondingEnd :: BigInt
+      bondingEnd = bondingStart + upp.bondingLength - big 1000
+      -- Period ranges
+      userPeriod = getContainingPeriodRange currTime' upp.start cycleLength
+        userStart
+        userEnd
+      bondingPeriod = getContainingPeriodRange currTime' upp.start cycleLength
+        bondingStart
+        bondingEnd
+
+      getPeriod
+        :: Maybe (Tuple BigInt BigInt)
+        -> Maybe (Tuple BigInt BigInt)
+        -> Maybe (Tuple BigInt BigInt)
+      getPeriod user bonding = case user /\ bonding of
+        user' /\ Nothing -> user'
+        Nothing /\ bonding' -> bonding'
+        _ /\ _ -> Nothing
+    -- Return range
+    start /\ end <-
+      liftContractM "getUserTime: this is not a user/bonding period"
+        $
+          getPeriod userPeriod bondingPeriod
+    pure
+      { currTime
+      , range: mkFiniteInterval (POSIXTime start)
+          (POSIXTime $ end + BigInt.fromInt 1)
+      }
   DebugNoTimeChecks -> noTimeChecks "getBondingTime"
 
 -- | Returns the period's range if it contain the `currentTime`.
@@ -149,38 +186,22 @@ getContainingPeriodRange
   -> BigInt
   -> BigInt
   -> Maybe (Tuple BigInt BigInt)
-getContainingPeriodRange currentTime baseOffset cycleLength startOffset endOffset =
-  if start <= currentTime && currentTime < end
-     then Just periodRange
-     else Nothing
-  where periodRange@(start /\ end) =
-           getPeriodRange
-              currentTime
-              baseOffset
-              cycleLength
-              startOffset
-              endOffset
-
-    --upperBound :: Int
-    --upperBound = currentIteration + 1
-
-    -- possibleRanges :: Array (Tuple BigInt BigInt)
-    -- possibleRanges =
-    --   ( \i -> (cycleLength * big (i - 1) + startOffset)
-    --       /\ (cycleLength * big (i - 1) + endOffset)
-    --   )
-    --     <$> 1 .. upperBound
-
-    -- periods :: Array (Tuple BigInt BigInt)
-    -- periods =
-    --   Array.takeWhile (\(startOffset' /\ _) -> currTime >= startOffset')
-    --     possibleRanges
-
-    -- currentPeriod :: Array (Tuple BigInt BigInt)
-    -- currentPeriod =
-    --   Array.filter
-    --     (\(startOffset' /\ endOffset') -> startOffset' <= currTime && currTime < endOffset')
-    --     periods
+getContainingPeriodRange
+  currentTime
+  baseOffset
+  cycleLength
+  startOffset
+  endOffset =
+  if start <= currentTime && currentTime < end then Just periodRange
+  else Nothing
+  where
+  periodRange@(start /\ end) =
+    getPeriodRange
+      currentTime
+      baseOffset
+      cycleLength
+      startOffset
+      endOffset
 
 -- | Creates the `UnbondedPoolParams` from the `InitialUnbondedParams` and
 -- | runtime parameters from the user.
@@ -232,7 +253,7 @@ queryAssocListUnbonded
         { assocListCs
         }
     )
-    scriptVersion = do
+  scriptVersion = do
   -- Fetch information related to the pool
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "queryAssocListUnbonded: Cannot create validator"
@@ -240,10 +261,7 @@ queryAssocListUnbonded
   let valHash = validatorHash validator
   let poolAddr = scriptHashAddress valHash Nothing
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "queryAssocListUnbonded: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
 
   let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
   getListDatums assocList
@@ -254,35 +272,42 @@ queryStateUnbonded
   -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
 queryStateUnbonded
   params@
-     ( UnbondedPoolParams
+    ( UnbondedPoolParams
         { nftCs
         }
-     )
+    )
   scriptVersion = do
   -- Fetch information related to the pool
   validator <- liftedE' "queryStateUnbonded: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
   nftTn <- liftContractM "queryStateUnbonded: Could not get staking token name"
-      unbondedStakingTokenName
-  let valHash = validatorHash validator
-      poolAddr = scriptHashAddress valHash Nothing
+    unbondedStakingTokenName
+  let
+    valHash = validatorHash validator
+    poolAddr = scriptHashAddress valHash Nothing
   -- Get the state UTxO's datum
-  unbondedPoolUtxos <-
-    liftedM
-      "queryStateUnbonded: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
-  let hasStateNft :: TransactionOutputWithRefScript -> Boolean
-      hasStateNft = unwrap >>> _.output >>> unwrap >>> _.amount >>> valueOf' nftCs nftTn >>> (_ == one)
+  unbondedPoolUtxos <- utxosAt poolAddr
+  let
+    hasStateNft :: TransactionOutputWithRefScript -> Boolean
+    hasStateNft = unwrap >>> _.output >>> unwrap >>> _.amount
+      >>> valueOf' nftCs nftTn
+      >>> (_ == one)
   stateTxOut <- liftContractM "queryStateUnbonded: Could not find state utxo"
-     <<< Array.head <<< Array.fromFoldable $ Map.filter hasStateNft unbondedPoolUtxos
+    <<< Array.head
+    <<< Array.fromFoldable
+    $ Map.filter hasStateNft unbondedPoolUtxos
   getDatum stateTxOut
-  where getDatum :: TransactionOutputWithRefScript -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
-        getDatum txOut = do
-            dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash txOut
-            case fromData $ unwrap dat of
-                Just (StateDatum r) -> pure r
-                Just _ -> throwContractError "queryStateUnbonded: Expected a state datum"
-                Nothing -> throwContractError "queryStateUnbonded: Could not parse datum"
+  where
+  getDatum
+    :: TransactionOutputWithRefScript
+    -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
+  getDatum txOut = do
+    dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash
+      txOut
+    case fromData $ unwrap dat of
+      Just (StateDatum r) -> pure r
+      Just _ -> throwContractError "queryStateUnbonded: Expected a state datum"
+      Nothing -> throwContractError "queryStateUnbonded: Could not parse datum"
 
 -- | Get all entries' datums
 getListDatums
@@ -312,13 +337,14 @@ getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
       throwContractError
         "getListDatums: Expected an list datum but found an asset datum"
 
-noTimeChecks :: forall (r :: Row Type) .
-    String ->
-    Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+noTimeChecks
+  :: forall (r :: Row Type)
+   . String
+  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
 noTimeChecks fnName = do
-    logInfo' $ fnName <> ": Time checks deactivated - omitting check"
-    currTime <- currentRoundedTime
-    pure { currTime, range: always }
+  logInfo' $ fnName <> ": Time checks deactivated - omitting check"
+  currTime <- currentRoundedTime
+  pure { currTime, range: always }
 
 -- | Gets the period's range for the given time
 getPeriodRange
@@ -333,8 +359,9 @@ getPeriodRange time baseOffset cycleLength startOffset endOffset =
   let
     iteration :: BigInt
     iteration = (time - baseOffset) `BigInt.quot` cycleLength
-  in (baseOffset + cycleLength * iteration + startOffset)
-     /\ (baseOffset + cycleLength * iteration + endOffset)
+  in
+    (baseOffset + cycleLength * iteration + startOffset)
+      /\ (baseOffset + cycleLength * iteration + endOffset)
 
 -- | Gets the period's range for the next cycle
 getNextPeriodRange
@@ -346,4 +373,5 @@ getNextPeriodRange
   -> BigInt
   -> BigInt /\ BigInt
 getNextPeriodRange time baseOffset cycleLength startOffset endOffset =
-    getPeriodRange (time + cycleLength) baseOffset cycleLength startOffset endOffset
+  getPeriodRange (time + cycleLength) baseOffset cycleLength startOffset
+    endOffset

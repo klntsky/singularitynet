@@ -2,32 +2,75 @@ module UnbondedStaking.DepositPool (depositUnbondedPoolContract) where
 
 import Contract.Prelude
 
-import Contract.Address (getNetworkId, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( getNetworkId
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural, fromBigInt')
 import Contract.Numeric.Rational (Rational)
-import Contract.PlutusData (PlutusData, Datum(Datum), Redeemer(Redeemer), fromData, getDatumByHash, toData)
+import Contract.PlutusData
+  ( PlutusData
+  , Datum(Datum)
+  , Redeemer(Redeemer)
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (ValidatorHash, validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustSpendScriptOutput, mustValidateIn)
-import Contract.Utxos (getWalletUtxos, utxosAt)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
+import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
-import Data.Array (elemIndex, zip, (!!))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Unfoldable (none)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Settings (unbondedStakingTokenName, confirmationTimeout, submissionAttempts)
+import Settings
+  ( unbondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
 import Types (ScriptVersion)
-import UnbondedStaking.Types (Entry(Entry), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingAction(AdminAct), UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum))
+import UnbondedStaking.Types
+  ( Entry(Entry)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  , UnbondedStakingAction(AdminAct)
+  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
+  )
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
-import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, mkOnchainAssocList, mustPayToScript, roundUp, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe, toRational)
+import Utils
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
+  , logInfo_
+  , mkOnchainAssocList
+  , mustPayToScript
+  , roundUp
+  , splitByLength
+  , submitBatchesSequentially
+  , submitTransaction
+  , toIntUnsafe
+  , toRational
+  )
 
 -- | Deposits a certain amount in the pool
 -- | If the `batchSize` is zero, then funds will be deposited to all users.
@@ -67,9 +110,7 @@ depositUnbondedPoolContract
     liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <-
-    liftedM "depositUnbondedPoolContract: Cannot get user Utxos" $
-      utxosAt adminAddr
+  adminUtxos <- utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "depositUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
@@ -79,10 +120,7 @@ depositUnbondedPoolContract
   logInfo_ "depositUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "depositUnbondedPoolContract: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "depositUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "depositUnbondedPoolContract: Cannot create TokenName"
@@ -136,17 +174,9 @@ depositUnbondedPoolContract
       entryUpdates
         :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
         traverse (updateEntryTx params valHash)
-          (zip entriesInputs (zip entriesDatums updatedEntriesDatums))
-
-      -- updateList <-
-      --   if null depositList then
-      --     traverse (mkEntryUpdateList depositAmt params valHash) assocList
-      --   else do
-      --     constraintsLookupsList <-
-      --       traverse (mkEntryUpdateList depositAmt params valHash) assocList
-      --     liftContractM
-      --       "depositUnbondedPoolContract: Failed to create updateList'" $
-      --       traverse ((!!) constraintsLookupsList) depositList
+          ( Array.zip entriesInputs
+              (Array.zip entriesDatums updatedEntriesDatums)
+          )
 
       let
         constraints :: TxConstraints Unit Unit
@@ -158,8 +188,8 @@ depositUnbondedPoolContract
         lookups =
           ScriptLookups.validator validator
             <> ScriptLookups.unspentOutputs unbondedPoolUtxos
-            -- We deliberately omit the admin utxos, since batching includes
-            -- them automatically before every batch.
+      -- We deliberately omit the admin utxos, since batching includes
+      -- them automatically before every batch.
 
       -- Submit transaction with possible batching
       failedDeposits <-
@@ -171,7 +201,9 @@ depositUnbondedPoolContract
             submissionAttempts
             entryUpdates
         else do
-          let entryUpdateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
+          let
+            entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
+              entryUpdates
           submitBatchesSequentially
             constraints
             lookups
@@ -186,7 +218,7 @@ depositUnbondedPoolContract
         liftContractM
           "depositUnbondedPoolContract: Failed to create /\
           \failedDepositsIndicies list" $
-          traverse (flip elemIndex entryUpdates) failedDeposits
+          traverse (flip Array.elemIndex entryUpdates) failedDeposits
       pure failedDepositsIndicies
     -- Other error cases:
     StateDatum { maybeEntryName: Nothing, open: true } ->

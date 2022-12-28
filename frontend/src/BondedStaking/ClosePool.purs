@@ -5,21 +5,57 @@ import Contract.Prelude
 import BondedStaking.TimeUtils (getClosingTime)
 import Contract.Address (getNetworkId, ownPaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Natural (Natural)
-import Contract.PlutusData (Datum(..), Redeemer(..), PlutusData, fromData, getDatumByHash, toData)
+import Contract.PlutusData
+  ( Datum(..)
+  , Redeemer(Redeemer)
+  , PlutusData
+  , fromData
+  , getDatumByHash
+  , toData
+  )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.TxConstraints (TxConstraints, mustBeSignedBy, mustIncludeDatum, mustSpendScriptOutput, mustValidateIn)
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustBeSignedBy
+  , mustIncludeDatum
+  , mustSpendScriptOutput
+  , mustValidateIn
+  )
 import Contract.Utxos (getWalletUtxos, utxosAt)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (!!))
 import Data.Map (toUnfoldable)
 import Scripts.PoolValidator (mkBondedPoolValidator)
-import Settings (bondedStakingTokenName, confirmationTimeout, submissionAttempts)
-import Types (BondedPoolParams(BondedPoolParams), BondedStakingAction(CloseAct), BondedStakingDatum, ScriptVersion)
-import Utils (getUtxoDatumHash, getUtxoWithNFT, logInfo_, splitByLength, submitBatchesSequentially, submitTransaction, toIntUnsafe)
+import Settings
+  ( bondedStakingTokenName
+  , confirmationTimeout
+  , submissionAttempts
+  )
+import Types
+  ( BondedPoolParams(BondedPoolParams)
+  , BondedStakingAction(CloseAct)
+  , BondedStakingDatum
+  , ScriptVersion
+  )
+import Utils
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
+  , logInfo_
+  , splitByLength
+  , submitBatchesSequentially
+  , submitTransaction
+  , toIntUnsafe
+  )
 
 closeBondedPoolContract
   :: BondedPoolParams
@@ -50,9 +86,7 @@ closeBondedPoolContract
   logInfo_ "closeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "closeBondedPoolContract: could not obtain pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeBondedPoolContract: Pool's UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "closeBondedPoolContract: Cannot create TokenName"
@@ -114,25 +148,25 @@ closeBondedPoolContract
         <> mustValidateIn txRange
 
   adminUtxos <- liftedM "closeBondedPoolContract: could not get admin's utxos" $
-      getWalletUtxos
+    getWalletUtxos
 
   -- Submit transaction with possible batching
   failedDeposits <-
     if batchSize == zero then
       submitTransaction
-         constraints
-         (lookups <> ScriptLookups.unspentOutputs adminUtxos)
-         confirmationTimeout
-         submissionAttempts
-         spendList
+        constraints
+        (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+        confirmationTimeout
+        submissionAttempts
+        spendList
     else do
       let updateBatches = splitByLength (toIntUnsafe batchSize) spendList
       submitBatchesSequentially
-         constraints
-         lookups
-         confirmationTimeout
-         submissionAttempts
-         updateBatches
+        constraints
+        lookups
+        confirmationTimeout
+        submissionAttempts
+        updateBatches
 
   logInfo_
     "closeBondedPoolContract: Finished updating pool entries. /\

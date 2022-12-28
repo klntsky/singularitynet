@@ -5,30 +5,61 @@ module UnbondedStaking.CreatePool
 
 import Contract.Prelude
 
-import Contract.Address (Bech32String, addressToBech32, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( Bech32String
+  , addressToBech32
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logWarn')
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM)
+import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Time (POSIXTime(POSIXTime))
-import Contract.Transaction (BalancedSignedTransaction, TransactionHash, TransactionOutputWithRefScript(..), balanceTx, signTransaction)
-import Contract.TxConstraints (TxConstraints, mustMintValue, mustSpendPubKeyOutput)
+import Contract.Transaction
+  ( TransactionOutputWithRefScript
+  , balanceTx
+  , signTransaction
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustMintValue
+  , mustSpendPubKeyOutput
+  )
 import Contract.Utxos (utxosAt)
-import Contract.Value (CurrencySymbol, Value, flattenValue, scriptCurrencySymbol, singleton)
+import Contract.Value
+  ( CurrencySymbol
+  , Value
+  , flattenValue
+  , scriptCurrencySymbol
+  , singleton
+  )
 import Control.Monad.Error.Class (liftMaybe)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
 import Effect.Exception as Exception
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
-import Settings (confirmationTimeout, submissionAttempts, unbondedStakingTokenName)
+import Settings
+  ( confirmationTimeout
+  , submissionAttempts
+  , unbondedStakingTokenName
+  )
 import Types (ScriptVersion, StakingType(Unbonded))
-import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams), UnbondedPoolParams, UnbondedStakingDatum(StateDatum))
+import UnbondedStaking.Types
+  ( InitialUnbondedParams
+  , UnbondedPoolParams
+  , UnbondedStakingDatum(StateDatum)
+  )
 import UnbondedStaking.Utils (mkUnbondedPoolParams)
-import Utils (addressFromBech32, currentRoundedTime, logInfo_, mustPayToScript, repeatUntilConfirmed)
+import Utils
+  ( addressFromBech32
+  , logInfo_
+  , mustPayToScript
+  , repeatUntilConfirmed
+  )
 
 -- Sets up pool configuration, mints the state NFT and deposits
 -- in the pool validator's address
@@ -44,7 +75,6 @@ createUnbondedPoolContract iup scriptVersion =
   repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
     adminPkh <- liftedM "createUnbondedPoolContract: Cannot get admin's pkh"
       ownPaymentPubKeyHash
-    logInfo_ "createUnbondedPoolContract: Admin PaymentPubKeyHash" adminPkh
     -- Get the (Nami) wallet address
     adminAddr <-
       liftedM "createUnbondedPoolContract: Cannot get wallet Address"
@@ -52,9 +82,8 @@ createUnbondedPoolContract iup scriptVersion =
     logInfo_ "createUnbondedPoolContract: User Address"
       =<< addressToBech32 adminAddr
     -- Get utxos at the wallet address
-    adminUtxos <-
-      liftedM "createUnbondedPoolContract: Cannot get user Utxos"
-        $ utxosAt adminAddr
+    adminUtxos <- utxosAt adminAddr
+    logInfo_ "Admin utxos:" $ show adminUtxos
     txOutRef <-
       liftContractM "createUnbondedPoolContract: Could not get head UTXO"
         $ fst
@@ -123,7 +152,6 @@ createUnbondedPoolContract iup scriptVersion =
     -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
     bTx <- liftedE $ balanceTx unattachedBalancedTx
     signedTx <- signTransaction bTx
-
     -- Return the pool info for subsequent transactions
     pure { signedTx, unbondedPoolParams, address }
 
@@ -137,9 +165,7 @@ getUnbondedPoolsContract
   -> Contract () (Array UnbondedPoolParams)
 getUnbondedPoolsContract addrStr ibp scriptVersion = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getUnbondedPoolsContract) Could not get pool UTxOs"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getUnbondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'UnbondedStakingToken')
