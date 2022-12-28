@@ -169,12 +169,6 @@ const main = async () => {
 };
 
 const mlabsSdkConfig: SdkConfig = {
-  ctlServerConfig: {
-    host: "ctl-server.preprod.ctl-runtime.staging.mlabs.city",
-    port: 443,
-    secure: true,
-    path: "",
-  },
   ogmiosConfig: {
     host: "ogmios.preprod.ctl-runtime.staging.mlabs.city",
     port: 443,

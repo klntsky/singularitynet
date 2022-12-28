@@ -45,7 +45,6 @@ export type Ratio = {
 };
 
 export type SdkConfig = {
-  ctlServerConfig: SdkServerConfig;
   ogmiosConfig: SdkServerConfig;
   kupoConfig: SdkServerConfig;
   datumCacheConfig: SdkServerConfig;
