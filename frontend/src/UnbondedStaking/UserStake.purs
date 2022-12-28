@@ -11,7 +11,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -21,6 +20,7 @@ import Contract.Log (logInfo')
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.PlutusData
   ( PlutusData
+  , Redeemer(Redeemer)
   , Datum(Datum)
   , fromData
   , getDatumByHash
@@ -29,9 +29,7 @@ import Contract.PlutusData
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( TransactionHash
-  , TransactionOutput
-  , BalancedSignedTransaction
+  ( TransactionOutput
   , balanceTx
   , signTransaction
   )
@@ -59,7 +57,6 @@ import Types
   , MintingAction(MintHead)
   , StakingType(Unbonded)
   )
-import Contract.PlutusData (Redeemer(Redeemer))
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedStakingAction(StakeAct)
@@ -545,7 +542,7 @@ userStakeUnbondedPoolContract
           -- Get the constraints for the second assoc. list element
           lastConstraints /\ lastLookups <- case secondOutput, secondInput of
             Nothing, Nothing -> pure $ mempty /\ mempty
-            Just so, Just si -> do --
+            Just so, Just _si -> do
               dh <-
                 liftContractM
                   "userStakeUnbondedPoolContract: Could not get Entry Datum Hash"
@@ -574,12 +571,6 @@ userStakeUnbondedPoolContract
                   \lookup"
                   $ ScriptLookups.datum lastEntryDatum
               let
-                secondTxOutput :: TransactionOutput
-                secondTxOutput = (unwrap so).output
-
-                secondTxValue :: Value
-                secondTxValue = (unwrap secondTxOutput).amount
-
                 constr = mempty
                 lu = mconcat
                   [ lastEntryDatumLookup

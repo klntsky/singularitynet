@@ -13,7 +13,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -25,6 +24,7 @@ import Contract.Log
   )
 import Contract.PlutusData
   ( PlutusData
+  , Redeemer(Redeemer)
   , Datum(Datum)
   , fromData
   , getDatumByHash
@@ -36,10 +36,8 @@ import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( TransactionInput
   , TransactionOutputWithRefScript
-  , BalancedSignedTransaction
   , balanceTx
   , signTransaction
-  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -73,7 +71,6 @@ import Types
   , StakingType(Bonded)
   )
 import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( findRemoveOtherElem
   , getAssetsToConsume

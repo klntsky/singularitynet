@@ -11,7 +11,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE'
   , liftedM
   , throwContractError
@@ -29,7 +28,7 @@ import Contract.PlutusData
   )
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
-import Contract.Scripts (validatorHash)
+import Contract.Scripts (ValidatorHash, validatorHash)
 import Contract.Transaction
   ( TransactionInput
   , TransactionOutputWithRefScript
@@ -52,7 +51,6 @@ import Settings
   , confirmationTimeout
   , submissionAttempts
   )
-import Contract.Scripts (ValidatorHash)
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedPoolParams(UnbondedPoolParams)

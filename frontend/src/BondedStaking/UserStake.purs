@@ -12,7 +12,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -25,6 +24,7 @@ import Contract.Log
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.PlutusData
   ( PlutusData
+  , Redeemer(Redeemer)
   , Datum(Datum)
   , fromData
   , getDatumByHash
@@ -33,10 +33,8 @@ import Contract.PlutusData
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( BalancedSignedTransaction
-  , balanceTx
+  ( balanceTx
   , signTransaction
-  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -66,7 +64,6 @@ import Types
   , MintingAction(MintHead)
   , StakingType(Bonded)
   )
-import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( findInsertUpdateElem
   , getUtxoWithNFT

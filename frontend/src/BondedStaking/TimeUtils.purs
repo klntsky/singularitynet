@@ -11,17 +11,31 @@ module BondedStaking.TimeUtils
 
 import Contract.Prelude
 
-import Contract.Monad (Contract, liftContractE, liftContractM, throwContractError)
-import Contract.Numeric.Natural (Natural)
-import Contract.Numeric.Natural (toBigInt)
-import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange)
-import Contract.Time (Slot, getEraSummaries, getSystemStart, mkFiniteInterval, slotToPosixTime)
+import Contract.Monad
+  ( Contract
+  , liftContractE
+  , liftContractM
+  , throwContractError
+  )
+import Contract.Numeric.Natural (Natural, toBigInt)
+import Contract.Time
+  ( Slot
+  , getEraSummaries
+  , getSystemStart
+  , mkFiniteInterval
+  , slotToPosixTime
+  , POSIXTime(POSIXTime)
+  , POSIXTimeRange
+  )
 import Control.Alternative (guard)
 import Ctl.Internal.Types.Interval (posixTimeRangeToTransactionValidity)
 import Data.Array (head)
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
-import Types (BondedPoolParams(BondedPoolParams), InitialBondedParams(InitialBondedParams))
+import Types
+  ( BondedPoolParams(BondedPoolParams)
+  , InitialBondedParams(InitialBondedParams)
+  )
 import Utils (big, bigIntRange, currentRoundedTime)
 
 -- | Get the time-range that includes the current (approximate) time and the

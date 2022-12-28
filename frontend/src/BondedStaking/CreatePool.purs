@@ -11,21 +11,11 @@ import Contract.Address
   )
 import Contract.Log (logAesonInfo, logWarn')
 import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
-import Contract.PlutusData
-  ( DataHash(..)
-  , Datum(Datum)
-  , OutputDatum(..)
-  , PlutusData
-  , datumHash
-  , fromData
-  , getDatumsByHashes
-  , toData
-  )
+import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionOutputWithRefScript(..)
+  ( TransactionOutputWithRefScript
   , balanceTx
   , signTransaction
   )

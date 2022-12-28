@@ -7,7 +7,15 @@ import ClosePool (closeBondedPoolContract)
 import Contract.Address (NetworkId(TestnetId))
 import Contract.Config (WalletSpec(..), defaultKupoServerConfig)
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, defaultDatumCacheWsConfig, defaultOgmiosWsConfig, defaultServerConfig, launchAff_, liftContractM, runContract)
+import Contract.Monad
+  ( Contract
+  , defaultDatumCacheWsConfig
+  , defaultOgmiosWsConfig
+  , defaultServerConfig
+  , launchAff_
+  , liftContractM
+  , runContract
+  )
 import Contract.Numeric.Natural as Natural
 import Contract.Time (POSIXTime(..))
 import CreatePool (createBondedPoolContract)

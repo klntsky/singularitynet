@@ -5,30 +5,67 @@ module UnbondedStaking.CreatePool
 
 import Contract.Prelude
 
-import Contract.Address (Bech32String, addressToBech32, getWalletAddress, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Address
+  ( Bech32String
+  , addressToBech32
+  , getWalletAddress
+  , ownPaymentPubKeyHash
+  , scriptHashAddress
+  )
 import Contract.Log (logWarn')
-import Contract.Monad (Contract, liftContractM, liftContractM, liftedE, liftedE', liftedM)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , liftedE
+  , liftedE'
+  , liftedM
+  )
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Time (POSIXTime(POSIXTime))
-import Contract.Transaction (BalancedSignedTransaction, TransactionHash, TransactionOutputWithRefScript(..), balanceTx, signTransaction)
-import Contract.TxConstraints (TxConstraints, mustMintValue, mustSpendPubKeyOutput)
+import Contract.Transaction
+  ( TransactionOutputWithRefScript
+  , balanceTx
+  , signTransaction
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustMintValue
+  , mustSpendPubKeyOutput
+  )
 import Contract.Utxos (utxosAt)
-import Contract.Value (CurrencySymbol, Value, flattenValue, scriptCurrencySymbol, singleton)
+import Contract.Value
+  ( CurrencySymbol
+  , Value
+  , flattenValue
+  , scriptCurrencySymbol
+  , singleton
+  )
 import Control.Monad.Error.Class (liftMaybe)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
 import Effect.Exception as Exception
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
-import Settings (confirmationTimeout, submissionAttempts, unbondedStakingTokenName)
+import Settings
+  ( confirmationTimeout
+  , submissionAttempts
+  , unbondedStakingTokenName
+  )
 import Types (StakingType(Unbonded))
-import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams), UnbondedPoolParams, UnbondedStakingDatum(StateDatum))
+import UnbondedStaking.Types
+  ( InitialUnbondedParams
+  , UnbondedPoolParams
+  , UnbondedStakingDatum(StateDatum)
+  )
 import UnbondedStaking.Utils (mkUnbondedPoolParams)
-import Utils (addressFromBech32, currentRoundedTime, logInfo_, mustPayToScript, repeatUntilConfirmed)
+import Utils
+  ( addressFromBech32
+  , logInfo_
+  , mustPayToScript
+  , repeatUntilConfirmed
+  )
 
 -- Sets up pool configuration, mints the state NFT and deposits
 -- in the pool validator's address

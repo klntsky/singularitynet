@@ -10,7 +10,13 @@ module UnbondedStaking.Utils
 import Contract.Prelude hiding (length)
 
 import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
-import Contract.Monad (Contract, liftContractM, throwContractError, liftedE', liftedM)
+import Contract.Monad
+  ( Contract
+  , liftContractM
+  , throwContractError
+  , liftedE'
+  , liftedM
+  )
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.PlutusData (getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
@@ -23,8 +29,19 @@ import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
 import Data.BigInt as BigInt
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import UnbondedStaking.Types (UnbondedPoolParams(UnbondedPoolParams), InitialUnbondedParams(InitialUnbondedParams), Entry(..), UnbondedStakingDatum(..))
-import Utils (big, currentRoundedTime, mkRatUnsafe, getUtxoDatumHash, mkOnchainAssocList)
+import UnbondedStaking.Types
+  ( UnbondedPoolParams(UnbondedPoolParams)
+  , InitialUnbondedParams(InitialUnbondedParams)
+  , Entry(..)
+  , UnbondedStakingDatum(..)
+  )
+import Utils
+  ( big
+  , currentRoundedTime
+  , mkRatUnsafe
+  , getUtxoDatumHash
+  , mkOnchainAssocList
+  )
 
 -- | Admin deposit/closing
 getAdminTime
@@ -49,7 +66,8 @@ getAdminTime (UnbondedPoolParams upp) = do
     isWithinPeriod currTime' cycleLength adminStart adminEnd
   pure
     { currTime
-    , range: mkFiniteInterval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
+    , range: mkFiniteInterval (POSIXTime start)
+        (POSIXTime $ end + BigInt.fromInt 1)
     }
 
 -- | User deposits/withdrawals
@@ -75,7 +93,8 @@ getUserTime (UnbondedPoolParams upp) = do
     isWithinPeriod currTime' cycleLength userStart userEnd
   pure
     { currTime
-    , range: mkFiniteInterval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
+    , range: mkFiniteInterval (POSIXTime start)
+        (POSIXTime $ end + BigInt.fromInt 1)
     }
 
 -- | User withdrawals only

@@ -11,7 +11,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE'
   , liftedM
   , throwContractError
@@ -19,6 +18,7 @@ import Contract.Monad
 import Contract.Log (logInfo')
 import Contract.PlutusData
   ( Datum(..)
+  , Redeemer(Redeemer)
   , PlutusData
   , fromData
   , getDatumByHash
@@ -50,7 +50,6 @@ import Types
   , BondedStakingDatum
   )
 import Contract.Numeric.Natural (Natural)
-import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( getUtxoWithNFT
   , logInfo_
