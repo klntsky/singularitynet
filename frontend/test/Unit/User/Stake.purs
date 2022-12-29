@@ -9,7 +9,7 @@ import Control.Monad.Reader (ask, lift)
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Tuple.Nested (type (/\), (/\))
-import Test.Common
+import SNet.Test.Common
   ( getUserWallet
   , getWalletFakegix
   , withKeyWallet

@@ -1,4 +1,4 @@
-module Test.Unit.Admin.Close (test) where
+module SNet.Test.Unit.Admin.Close (test) where
 
 import Prelude
 
@@ -6,7 +6,12 @@ import Contract.Monad (Contract, throwContractError)
 import Contract.Test.Plutip (PlutipTest)
 import Control.Monad.Reader (ask, lift)
 import Data.Array as Array
-import Test.Common (getAdminWallet, waitFor, withKeyWallet, withWalletsAndPool)
+import SNet.Test.Common
+  ( getAdminWallet
+  , waitFor
+  , withKeyWallet
+  , withWalletsAndPool
+  )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import Utils (nat)

@@ -1,4 +1,4 @@
-module Test.Unit.Admin.DepositEmpty (test) where
+module SNet.Test.Unit.Admin.DepositEmpty (test) where
 
 import Prelude
 
@@ -7,7 +7,7 @@ import Contract.Test.Plutip (PlutipTest)
 import Control.Monad.Reader (ask, lift)
 import Data.Array as Array
 import Data.BigInt as BigInt
-import Test.Common
+import SNet.Test.Common
   ( getAdminWallet
   , getWalletFakegix
   , waitFor

@@ -1,10 +1,10 @@
-module Test.Unit.Admin.Open (test) where
+module SNet.Test.Unit.Admin.Open (test) where
 
 import Prelude
 
 import Contract.Monad (Contract)
 import Contract.Test.Plutip (PlutipTest)
-import Test.Common (withWalletsAndPool)
+import SNet.Test.Common (withWalletsAndPool)
 import UnbondedStaking.Types (SnetInitialParams)
 
 -- | The admin opens the pool

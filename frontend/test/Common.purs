@@ -1,4 +1,4 @@
-module Test.Common
+module SNet.Test.Common
   ( fakegixTokenName
   , testInitialParams
   , testInitialParamsNoTimeChecks
@@ -67,7 +67,7 @@ import Effect.Aff (delay)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception as Exception
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
-import Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
+import SNet.Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
 import UnbondedStaking.Types

@@ -1,4 +1,4 @@
-module Test.Unit.Admin.CloseNUser (test) where
+module SNet.Test.Unit.Admin.CloseNUser (test) where
 
 import Prelude
 
@@ -12,7 +12,7 @@ import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
-import Test.Common
+import SNet.Test.Common
   ( getAdminWallet
   , getUserWallet
   , getWalletFakegix

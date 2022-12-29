@@ -1,4 +1,4 @@
-module Tests.Scripts.AlwaysSucceedsMp
+module SNet.Tests.Scripts.AlwaysSucceedsMp
   ( mkTrivialPolicy
   ) where
 

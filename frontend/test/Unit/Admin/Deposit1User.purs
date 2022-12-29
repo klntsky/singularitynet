@@ -1,4 +1,4 @@
-module Test.Unit.Admin.Deposit1User (test) where
+module SNet.Test.Unit.Admin.Deposit1User (test) where
 
 import Prelude
 
@@ -10,7 +10,7 @@ import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Tuple.Nested (type (/\), (/\))
-import Test.Common
+import SNet.Test.Common
   ( getAdminWallet
   , getUserWallet
   , getWalletFakegix
