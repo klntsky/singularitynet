@@ -10,46 +10,29 @@ module SNet.Test.Common
   , getUserWallet
   , getWalletFakegix
   , getPoolFakegix
+  , localPlutipCfg
+  , localPlutipCfgLongSlots
+  , testConfig
+  , testConfigLongTimeout
   ) where
 
 import Prelude
 
-import Contract.Address
-  ( PaymentPubKeyHash
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (PaymentPubKeyHash, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Config (LogLevel(..), emptyHooks)
 import Contract.Log (logDebug')
 import Contract.Monad (Contract, liftedE, liftedM, throwContractError)
 import Contract.Numeric.Rational ((%))
 import Contract.Prelude (mconcat)
 import Contract.Prim.ByteArray (byteArrayFromAscii)
-import Contract.ScriptLookups
-  ( ScriptLookups
-  , mintingPolicy
-  , mkUnbalancedTx
-  , unspentOutputs
-  )
+import Contract.ScriptLookups (ScriptLookups, mintingPolicy, mkUnbalancedTx, unspentOutputs)
 import Contract.Scripts (MintingPolicy, validatorHash)
-import Contract.Test.Plutip (PlutipTest, InitialUTxOs, withWallets)
+import Contract.Test.Plutip (InitialUTxOs, PlutipTest, PlutipConfig, withWallets)
 import Contract.Test.Plutip as Plutip
-import Contract.Transaction
-  ( awaitTxConfirmed
-  , balanceTx
-  , signTransaction
-  , submit
-  )
+import Contract.Transaction (awaitTxConfirmed, balanceTx, signTransaction, submit)
 import Contract.TxConstraints (TxConstraints, mustMintValue, mustPayToPubKey)
 import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  , Value
-  , mkTokenName
-  , scriptCurrencySymbol
-  , singleton
-  , valueOf
-  )
+import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton, valueOf)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
 import Control.Monad.Reader (ask, lift, runReaderT)
@@ -60,28 +43,21 @@ import Data.BigInt as BigInt
 import Data.Foldable (foldMap, sum)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap, wrap)
+import Data.Time.Duration (Seconds(..), fromDuration)
 import Data.Traversable (traverse)
 import Data.Tuple (fst, snd, uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
+import Data.UInt as UInt
 import Effect.Aff (delay)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception as Exception
-import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import SNet.Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
+import Scripts.PoolValidator (mkUnbondedPoolValidator)
+import Test.Spec.Runner (Config)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
-import UnbondedStaking.Types
-  ( InitialUnbondedParams(..)
-  , Period(..)
-  , SnetInitialParams
-  , UnbondedPoolParams(..)
-  , SnetContract
-  )
-import UnbondedStaking.Utils
-  ( getNextPeriodRange
-  , getPeriodRange
-  , queryStateUnbonded
-  )
+import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), SnetInitialParams, UnbondedPoolParams(..), SnetContract)
+import UnbondedStaking.Utils (getNextPeriodRange, getPeriodRange, queryStateUnbonded)
 import Utils (currentRoundedTime, currentTime, nat)
 
 fakegixTokenName :: Contract () TokenName
@@ -104,7 +80,7 @@ getFakegixData = do
 testInitialParams :: Contract () SnetInitialParams
 testInitialParams = do
   (_ /\ fakegixCs /\ fakegixTn) <- getFakegixData
-  let periodLen = BigInt.fromInt 5_000
+  let periodLen = BigInt.fromInt 25_000
   interest <-
     liftMaybe (Exception.error "testInitialParams: could not make Rational") $ 1
       % 100
@@ -131,7 +107,17 @@ testInitialParams = do
 testInitialParamsNoTimeChecks :: Contract () SnetInitialParams
 testInitialParamsNoTimeChecks = do
   initParams <- testInitialParams
-  pure $ initParams { scriptVersion = DebugNoTimeChecks }
+  let iup = unwrap initParams.initialUnbondedParams
+      newPeriodLen = BigInt.fromInt 5_000
+  pure
+     { initialUnbondedParams: InitialUnbondedParams $ iup
+       { adminLength = newPeriodLen
+       , bondingLength = newPeriodLen
+       , userLength = newPeriodLen
+       , interestLength = newPeriodLen
+       }
+     , scriptVersion: DebugNoTimeChecks
+     }
 
 adminInitialUtxos :: InitialUTxOs /\ BigInt
 adminInitialUtxos = (BigInt.fromInt <$> [ 10_000_000, 200_000_000 ]) /\
@@ -324,3 +310,58 @@ utxosFakegix utxos = do
     (_.amount <<< unwrap <<< _.output <<< unwrap) $ utxos
   where
   valueOf' cs tn v = valueOf v cs tn
+
+testConfig :: Config
+testConfig =
+  { slow: wrap 90.0
+  , timeout: Just $ fromDuration $ Seconds 50.0
+  , exit: true
+  }
+
+testConfigLongTimeout :: Config
+testConfigLongTimeout =
+  { slow: wrap 400.0
+  , timeout: Just $ fromDuration $ Seconds 400.0
+  , exit: true
+  }
+
+localPlutipCfg :: PlutipConfig
+localPlutipCfg =
+  { host: "127.0.0.1"
+  , port: UInt.fromInt 8082
+  , logLevel: Info
+  , clusterConfig: { slotLength: Seconds 0.1 }
+  -- Server configs are used to deploy the corresponding services. 
+  , ogmiosConfig:
+      { port: UInt.fromInt 1338
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , kupoConfig:
+      { port: UInt.fromInt 1443
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , ogmiosDatumCacheConfig:
+      { port: UInt.fromInt 10000
+      , host: "127.0.0.1"
+      , secure: false
+      , path: Nothing
+      }
+  , postgresConfig:
+      { host: "127.0.0.1"
+      , port: UInt.fromInt 5433
+      , user: "ctxlib"
+      , password: "ctxlib"
+      , dbname: "ctxlib"
+      }
+  , suppressLogs: false
+  , customLogger: Nothing
+  , hooks: emptyHooks
+  }
+
+localPlutipCfgLongSlots :: PlutipConfig
+localPlutipCfgLongSlots = localPlutipCfg
+  { clusterConfig = { slotLength: Seconds 1.0 } }

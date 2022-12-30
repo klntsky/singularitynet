@@ -15,23 +15,12 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , throwContractError
-  , liftedE'
-  , liftedM
-  )
+import Contract.Monad (Contract, liftContractE, liftContractM, liftedE', liftedM, throwContractError)
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.PlutusData (getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Scripts (validatorHash)
-import Contract.Time
-  ( POSIXTime(POSIXTime)
-  , POSIXTimeRange
-  , always
-  , mkFiniteInterval
-  )
+import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, always, mkFiniteInterval)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.Utxos (utxosAt)
 import Contract.Value (CurrencySymbol)
@@ -42,20 +31,8 @@ import Data.Map as Map
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings (unbondedStakingTokenName)
 import Types (ScriptVersion(..))
-import UnbondedStaking.Types
-  ( Entry(..)
-  , InitialUnbondedParams(InitialUnbondedParams)
-  , UnbondedPoolParams(UnbondedPoolParams)
-  , UnbondedStakingDatum(..)
-  )
-import Utils
-  ( big
-  , currentRoundedTime
-  , getUtxoDatumHash
-  , mkOnchainAssocList
-  , mkRatUnsafe
-  , valueOf'
-  )
+import UnbondedStaking.Types (Entry(..), InitialUnbondedParams(InitialUnbondedParams), PeriodError(..), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingDatum(..))
+import Utils (big, currentRoundedTime, getUtxoDatumHash, mkOnchainAssocList, mkRatUnsafe, valueOf')
 
 -- | Admin deposit/closing
 getAdminTime
@@ -78,7 +55,7 @@ getAdminTime (UnbondedPoolParams upp) = case _ of
       adminEnd :: BigInt
       adminEnd = adminStart + upp.adminLength - big 1000
     -- Return range
-    start /\ end <- liftContractM "getAdminTime: this is not a admin period" $
+    start /\ end <- liftContractE $
       getContainingPeriodRange currTime' upp.start cycleLength adminStart
         adminEnd
     pure
@@ -109,8 +86,7 @@ getUserTime (UnbondedPoolParams upp) = case _ of
       userEnd :: BigInt
       userEnd = userStart + upp.userLength - big 1000
     -- Return range
-    start /\ end <- liftContractM "getUserTime: this is not a user period" $
-      getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
+    start /\ end <- liftContractE $ getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
     pure
       { currTime
       , range: mkFiniteInterval (POSIXTime start)
@@ -154,18 +130,18 @@ getUserOrBondingTime (UnbondedPoolParams upp) = case _ of
         bondingEnd
 
       getPeriod
-        :: Maybe (Tuple BigInt BigInt)
-        -> Maybe (Tuple BigInt BigInt)
-        -> Maybe (Tuple BigInt BigInt)
+        :: Either PeriodError (Tuple BigInt BigInt)
+        -> Either PeriodError (Tuple BigInt BigInt)
+        -> Either (Array PeriodError) (Tuple BigInt BigInt)
       getPeriod user bonding = case user /\ bonding of
-        user' /\ Nothing -> user'
-        Nothing /\ bonding' -> bonding'
-        _ /\ _ -> Nothing
+        Right user' /\ Left _ -> pure user'
+        Left _ /\ Right bonding' -> pure bonding'
+        Left e1 /\ Left e2 -> Left [e1, e2]
+        -- This case is impossible, we just return the user period
+        Right user' /\ _ -> pure user'
     -- Return range
     start /\ end <-
-      liftContractM "getUserTime: this is not a user/bonding period"
-        $
-          getPeriod userPeriod bondingPeriod
+      liftContractE  $ getPeriod userPeriod bondingPeriod
     pure
       { currTime
       , range: mkFiniteInterval (POSIXTime start)
@@ -185,23 +161,25 @@ getContainingPeriodRange
   -> BigInt
   -> BigInt
   -> BigInt
-  -> Maybe (Tuple BigInt BigInt)
+  -> Either PeriodError (Tuple BigInt BigInt)
 getContainingPeriodRange
   currentTime
   baseOffset
   cycleLength
   startOffset
   endOffset =
-  if start <= currentTime && currentTime < end then Just periodRange
-  else Nothing
-  where
-  periodRange@(start /\ end) =
-    getPeriodRange
-      currentTime
-      baseOffset
-      cycleLength
-      startOffset
-      endOffset
+      let periodRange@(start /\ end) =
+               getPeriodRange
+                 currentTime
+                 baseOffset
+                 cycleLength
+                 startOffset
+                 endOffset
+          errInfo = { current: wrap currentTime, start: wrap start, end: wrap end }
+      in case unit of
+          _ | currentTime < start -> Left $ TooSoon errInfo
+            | currentTime >= end -> Left $ TooLate errInfo
+            | otherwise -> Right periodRange
 
 -- | Creates the `UnbondedPoolParams` from the `InitialUnbondedParams` and
 -- | runtime parameters from the user.
