@@ -12,10 +12,11 @@ import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
   ( getUserWallet
   , getWalletFakegix
+  , waitFor
   , withKeyWallet
   , withWalletsAndPool
   )
-import UnbondedStaking.Types (SnetInitialParams)
+import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import Utils (nat)
 
@@ -23,10 +24,11 @@ bobInitialUtxos :: InitialUTxOs /\ BigInt
 bobInitialUtxos = map BigInt.fromInt [ 10_000_000, 100_000_000 ] /\
   (BigInt.fromInt 1_000_000_000)
 
--- | The admin deposits to a pool with one user entry
+-- | The user stakes once in the pool
 test :: Contract () SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [ bobInitialUtxos ] \wallets ->
   do
+    waitFor UserPeriod
     bobWallet <- getUserWallet 0 wallets
     withKeyWallet bobWallet do
       let stakeAmt = nat 2000
