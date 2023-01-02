@@ -72,7 +72,7 @@ import UnbondedStaking.Types
   , UnbondedStakingAction(WithdrawAct)
   , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   )
-import UnbondedStaking.Utils (getUserOrBondingTime)
+import UnbondedStaking.Utils (getClosingTime, getUserOrBondingTime)
 import Utils
   ( findRemoveOtherElem
   , getAssetsToConsume
@@ -161,12 +161,6 @@ userWithdrawUnbondedPoolContract
     -- Get the minting policy and currency symbol from the list NFT:
     listPolicy <- liftedE $ mkListNFTPolicy Unbonded scriptVersion nftCs
 
-    -- Get the staking range to use
-    logInfo' "userWithdrawUnbondedPoolContract: Getting user range..."
-    { currTime, range } <- getUserOrBondingTime params scriptVersion
-    logInfo_ "userWithdrawUnbondedPoolContract: Current time: " $ show currTime
-    logInfo_ "userWithdrawUnbondedPoolContract: TX Range" range
-
     -- Get the token name for the user by hashing
     assocListTn <-
       liftContractM
@@ -182,6 +176,15 @@ userWithdrawUnbondedPoolContract
         $ getUtxoWithNFT unbondedPoolUtxos assocListCs assocListTn
     userEntry <- unwrap <$> getEntryDatumFromOutput entryOutput
     logInfo_ "userWithdrawUnbondedPoolContract: entry to consume" userEntry
+
+    -- Get the staking range to use
+    logInfo' "userWithdrawUnbondedPoolContract: Getting user range..."
+    { currTime, range } <-
+      if userEntry.open then getUserOrBondingTime params scriptVersion
+      else getClosingTime params scriptVersion
+    logInfo_ "userWithdrawUnbondedPoolContract: Current time: " $ show currTime
+    logInfo_ "userWithdrawUnbondedPoolContract: TX Range" range
+
     -- Build useful values for later
     let
       burnEntryValue = singleton assocListCs assocListTn (-one)

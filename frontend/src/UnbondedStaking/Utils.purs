@@ -3,6 +3,7 @@ module UnbondedStaking.Utils
   , getAdminTime
   , getUserOrBondingTime
   , getUserTime
+  , getClosingTime
   , getContainingPeriodRange
   , getPeriodRange
   , getNextPeriodRange
@@ -15,12 +16,25 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address (PaymentPubKeyHash, scriptHashAddress)
 import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractE, liftContractM, liftedE', liftedM, throwContractError)
+import Contract.Monad
+  ( Contract
+  , liftContractE
+  , liftContractM
+  , liftedE'
+  , liftedM
+  , throwContractError
+  )
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.PlutusData (getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Scripts (validatorHash)
-import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, always, mkFiniteInterval)
+import Contract.Time
+  ( POSIXTime(POSIXTime)
+  , POSIXTimeRange
+  , always
+  , from
+  , mkFiniteInterval
+  )
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.Utxos (utxosAt)
 import Contract.Value (CurrencySymbol)
@@ -31,8 +45,21 @@ import Data.Map as Map
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings (unbondedStakingTokenName)
 import Types (ScriptVersion(..))
-import UnbondedStaking.Types (Entry(..), InitialUnbondedParams(InitialUnbondedParams), PeriodError(..), UnbondedPoolParams(UnbondedPoolParams), UnbondedStakingDatum(..))
-import Utils (big, currentRoundedTime, getUtxoDatumHash, mkOnchainAssocList, mkRatUnsafe, valueOf')
+import UnbondedStaking.Types
+  ( Entry(..)
+  , InitialUnbondedParams(InitialUnbondedParams)
+  , PeriodError(..)
+  , UnbondedPoolParams(UnbondedPoolParams)
+  , UnbondedStakingDatum(..)
+  )
+import Utils
+  ( big
+  , currentRoundedTime
+  , getUtxoDatumHash
+  , mkOnchainAssocList
+  , mkRatUnsafe
+  , valueOf'
+  )
 
 -- | Admin deposit/closing
 getAdminTime
@@ -86,7 +113,10 @@ getUserTime (UnbondedPoolParams upp) = case _ of
       userEnd :: BigInt
       userEnd = userStart + upp.userLength - big 1000
     -- Return range
-    start /\ end <- liftContractE $ getContainingPeriodRange currTime' upp.start cycleLength userStart userEnd
+    start /\ end <- liftContractE $ getContainingPeriodRange currTime' upp.start
+      cycleLength
+      userStart
+      userEnd
     pure
       { currTime
       , range: mkFiniteInterval (POSIXTime start)
@@ -95,7 +125,9 @@ getUserTime (UnbondedPoolParams upp) = case _ of
   DebugNoTimeChecks -> noTimeChecks "getUserTime"
 
 -- | User withdrawals only
--- | Note: Period can either be in bonding period or user period
+-- Note: A user may also withdraw when the pool is closed. This case
+-- is handled separately and not here, which means this function should *not*
+-- be called before checking if the pool is open or not.
 getUserOrBondingTime
   :: forall (r :: Row Type)
    . UnbondedPoolParams
@@ -136,18 +168,35 @@ getUserOrBondingTime (UnbondedPoolParams upp) = case _ of
       getPeriod user bonding = case user /\ bonding of
         Right user' /\ Left _ -> pure user'
         Left _ /\ Right bonding' -> pure bonding'
-        Left e1 /\ Left e2 -> Left [e1, e2]
+        Left e1 /\ Left e2 -> Left [ e1, e2 ]
         -- This case is impossible, we just return the user period
         Right user' /\ _ -> pure user'
     -- Return range
     start /\ end <-
-      liftContractE  $ getPeriod userPeriod bondingPeriod
+      liftContractE $ getPeriod userPeriod bondingPeriod
     pure
       { currTime
       , range: mkFiniteInterval (POSIXTime start)
           (POSIXTime $ end + BigInt.fromInt 1)
       }
   DebugNoTimeChecks -> noTimeChecks "getBondingTime"
+
+-- | It returns the current time and a range from it up to `currTime + adminLength`.
+-- NOTE: This function _assumes_ the pool is already closed.
+getClosingTime
+  :: forall (r :: Row Type)
+   . UnbondedPoolParams
+  -> ScriptVersion
+  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+getClosingTime (UnbondedPoolParams ubp) Production = do
+  currTime <- currentRoundedTime
+  let rangeLen = ubp.adminLength
+  pure
+    { currTime
+    , range: mkFiniteInterval currTime $ wrap $ unwrap currTime + rangeLen
+    }
+getClosingTime _ DebugNoTimeChecks = noTimeChecks
+  "getClosingTime"
 
 -- | Returns the period's range if it contain the `currentTime`.
 --
@@ -168,18 +217,21 @@ getContainingPeriodRange
   cycleLength
   startOffset
   endOffset =
-      let periodRange@(start /\ end) =
-               getPeriodRange
-                 currentTime
-                 baseOffset
-                 cycleLength
-                 startOffset
-                 endOffset
-          errInfo = { current: wrap currentTime, start: wrap start, end: wrap end }
-      in case unit of
-          _ | currentTime < start -> Left $ TooSoon errInfo
-            | currentTime >= end -> Left $ TooLate errInfo
-            | otherwise -> Right periodRange
+  let
+    periodRange@(start /\ end) =
+      getPeriodRange
+        currentTime
+        baseOffset
+        cycleLength
+        startOffset
+        endOffset
+    errInfo = { current: wrap currentTime, start: wrap start, end: wrap end }
+  in
+    case unit of
+      _
+        | currentTime < start -> Left $ TooSoon errInfo
+        | currentTime >= end -> Left $ TooLate errInfo
+        | otherwise -> Right periodRange
 
 -- | Creates the `UnbondedPoolParams` from the `InitialUnbondedParams` and
 -- | runtime parameters from the user.
