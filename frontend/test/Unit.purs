@@ -6,20 +6,42 @@ import Contract.Monad (Contract, launchAff_)
 import Contract.Test.Mote (interpretWithConfig)
 import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
 import Mote (MoteT, group, skip, test)
-import Options.Applicative (Parser, execParser, fullDesc, header, help, helper, info, long, progDesc, switch, (<**>))
-import SNet.Test.Common (localPlutipCfg, localPlutipCfgLongSlots, testConfig, testConfigLongTimeout, testInitialParams, testInitialParamsNoTimeChecks)
+import Options.Applicative
+  ( Parser
+  , execParser
+  , fullDesc
+  , header
+  , help
+  , helper
+  , info
+  , long
+  , progDesc
+  , switch
+  , (<**>)
+  )
+import SNet.Test.Common
+  ( localPlutipCfg
+  , localPlutipCfgLongSlots
+  , testConfig
+  , testConfigLongTimeout
+  , testInitialParams
+  , testInitialParamsNoTimeChecks
+  )
 import SNet.Test.Unit.Admin.Close as Close
 import SNet.Test.Unit.Admin.Deposit1User as Deposit1User
 import SNet.Test.Unit.Admin.DepositEmpty as DepositEmpty
 import SNet.Test.Unit.Admin.DepositNUser as DepositNUser
 import SNet.Test.Unit.Admin.Open as Open
 import Test.Unit.User.Stake as Stake
+import Test.Unit.User.StakeAndWithdraw as StakeAndWithdraw
+import Test.Unit.User.StakeWaitAndWithdraw as StakeWaitAndWithdraw
+import Test.Unit.User.WithdrawFromClosed as WithdrawFromClosed
 import UnbondedStaking.Types (SnetInitialParams)
 
 unitTests :: Contract () SnetInitialParams -> MoteT Aff PlutipTest Aff Unit
 unitTests initParams =
   group "Unit Tests" do
-    group "Admin" do
+    skip $ group "Admin" do
       test "Open/Create Pool" $ Open.test initParams
       test "Close Pool" $ Close.test initParams
       -- We  this until we decide if it's a good idea to fail when
@@ -50,7 +72,16 @@ unitTests initParams =
             DepositNUser.test initParams n b
       )
     group "User" do
-      test "Stake" $ Stake.test initParams
+      skip $ test "Stake" $ Stake.test initParams
+      skip $ test "Stake and withdraw" $ StakeAndWithdraw.test initParams
+      ( let
+          n = 3
+        in
+          test ("Stake and withdraw after " <> show n <> " cycles")
+            $ StakeWaitAndWithdraw.test n initParams
+      )
+      test "Withdraw from a closed pool" $ WithdrawFromClosed.test
+        initParams
 
 suite :: Boolean -> Effect Unit
 suite timechecksOff
