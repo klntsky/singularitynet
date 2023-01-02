@@ -18,46 +18,95 @@ module SNet.Test.Common
 
 import Prelude
 
-import Contract.Address (PaymentPubKeyHash, ownPaymentPubKeyHash, scriptHashAddress)
-import Contract.Config (LogLevel(..), emptyHooks)
+import Contract.Address
+  ( PaymentPubKeyHash
+  , StakePubKeyHash
+  , ownPaymentPubKeyHash
+  , ownStakePubKeyHash
+  , scriptHashAddress
+  )
+import Contract.Config
+  ( LogLevel(..)
+  , PrivateStakeKey
+  , emptyHooks
+  , privateKeyFromBytes
+  )
 import Contract.Log (logDebug')
 import Contract.Monad (Contract, liftedE, liftedM, throwContractError)
 import Contract.Numeric.Rational ((%))
 import Contract.Prelude (mconcat)
-import Contract.Prim.ByteArray (byteArrayFromAscii)
-import Contract.ScriptLookups (ScriptLookups, mintingPolicy, mkUnbalancedTx, unspentOutputs)
+import Contract.Prim.ByteArray (byteArrayFromAscii, hexToRawBytes)
+import Contract.ScriptLookups
+  ( ScriptLookups
+  , mintingPolicy
+  , mkUnbalancedTx
+  , unspentOutputs
+  )
 import Contract.Scripts (MintingPolicy, validatorHash)
-import Contract.Test.Plutip (InitialUTxOs, PlutipTest, PlutipConfig, withWallets)
+import Contract.Test.Plutip
+  ( InitialUTxOs
+  , PlutipConfig
+  , PlutipTest
+  , withStakeKey
+  , withWallets
+  )
 import Contract.Test.Plutip as Plutip
-import Contract.Transaction (awaitTxConfirmed, balanceTx, signTransaction, submit)
-import Contract.TxConstraints (TxConstraints, mustMintValue, mustPayToPubKey)
+import Contract.Transaction
+  ( awaitTxConfirmed
+  , balanceTx
+  , signTransaction
+  , submit
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustMintValue
+  , mustPayToPubKeyAddress
+  )
 import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
-import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton, valueOf)
+import Contract.Value
+  ( CurrencySymbol
+  , TokenName
+  , Value
+  , mkTokenName
+  , scriptCurrencySymbol
+  , singleton
+  , valueOf
+  )
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
 import Control.Monad.Reader (ask, lift, runReaderT)
 import Data.Array as Array
-import Data.Bifunctor (rmap)
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Foldable (foldMap, sum)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Newtype (unwrap, wrap)
 import Data.Time.Duration (Seconds(..), fromDuration)
 import Data.Traversable (traverse)
-import Data.Tuple (fst, snd, uncurry)
+import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UInt as UInt
 import Effect.Aff (delay)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception as Exception
+import Partial.Unsafe (unsafePartial)
 import SNet.Tests.Scripts.AlwaysSucceedsMp (mkTrivialPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Test.Spec.Runner (Config)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
-import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), SnetInitialParams, UnbondedPoolParams(..), SnetContract)
-import UnbondedStaking.Utils (getNextPeriodRange, getPeriodRange, queryStateUnbonded)
+import UnbondedStaking.Types
+  ( InitialUnbondedParams(..)
+  , Period(..)
+  , SnetInitialParams
+  , UnbondedPoolParams(..)
+  , SnetContract
+  )
+import UnbondedStaking.Utils
+  ( getNextPeriodRange
+  , getPeriodRange
+  , queryStateUnbonded
+  )
 import Utils (currentRoundedTime, currentTime, nat)
 
 fakegixTokenName :: Contract () TokenName
@@ -107,17 +156,18 @@ testInitialParams = do
 testInitialParamsNoTimeChecks :: Contract () SnetInitialParams
 testInitialParamsNoTimeChecks = do
   initParams <- testInitialParams
-  let iup = unwrap initParams.initialUnbondedParams
-      newPeriodLen = BigInt.fromInt 5_000
+  let
+    iup = unwrap initParams.initialUnbondedParams
+    newPeriodLen = BigInt.fromInt 5_000
   pure
-     { initialUnbondedParams: InitialUnbondedParams $ iup
-       { adminLength = newPeriodLen
-       , bondingLength = newPeriodLen
-       , userLength = newPeriodLen
-       , interestLength = newPeriodLen
-       }
-     , scriptVersion: DebugNoTimeChecks
-     }
+    { initialUnbondedParams: InitialUnbondedParams $ iup
+        { adminLength = newPeriodLen
+        , bondingLength = newPeriodLen
+        , userLength = newPeriodLen
+        , interestLength = newPeriodLen
+        }
+    , scriptVersion: DebugNoTimeChecks
+    }
 
 adminInitialUtxos :: InitialUTxOs /\ BigInt
 adminInitialUtxos = (BigInt.fromInt <$> [ 10_000_000, 200_000_000 ]) /\
@@ -212,31 +262,45 @@ withWalletsAndPool
   -> (Array KeyWallet -> SnetContract Unit)
   -> PlutipTest
 withWalletsAndPool initParamsContract distr contract =
-  withWallets (fst <$> Array.cons adminInitialUtxos distr) \wallets -> do
-    adminW <- liftMaybe (Exception.error "Could not get admin wallet") $
-      Array.head wallets
-    userPkhs <- dropMaybe <$> (traverse <<< traverse) getUserPkh
-      (Array.tail wallets)
-    -- Mint and distribute FAKEGIX
-    Plutip.withKeyWallet adminW
-      $ mintAndDistributeFakegix (snd adminInitialUtxos)
-      $ Array.zip userPkhs
-      $ snd <$> distr
-    logDebug' "FAKEGIX distributed succesfully!"
-    -- Create pool
-    { initialUnbondedParams, scriptVersion } <- initParamsContract
-    { unbondedPoolParams, address } <- Plutip.withKeyWallet adminW $
-      createUnbondedPoolContract initialUnbondedParams scriptVersion
-    logDebug' "Pool created succesfully!"
-    logDebug' $ "Pool parameters: " <> show unbondedPoolParams
-    logDebug' $ "Pool address: " <> show address
-    runReaderT (contract wallets) { unbondedPoolParams, scriptVersion }
+  withWallets
+    ( withStakeKey privateStakeKey <<< fst <$> Array.cons adminInitialUtxos
+        distr
+    )
+    \wallets -> do
+      adminW <- liftMaybe (Exception.error "Could not get admin wallet") $
+        Array.head wallets
+      (userPkhs /\ userSpkhs) <-
+        Array.unzip <<< dropMaybe <$>
+          (traverse <<< traverse)
+            (\w -> (/\) <$> getUserPkh w <*> getUserSpkh w)
+            (Array.tail wallets)
+      -- Mint and distribute FAKEGIX
+      Plutip.withKeyWallet adminW
+        $ mintAndDistributeFakegix (snd adminInitialUtxos)
+        $ Array.zip userPkhs
+        $ Array.zip userSpkhs
+        $ snd <$> distr
+      logDebug' "FAKEGIX distributed succesfully!"
+      -- Create pool
+      { initialUnbondedParams, scriptVersion } <- initParamsContract
+      { unbondedPoolParams, address } <- Plutip.withKeyWallet adminW $
+        createUnbondedPoolContract initialUnbondedParams scriptVersion
+      logDebug' "Pool created succesfully!"
+      logDebug' $ "Pool parameters: " <> show unbondedPoolParams
+      logDebug' $ "Pool address: " <> show address
+      runReaderT (contract wallets) { unbondedPoolParams, scriptVersion }
   where
   getUserPkh :: KeyWallet -> Contract () PaymentPubKeyHash
   getUserPkh w =
     Plutip.withKeyWallet w <<<
       liftedM "(getUserPkh) Could not user's PKH" $
       ownPaymentPubKeyHash
+
+  getUserSpkh :: KeyWallet -> Contract () StakePubKeyHash
+  getUserSpkh w =
+    Plutip.withKeyWallet w <<<
+      liftedM "(getUserSpkh) Could not user's SPKH" $
+      ownStakePubKeyHash
 
   dropMaybe :: forall a. Maybe (Array a) -> Array a
   dropMaybe (Just arr) = arr
@@ -279,18 +343,23 @@ getPoolFakegix = do
 
 -- | Mint the necessay FAKEGIX and distribute it to admin and users
 mintAndDistributeFakegix
-  :: BigInt -> Array (PaymentPubKeyHash /\ BigInt) -> Contract () Unit
+  :: BigInt
+  -> Array (PaymentPubKeyHash /\ StakePubKeyHash /\ BigInt)
+  -> Contract () Unit
 mintAndDistributeFakegix adminFakegix users = do
   adminUtxos <- liftedM "Could not get admin's utxos" $ getWalletUtxos
   (mp /\ cs /\ tn) <- getFakegixData
   let
     valueToMint :: Value
-    valueToMint = singleton cs tn $ adminFakegix + sum (snd <$> users)
+    valueToMint = singleton cs tn $ adminFakegix + sum (snd <<< snd <$> users)
+
+    mustPayTo (pkh /\ spkh /\ n) = mustPayToPubKeyAddress pkh spkh
+      (singleton cs tn n)
 
     constraints :: TxConstraints Void Void
     constraints = mconcat
       [ mustMintValue valueToMint
-      , foldMap (uncurry mustPayToPubKey <<< rmap (singleton cs tn)) users
+      , foldMap mustPayTo users
       ]
 
     lookups :: ScriptLookups Void
@@ -310,6 +379,13 @@ utxosFakegix utxos = do
     (_.amount <<< unwrap <<< _.output <<< unwrap) $ utxos
   where
   valueOf' cs tn v = valueOf v cs tn
+
+-- The user withdraw action requires a staking key which Plutip does not
+-- generate automatically. So we hard-code one here for all users.
+privateStakeKey :: PrivateStakeKey
+privateStakeKey = wrap $ unsafePartial $ fromJust
+  $ privateKeyFromBytes =<< hexToRawBytes
+      "633b1c4c4a075a538d37e062c1ed0706d3f0a94b013708e8f5ab0a0ca1df163d"
 
 testConfig :: Config
 testConfig =
@@ -357,7 +433,7 @@ localPlutipCfg =
       , password: "ctxlib"
       , dbname: "ctxlib"
       }
-  , suppressLogs: false
+  , suppressLogs: true
   , customLogger: Nothing
   , hooks: emptyHooks
   }
