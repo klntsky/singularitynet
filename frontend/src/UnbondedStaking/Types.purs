@@ -17,9 +17,24 @@ import Contract.Address (PaymentPubKeyHash)
 import Contract.Monad (Contract)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
-import Contract.PlutusData (class FromData, class HasPlutusSchema, class ToData, type (:+), type (:=), type (@@), I, PlutusData(Constr), PNil, genericFromData, genericToData, toData, S, Z)
+import Contract.PlutusData
+  ( class FromData
+  , class HasPlutusSchema
+  , class ToData
+  , type (:+)
+  , type (:=)
+  , type (@@)
+  , I
+  , PlutusData(Constr)
+  , PNil
+  , genericFromData
+  , genericToData
+  , toData
+  , S
+  , Z
+  )
 import Contract.Prim.ByteArray (ByteArray)
-import Contract.Time (POSIXTime(..))
+import Contract.Time (POSIXTime)
 import Contract.Value (CurrencySymbol)
 import Control.Monad.Reader (ReaderT)
 import Data.BigInt (BigInt)
@@ -53,9 +68,9 @@ derive instance Generic Period _
 instance Show Period where
   show = genericShow
 
-data PeriodError =
-    TooSoon { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
-    | TooLate { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
+data PeriodError
+  = TooSoon { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
+  | TooLate { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
 
 derive instance Eq PeriodError
 derive instance Generic PeriodError _

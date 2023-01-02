@@ -16,7 +16,6 @@ import SNet.Test.Common
   , getUserWallet
   , getWalletFakegix
   , waitFor
-  , waitForNext
   , withKeyWallet
   , withWalletsAndPool
   )

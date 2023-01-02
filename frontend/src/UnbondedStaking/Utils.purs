@@ -32,7 +32,6 @@ import Contract.Time
   ( POSIXTime(POSIXTime)
   , POSIXTimeRange
   , always
-  , from
   , mkFiniteInterval
   )
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
