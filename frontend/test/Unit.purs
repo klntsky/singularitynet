@@ -41,7 +41,7 @@ import UnbondedStaking.Types (SnetInitialParams)
 unitTests :: Contract () SnetInitialParams -> MoteT Aff PlutipTest Aff Unit
 unitTests initParams =
   group "Unit Tests" do
-    skip $ group "Admin" do
+    group "Admin" do
       test "Open/Create Pool" $ Open.test initParams
       test "Close Pool" $ Close.test initParams
       -- We skip this until we decide if it's a good idea to fail when
