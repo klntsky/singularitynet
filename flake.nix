@@ -3,8 +3,8 @@
   nixConfig.bash-prompt = "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]singularitynet \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
 
   inputs = {
-    nixpkgs.follows = "ctl/nixpkgs";
-    haskell-nix.follows = "ctl/haskell-nix";
+    nixpkgs.follows = "plutarch/nixpkgs";
+    haskell-nix.follows = "plutarch/haskell-nix";
 
     plutip.url = "github:mlabs-haskell/plutip?rev=0b92bb7b913d213457713c09bacae06110c47bac";
 
