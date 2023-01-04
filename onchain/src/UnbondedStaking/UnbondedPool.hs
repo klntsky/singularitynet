@@ -665,11 +665,6 @@ withdrawActLogic txInfoF paramsF purpose datum withdrawActParamsF period = do
       -- Burning action only valid if pool is closed
       pguardC "withdrawActLogic: Pool is not closed" $
         pnot # (toPBool # entryF.open)
-      -- Validate period
-      pguardC "withdrawActLogic: wrong period for PWithdrawAct redeemer" $
-        period #== depositWithdrawPeriod
-          #|| period #== adminUpdatePeriod
-          #|| period #== bondingPeriod
       ---- BUSINESS LOGIC ----
       -- Validate that entry key matches the key in state UTxO
       pguardC "withdrawActLogic: consumed entry key does not match user's pkh" $
