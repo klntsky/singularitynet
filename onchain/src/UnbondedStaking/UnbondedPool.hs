@@ -881,6 +881,8 @@ newEntryGuard paramsF newEntryF stakeAmt stakeHolderKey = do
       #&& newEntryF.deposited #== stakeAmt
   pguardC "newEntryGuard: new entry does not have the stakeholder's key" $
     newEntryF.key #== stakeHolderKey
+  pguardC "newEntryGuard: new entry is not open" $
+    toPBool # newEntryF.open
   pguardC "newEntryGuard: new entry's stake not within stake bounds" $
     pfromData paramsF.minStake #<= newEntryF.deposited
       #&& pfromData newEntryF.deposited #<= paramsF.maxStake
