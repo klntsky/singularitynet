@@ -4,12 +4,12 @@ import Prelude
 
 import Contract.Monad (Contract, throwContractError)
 import Contract.Test.Plutip (PlutipTest)
+import Control.Monad.Error.Class (try)
 import Control.Monad.Reader (ask, lift)
-import Data.Array as Array
 import Data.BigInt as BigInt
+import Data.Either (isRight)
 import SNet.Test.Common
   ( getAdminWallet
-  , getWalletFakegix
   , waitFor
   , withKeyWallet
   , withWalletsAndPool
@@ -25,17 +25,11 @@ test initParams = withWalletsAndPool initParams [] \wallets -> do
   { unbondedPoolParams, scriptVersion } <- ask
   withKeyWallet adminWallet do
     waitFor AdminPeriod
-    initialFakegix <- getWalletFakegix
-    failedIndices <- lift $ depositUnbondedPoolContract (BigInt.fromInt 2000)
+    result <- try $ lift $ depositUnbondedPoolContract (BigInt.fromInt 2000)
       unbondedPoolParams
       scriptVersion
       (nat 0)
       []
-    when (not $ Array.null failedIndices)
+    when (isRight result)
       $ lift
-      $ throwContractError "Some entries failed to be updated"
-    finalFakegix <- getWalletFakegix
-    when (not $ initialFakegix == finalFakegix)
-      $ lift
-      $ throwContractError
-          "The admin deposited FAKEGIX when they should not have"
+      $ throwContractError "Deposit should have failed"

@@ -15,6 +15,7 @@ You can edit this file as you like.
   , "control"
   , "datetime"
   , "exceptions"
+  , "either"
   , "foldable-traversable"
   , "integers"
   , "math"

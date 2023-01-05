@@ -44,10 +44,9 @@ unitTests initParams =
     group "Admin" do
       test "Open/Create Pool" $ Open.test initParams
       test "Close Pool" $ Close.test initParams
-      -- We skip this until we decide if it's a good idea to fail when
-      -- there are no stakers in the pool
-      skip $ test "Deposit to empty pool" $ DepositEmpty.test initParams
-      test "Deposit to pool with 1 user's stake" $ Deposit1User.test initParams
+      test "Deposit to empty pool" $ DepositEmpty.test initParams
+      test "Deposit to pool with 1 user's stake" $ Deposit1User.test
+        initParams
       ( let
           n = 10
           b = 5
@@ -57,8 +56,9 @@ unitTests initParams =
                 <> " users' stake (batch size = "
                 <> show b
                 <> ")"
-            ) $
-            DepositNUser.test initParams n b
+            )
+            $
+              DepositNUser.test initParams n b
       )
       ( let
           n = 10
@@ -68,8 +68,9 @@ unitTests initParams =
             ( "Close pool with " <> show n <> " users' stake (batch size = "
                 <> show b
                 <> ")"
-            ) $
-            DepositNUser.test initParams n b
+            )
+            $
+              DepositNUser.test initParams n b
       )
     group "User" do
       test "Stake" $ Stake.test initParams
