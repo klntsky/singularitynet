@@ -18,16 +18,16 @@ import Contract.Monad
   , liftedM
   )
 import Contract.Numeric.Rational (Rational, (%))
+import Contract.PlutusData (getDatumByHash, fromData)
+import Contract.Prim.ByteArray (ByteArray)
+import Contract.Scripts (validatorHash)
+import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, mkFiniteInterval)
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
+import Contract.Utxos (utxosAt)
 import Contract.Value (CurrencySymbol)
-import Contract.Time (POSIXTime(POSIXTime), POSIXTimeRange, interval)
 import Data.Array (filter, head, takeWhile, (..))
 import Data.BigInt (BigInt, quot, toInt)
 import Data.BigInt as BigInt
-import Contract.Scripts (validatorHash)
-import Contract.Prim.ByteArray (ByteArray)
-import Contract.Utxos (utxosAt)
-import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
-import Contract.PlutusData (getDatumByHash, fromData)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import UnbondedStaking.Types
   ( UnbondedPoolParams(UnbondedPoolParams)
@@ -66,7 +66,8 @@ getAdminTime (UnbondedPoolParams upp) = do
     isWithinPeriod currTime' cycleLength adminStart adminEnd
   pure
     { currTime
-    , range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
+    , range: mkFiniteInterval (POSIXTime start)
+        (POSIXTime $ end + BigInt.fromInt 1)
     }
 
 -- | User deposits/withdrawals
@@ -92,7 +93,8 @@ getUserTime (UnbondedPoolParams upp) = do
     isWithinPeriod currTime' cycleLength userStart userEnd
   pure
     { currTime
-    , range: interval (POSIXTime start) (POSIXTime $ end + BigInt.fromInt 1)
+    , range: mkFiniteInterval (POSIXTime start)
+        (POSIXTime $ end + BigInt.fromInt 1)
     }
 
 -- | User withdrawals only
@@ -136,7 +138,7 @@ getBondingTime (UnbondedPoolParams upp) = do
   start /\ end <- liftContractM "getUserTime: this is not a user/bonding period"
     $
       getPeriod userPeriod bondingPeriod
-  pure { currTime, range: interval (POSIXTime start) (POSIXTime end) }
+  pure { currTime, range: mkFiniteInterval (POSIXTime start) (POSIXTime end) }
 
 -- | Returns the current/previous period and the next valid period in the
 -- | future from the current time
@@ -231,10 +233,7 @@ queryAssocListUnbonded
   let valHash = validatorHash validator
   let poolAddr = scriptHashAddress valHash Nothing
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM
-      "queryAssocListUnbonded: Cannot get pool's utxos at pool address"
-      $ utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
 
   let assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
   getListDatums assocList

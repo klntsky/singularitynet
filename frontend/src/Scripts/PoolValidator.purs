@@ -8,7 +8,7 @@ import Contract.Prelude
 import Contract.Monad (Contract, liftedE)
 import Contract.PlutusData (class ToData, toData)
 import Contract.Scripts
-  ( ClientError
+  ( ApplyArgsError
   , PlutusScript
   , Validator(Validator)
   , applyArgs
@@ -33,7 +33,7 @@ unbondedPoolValidator = jsonReader "script" _unbondedPoolValidator
 mkBondedPoolValidator
   :: forall (r :: Row Type)
    . BondedPoolParams
-  -> Contract r (Either ClientError Validator)
+  -> Contract r (Either ApplyArgsError Validator)
 mkBondedPoolValidator = mkValidator bondedPoolValidator
 
 -- | This function takes a `UnbondedPoolParams` and produces the `Validator`
@@ -41,7 +41,7 @@ mkBondedPoolValidator = mkValidator bondedPoolValidator
 mkUnbondedPoolValidator
   :: forall (r :: Row Type)
    . UnbondedPoolParams
-  -> Contract r (Either ClientError Validator)
+  -> Contract r (Either ApplyArgsError Validator)
 mkUnbondedPoolValidator = mkValidator unbondedPoolValidator
 
 mkValidator
@@ -49,10 +49,10 @@ mkValidator
    . ToData a
   => Either JsonDecodeError PlutusScript
   -> a
-  -> Contract r (Either ClientError Validator)
+  -> Contract r (Either ApplyArgsError Validator)
 mkValidator ps params = do
   unappliedScript <- liftedE $ pure ps
-  map (rmap Validator) $ applyArgs unappliedScript [ toData params ]
+  pure <<< rmap Validator $ applyArgs unappliedScript [ toData params ]
 
 foreign import _bondedPoolValidator :: Json
 foreign import _unbondedPoolValidator :: Json

@@ -103,10 +103,10 @@ import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (currentRoundedTime, hashPkh)
 
--- | Configuation needed to call contracts from JS.
+-- | Configuration needed to call contracts from JS.
 type SdkConfig =
-  { ctlServerConfig :: SdkServerConfig
-  , ogmiosConfig :: SdkServerConfig
+  { ogmiosConfig :: SdkServerConfig
+  , kupoConfig :: SdkServerConfig
   , datumCacheConfig :: SdkServerConfig
   , networkId :: Number -- converts to Int
   , logLevel :: String -- "Trace", "Debug", "Info", "Warn", "Error"
@@ -154,9 +154,8 @@ fromSdkPath s = Just s
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
-  ctlServerConfig <- map Just $ liftEither $ fromSdkServerConfig "ctl-server"
-    cfg.ctlServerConfig
   ogmiosConfig <- liftEither $ fromSdkServerConfig "ogmios" cfg.ogmiosConfig
+  kupoConfig <- liftEither $ fromSdkServerConfig "kupo" cfg.kupoConfig
   datumCacheConfig <- liftEither $ fromSdkServerConfig "ogmios-datum-cache"
     cfg.datumCacheConfig
   networkIdInt <- liftM (errorWithContext "invalid `NetworkId`")
@@ -167,8 +166,8 @@ buildContractConfig cfg = Promise.fromAff $ do
   walletSpec <- Just <$> liftEither (fromSdkWalletSpec cfg.walletSpec)
   pure
     { ogmiosConfig
+    , kupoConfig
     , datumCacheConfig
-    , ctlServerConfig
     , logLevel
     , networkId
     , walletSpec
