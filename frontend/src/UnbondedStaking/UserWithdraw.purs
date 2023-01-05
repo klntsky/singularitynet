@@ -14,7 +14,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -23,6 +22,7 @@ import Contract.Monad
 import Contract.Log (logInfo')
 import Contract.PlutusData
   ( PlutusData
+  , Redeemer(Redeemer)
   , Datum(Datum)
   , fromData
   , getDatumByHash
@@ -37,8 +37,6 @@ import Contract.Transaction
   , TransactionOutputWithRefScript
   , balanceTx
   , signTransaction
-  , TransactionHash
-  , BalancedSignedTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -67,7 +65,6 @@ import Types
   , StakingType(Unbonded)
   )
 import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.PlutusData (Redeemer(Redeemer))
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedPoolParams(UnbondedPoolParams)
@@ -130,9 +127,7 @@ userWithdrawUnbondedPoolContract
   logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
 
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userWithdrawUnbondedPoolContract: could not obtain user utxos"
-      $ utxosAt userAddr
+  userUtxos <- utxosAt userAddr
   logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
 
   ---- FETCH POOL DATA ----
@@ -147,9 +142,7 @@ userWithdrawUnbondedPoolContract
     $ fromPlutusAddress networkId poolAddr
 
   -- Get the unbonded pool's utxo
-  unbondedPoolUtxos <-
-    liftedM "userWithdrawUnbondedPoolContract: could not obtain pool utxos" $
-      utxosAt poolAddr
+  unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userWithdrawUnbondedPoolContract: Pool UTxOs" unbondedPoolUtxos
 
   -- Get asset UTxOs in unbonded pool
@@ -185,7 +178,6 @@ userWithdrawUnbondedPoolContract
   logInfo_ "userWithdrawUnbondedPoolContract: entry to consume" userEntry
   -- Build useful values for later
   let
-    mintEntryValue = singleton assocListCs assocListTn one
     burnEntryValue = singleton assocListCs assocListTn (-one)
     assetParams = unwrap unbondedAssetClass
     assetCs = assetParams.currencySymbol

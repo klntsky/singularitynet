@@ -16,7 +16,6 @@ import Contract.Log (logWarn')
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -25,9 +24,7 @@ import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionHash
-  , TransactionOutputWithRefScript(..)
+  ( TransactionOutputWithRefScript
   , balanceTx
   , signTransaction
   )
@@ -48,7 +45,6 @@ import Control.Monad.Error.Class (liftMaybe)
 import Data.Array as Array
 import Data.Map (toUnfoldable)
 import Effect.Exception as Exception
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Scripts.StateNFT (mkStateNFTPolicy)
@@ -58,16 +54,14 @@ import Settings
   , unbondedStakingTokenName
   )
 import Types (StakingType(Unbonded))
-import Contract.Time (POSIXTime(POSIXTime))
 import UnbondedStaking.Types
-  ( InitialUnbondedParams(InitialUnbondedParams)
+  ( InitialUnbondedParams
   , UnbondedPoolParams
   , UnbondedStakingDatum(StateDatum)
   )
 import UnbondedStaking.Utils (mkUnbondedPoolParams)
 import Utils
   ( addressFromBech32
-  , currentRoundedTime
   , logInfo_
   , mustPayToScript
   , repeatUntilConfirmed
@@ -86,7 +80,6 @@ createUnbondedPoolContract iup =
   repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
     adminPkh <- liftedM "createUnbondedPoolContract: Cannot get admin's pkh"
       ownPaymentPubKeyHash
-    logInfo_ "createUnbondedPoolContract: Admin PaymentPubKeyHash" adminPkh
     -- Get the (Nami) wallet address
     adminAddr <-
       liftedM "createUnbondedPoolContract: Cannot get wallet Address"
@@ -94,9 +87,8 @@ createUnbondedPoolContract iup =
     logInfo_ "createUnbondedPoolContract: User Address"
       =<< addressToBech32 adminAddr
     -- Get utxos at the wallet address
-    adminUtxos <-
-      liftedM "createUnbondedPoolContract: Cannot get user Utxos"
-        $ utxosAt adminAddr
+    adminUtxos <- utxosAt adminAddr
+    logInfo_ "Admin utxos:" $ show adminUtxos
     txOutRef <-
       liftContractM "createUnbondedPoolContract: Could not get head UTXO"
         $ fst
@@ -165,7 +157,6 @@ createUnbondedPoolContract iup =
     -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
     bTx <- liftedE $ balanceTx unattachedBalancedTx
     signedTx <- signTransaction bTx
-
     -- Return the pool info for subsequent transactions
     pure { signedTx, unbondedPoolParams, address }
 
@@ -178,9 +169,7 @@ getUnbondedPoolsContract
   -> Contract () (Array UnbondedPoolParams)
 getUnbondedPoolsContract addrStr ibp = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getUnbondedPoolsContract) Could not get pool UTxOs"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getUnbondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'UnbondedStakingToken')

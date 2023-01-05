@@ -11,21 +11,11 @@ import Contract.Address
   )
 import Contract.Log (logAesonInfo, logWarn')
 import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
-import Contract.PlutusData
-  ( DataHash(..)
-  , Datum(Datum)
-  , OutputDatum(..)
-  , PlutusData
-  , datumHash
-  , fromData
-  , getDatumsByHashes
-  , toData
-  )
+import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction
-  ( BalancedSignedTransaction
-  , TransactionOutputWithRefScript(..)
+  ( TransactionOutputWithRefScript
   , balanceTx
   , signTransaction
   )
@@ -90,9 +80,7 @@ createBondedPoolContract ibp =
       logInfo_ "createBondedPoolContract: Admin Address"
         =<< addressToBech32 adminAddr
       -- Get utxos at the wallet address
-      adminUtxos <-
-        liftedM "createBondedPoolContract: could not get admin's utxos" $
-          utxosAt adminAddr
+      adminUtxos <- utxosAt adminAddr
       txOutRef <-
         liftContractM "createBondedPoolContract: Could not get head UTXO"
           $ fst
@@ -171,9 +159,7 @@ getBondedPoolsContract
   -> Contract () (Array BondedPoolParams)
 getBondedPoolsContract addrStr ibp = do
   -- Get all UTxOs locked in the protocol's address
-  poolUtxos <- liftedM "(getBondedPoolsContract) Could not get pool utxos"
-    $ utxosAt
-    =<< addressFromBech32 addrStr
+  poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getBondedPoolContract) UTxOs at pool address: " (show poolUtxos)
   -- For each pool, we obtain its state NFT and assoc list CS (it should be
   -- the only token with name 'BondedStakingToken')
