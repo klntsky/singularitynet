@@ -102,8 +102,8 @@ exports.EntryList = class EntryList {
     this.sdk = sdk;
     this.entries = entries.map(e => {
       return { ...e,
-               rewards: e.rewards.value0.divide(e.rewards.value1),
-               nextCycleRewards: e.nextCycleRewards.value0.divide(e.nextCycleRewards.value1)
+               rewards: Math.floor(e.rewards.value0.divide(e.rewards.value1)),
+               nextCycleRewards: Math.floor(e.nextCycleRewards.value0.divide(e.nextCycleRewards.value1))
              }
     });
   }

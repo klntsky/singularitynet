@@ -56,8 +56,8 @@ export type SdkConfig = {
 export type UserEntry = {
   key: Uint8Array;
   deposited: BigInteger;
-  rewards: Ratio;
-  nextCycleRewards: Ratio;
+  rewards: Number;
+  nextCycleRewards: Number;
 }
 
 // Bonded pool
