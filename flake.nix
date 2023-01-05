@@ -237,11 +237,6 @@
         frontend = self.frontend.flake.${system}.devShell;
       });
 
-      hydraJobs = perSystem (system:
-        self.checks.${system} // {
-          inherit (self.packages.${system}) frontend-bundle-web;
-        });
-
       herculesCI.ciSystems = [ "x86_64-linux" ];
     };
 }
