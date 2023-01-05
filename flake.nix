@@ -127,72 +127,6 @@
           };
       };
 
-      # OFFCHAIN / Testnet, Cardano, ...
-
-      offchain = rec {
-        ghcVersion = "ghc8107";
-        projectFor = system:
-          let
-            pkgs = nixpkgsFor system;
-            pkgs' = nixpkgsFor' system;
-            plutipin = inputs.plutip.inputs;
-            fourmolu = pkgs.haskell-nix.tool "ghc921" "fourmolu" { };
-            project = pkgs.haskell-nix.cabalProject' {
-              src = ./.;
-              compiler-nix-name = ghcVersion;
-              inherit (plutip) cabalProjectLocal;
-              cabalProjectFileName = "cabal.project.offchain";
-              extraSources = plutip.extraSources ++ [
-                {
-                  src = "${plutip}";
-                  subdirs = [ "." ];
-                }
-              ];
-              modules = [
-                ({ config, ... }: {
-                  packages.singularitynet-offchain.components.tests.singularitynet-offchain-test.build-tools = [
-                    project.hsPkgs.cardano-cli.components.exes.cardano-cli
-                    project.hsPkgs.cardano-node.components.exes.cardano-node
-                  ];
-
-                })
-              ] ++ plutip.haskellModules;
-
-              shell = {
-                withHoogle = true;
-
-                exactDeps = true;
-
-                # We use the ones from Nixpkgs, since they are cached reliably.
-                # Eventually we will probably want to build these with haskell.nix.
-                nativeBuildInputs = [
-                  pkgs'.cabal-install
-                  pkgs'.fd
-                  pkgs'.haskellPackages.apply-refact
-                  pkgs'.haskellPackages.cabal-fmt
-                  pkgs'.hlint
-                  pkgs'.nixpkgs-fmt
-
-                  project.hsPkgs.cardano-cli.components.exes.cardano-cli
-                  project.hsPkgs.cardano-node.components.exes.cardano-node
-
-                  fourmolu
-                ];
-
-                tools.haskell-language-server = { };
-
-                additional = ps: [ ps.plutip ];
-
-                shellHook = ''
-                  export NIX_SHELL_TARGET="offchain"
-                        ln -fs cabal.project.offchain cabal.project
-                '';
-              };
-            };
-          in
-          project;
-      };
-
       frontend = {
         projectFor = system:
           let
@@ -259,18 +193,12 @@
         flake = perSystem (system: (onchain.projectFor system).flake { });
       };
 
-      offchain = {
-        project = perSystem offchain.projectFor;
-        flake = perSystem (system: (offchain.projectFor system).flake { });
-      };
-
       frontend = {
         flake = perSystem (system: (frontend.projectFor system).flake);
       };
 
       packages = perSystem (system:
         self.onchain.flake.${system}.packages
-        // self.offchain.flake.${system}.packages
         // self.frontend.flake.${system}.packages
       );
 
@@ -278,7 +206,6 @@
 
       checks = perSystem (system:
         self.onchain.flake.${system}.checks
-        // self.offchain.flake.${system}.checks
         // self.frontend.flake.${system}.checks # includes formatting check as well
         # FIXME
         # Fourmolu from haskell.nix is broken, it might be possible to use one
@@ -297,7 +224,6 @@
               ++ builtins.attrValues self.packages.${system}
               ++ [
                 self.devShells.${system}.onchain.inputDerivation
-                self.devShells.${system}.offchain.inputDerivation
                 self.devShells.${system}.frontend.inputDerivation
               ];
           } ''
@@ -308,7 +234,6 @@
 
       devShells = perSystem (system: {
         onchain = self.onchain.flake.${system}.devShell;
-        offchain = self.offchain.flake.${system}.devShell;
         frontend = self.frontend.flake.${system}.devShell;
       });
 
