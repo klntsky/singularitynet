@@ -48,7 +48,11 @@
       };
       nixpkgsFor' = system: import nixpkgs {
         inherit system;
-        overlays = [ ctl.overlay ];
+        overlays = [
+           ctl.overlays.purescript
+           ctl.overlays.runtime
+           ctl.overlays.spago
+           ];
       };
 
       formatCheckFor = system:
