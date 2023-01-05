@@ -165,7 +165,7 @@
               };
 
               checks = {
-                frontend = project.runPursTest {
+                frontend = project.runPlutipTest {
                   testMain = "Test.Main";
                 };
 
