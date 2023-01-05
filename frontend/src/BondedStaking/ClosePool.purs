@@ -11,7 +11,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE'
   , liftedM
   , throwContractError
@@ -19,6 +18,7 @@ import Contract.Monad
 import Contract.Log (logInfo')
 import Contract.PlutusData
   ( Datum(..)
+  , Redeemer(Redeemer)
   , PlutusData
   , fromData
   , getDatumByHash
@@ -50,7 +50,6 @@ import Types
   , BondedStakingDatum
   )
 import Contract.Numeric.Natural (Natural)
-import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( getUtxoWithNFT
   , logInfo_
@@ -87,9 +86,7 @@ closeBondedPoolContract
   logInfo_ "closeBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "closeBondedPoolContract: could not obtain pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeBondedPoolContract: Pool's UTXOs" bondedPoolUtxos
   tokenName <- liftContractM
     "closeBondedPoolContract: Cannot create TokenName"

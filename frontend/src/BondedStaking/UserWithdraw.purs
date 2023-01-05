@@ -13,7 +13,6 @@ import Contract.Address
 import Contract.Monad
   ( Contract
   , liftContractM
-  , liftContractM
   , liftedE
   , liftedE'
   , liftedM
@@ -25,6 +24,7 @@ import Contract.Log
   )
 import Contract.PlutusData
   ( PlutusData
+  , Redeemer(Redeemer)
   , Datum(Datum)
   , fromData
   , getDatumByHash
@@ -36,10 +36,8 @@ import Contract.Scripts (validatorHash)
 import Contract.Transaction
   ( TransactionInput
   , TransactionOutputWithRefScript
-  , BalancedSignedTransaction
   , balanceTx
   , signTransaction
-  , TransactionHash
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -73,7 +71,6 @@ import Types
   , StakingType(Bonded)
   )
 import Contract.Numeric.Rational (Rational, denominator, numerator)
-import Contract.PlutusData (Redeemer(Redeemer))
 import Utils
   ( findRemoveOtherElem
   , getAssetsToConsume
@@ -119,9 +116,7 @@ userWithdrawBondedPoolContract
     liftedM "userWithdrawBondedPoolContract: Cannot get wallet Address"
       getWalletAddress
   -- Get utxos at the wallet address
-  userUtxos <-
-    liftedM "userWithdrawBondedPoolContract: could not get user utxos" $
-      utxosAt userAddr
+  userUtxos <- utxosAt userAddr
   ---- FETCH POOL DATA ----
   -- Get the bonded pool validator and hash
   validator <-
@@ -133,9 +128,7 @@ userWithdrawBondedPoolContract
   logInfo_ "userWithdrawBondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
   -- Get the bonded pool's utxo
-  bondedPoolUtxos <-
-    liftedM "userWithdrawBondedPoolContract: could not get pool utxos" $
-      utxosAt poolAddr
+  bondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "userWithdrawBondedPoolContract: Pool UTxOs" bondedPoolUtxos
   tokenName <- liftContractM
     "userWithdrawBondedPoolContract: Cannot create TokenName"
