@@ -166,7 +166,8 @@
 
               checks = {
                 frontend = project.runPlutipTest {
-                  testMain = "Test.Main";
+                  # We only run unit tests for now (without timechecks)
+                  testMain = "SNet.Test.Unit";
                 };
 
                 format-check = pkgs.runCommand "formatting-check"

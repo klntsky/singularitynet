@@ -100,14 +100,15 @@ suite timechecksOff
 
 main :: Effect Unit
 main = do
-  timechecksOff <- parse
-  log $ "Timechecks " <> if timechecksOff then "OFF" else "ON"
-  suite timechecksOff
+  timechecksOn <- parse
+  log $ "Timechecks " <> if timechecksOn then "ON" else "OFF"
+  suite (not timechecksOn)
 
+-- | By default we don't use timechecks (for CI use)
 timechecksParser :: Parser Boolean
 timechecksParser = switch
-  $ long "without-timechecks"
-  <> help "Deactivate timechecks (useful for quicker testing)"
+  $ long "with-timechecks"
+  <> help "Activate timechecks"
 
 parse :: Effect Boolean
 parse = execParser $ info (timechecksParser <**> helper)
