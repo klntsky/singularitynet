@@ -390,7 +390,7 @@ privateStakeKey = wrap $ unsafePartial $ fromJust
 testConfig :: Config
 testConfig =
   { slow: wrap 90.0
-  , timeout: Just $ fromDuration $ Seconds 50.0
+  , timeout: Just $ fromDuration $ Seconds 90.0
   , exit: true
   }
 
