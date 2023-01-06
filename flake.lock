@@ -11731,11 +11731,11 @@
       "inputs": {
         "ctl": "ctl",
         "haskell-nix": [
-          "ctl",
+          "plutarch",
           "haskell-nix"
         ],
         "nixpkgs": [
-          "ctl",
+          "plutarch",
           "nixpkgs"
         ],
         "plutarch": "plutarch",
