@@ -6,6 +6,8 @@ module SdkApi
   , SdkConfig
   , SdkInterest
   , SdkServerConfig
+  , SdkIncompleteDeposit
+  , SdkIncompleteClose
   , buildContractConfig
   , callCloseBondedPool
   , callCloseUnbondedPool
@@ -69,6 +71,7 @@ import Ctl.Internal.Serialization.Hash
   ( ed25519KeyHashFromBytes
   , ed25519KeyHashToBytes
   )
+import Data.ArrayBuffer.Types (Uint8Array)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -93,13 +96,15 @@ import UnbondedStaking.CreatePool
   )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
+  ( Entry(..)
+  , IncompleteClose(..)
+  , IncompleteDeposit(..)
   , InitialUnbondedParams
-  , Entry(..)
+  , UnbondedPoolParams(UnbondedPoolParams)
   )
-import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
+import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (currentRoundedTime, hashPkh)
@@ -152,6 +157,18 @@ fromSdkServerConfig serviceName conf@{ host, secure } = do
 fromSdkPath :: String -> Maybe String
 fromSdkPath "" = Nothing
 fromSdkPath s = Just s
+
+fromSdkIncompleteDeposit :: SdkIncompleteDeposit -> IncompleteDeposit
+fromSdkIncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt } =
+  IncompleteDeposit
+    { failedKeys: map wrap fk
+    , totalDeposited
+    , nextDepositAmt
+    }
+
+fromSdkIncompleteClose :: SdkIncompleteClose -> IncompleteClose
+fromSdkIncompleteClose { failedKeys: fk } =
+  IncompleteClose { failedKeys: map wrap fk }
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
@@ -220,6 +237,18 @@ toSdkAdmin = rawBytesToHex <<< ed25519KeyHashToBytes <<< unwrap <<< unwrap
 
 toSdkCurrencySymbol :: CurrencySymbol -> String
 toSdkCurrencySymbol = byteArrayToHex <<< getCurrencySymbol
+
+toSdkIncompleteDeposit :: IncompleteDeposit -> SdkIncompleteDeposit
+toSdkIncompleteDeposit
+  (IncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt }) =
+  { failedKeys: map unwrap fk
+  , totalDeposited
+  , nextDepositAmt
+  }
+
+toSdkIncompleteClose :: IncompleteClose -> SdkIncompleteClose
+toSdkIncompleteClose (IncompleteClose { failedKeys: fk }) =
+  { failedKeys: map unwrap fk }
 
 fromSdkNat :: String -> String -> BigInt -> Either Error Natural
 fromSdkNat context name bint = note (error msg) $ fromBigInt bint
@@ -473,6 +502,16 @@ type InitialUnbondedArgs =
   , minStake :: BigInt -- Natural
   , maxStake :: BigInt -- Natural
   , unbondedAssetClass :: SdkAssetClass
+  }
+
+type SdkIncompleteDeposit =
+  { failedKeys :: Array Uint8Array
+  , totalDeposited :: BigInt
+  , nextDepositAmt :: BigInt
+  }
+
+type SdkIncompleteClose =
+  { failedKeys :: Array Uint8Array
   }
 
 callCreateUnbondedPool
