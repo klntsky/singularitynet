@@ -8,6 +8,7 @@ module SdkApi
   , SdkServerConfig
   , SdkIncompleteDeposit
   , SdkIncompleteClose
+  , AnyType
   , buildContractConfig
   , callCloseBondedPool
   , callCloseUnbondedPool
@@ -24,6 +25,9 @@ module SdkApi
   , callUserStakeUnbondedPool
   , callUserWithdrawBondedPool
   , callUserWithdrawUnbondedPool
+  , callJust
+  , callNothing
+  , callConsumeMaybe
   , fromSdkLogLevel
   , toUnbondedPoolArgs
   ) where
@@ -542,14 +546,15 @@ callDepositUnbondedPool
   -> BigInt
   -> UnbondedPoolArgs
   -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg
+  -> Maybe SdkIncompleteDeposit
+  -> Effect (Promise (Maybe SdkIncompleteDeposit))
+callDepositUnbondedPool cfg amt upa bi id' = Promise.fromAff $ runContract cfg
   do
     upp <- liftEither $ fromUnbondedPoolArgs upa
     nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
       $ fromBigInt bi
-    depositUnbondedPoolContract amt upp Production nat arr
+    let id = fromSdkIncompleteDeposit <$> id'
+    map toSdkIncompleteDeposit <$> depositUnbondedPoolContract amt upp Production nat id
 
 callCloseUnbondedPool
   :: ConfigParams ()
@@ -713,3 +718,20 @@ callGetNodeTime cfg = fromAff
   $ runContract cfg { walletSpec = Nothing }
   $ unwrap
   <$> currentRoundedTime
+
+-- We export constructors and consumers of `Maybe` for the JS code
+
+callJust :: forall a . a -> Maybe a
+callJust = Just
+
+callNothing :: forall a . Maybe a
+callNothing = Nothing
+
+-- We need this escape hatch to allow the JS code to consume a `Maybe a`
+-- however it wants
+foreign import data AnyType :: Type
+
+callConsumeMaybe :: forall a . (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> AnyType
+callConsumeMaybe just nothing = case _ of
+    Nothing -> nothing unit
+    Just x -> just x

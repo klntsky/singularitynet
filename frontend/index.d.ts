@@ -7,7 +7,8 @@ export declare class Pool<T> {
 
   constructor(config: SdkConfig, args: T, address: string);
 
-  deposit(amount: BigInteger, batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
+  deposit(amount: BigInteger, batchSize: BigInteger): Promise<IncompleteDeposit | null>;
+  completeDeposit(incompleteDeposit: IncompleteDeposit, batchSize: BigInteger): Promise<Incompleteeposit | null>;
   close(batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
@@ -144,6 +145,16 @@ export type InitialUnbondedArgs = {
   minStake: BigInteger; // Natural
   maxStake: BigInteger; // Natural
   unbondedAssetClass: SdkAssetClass;
+};
+
+export type IncompleteDeposit = {
+  failedKeys: Array<Uint8Array>;
+  totalDeposited: Ratio;
+  nextDepositAmt: BigInteger;
+};
+
+export type IncompleteClose = {
+  failedKeys: Array<Uint8Array>;
 };
 
 export declare function getNodeTime(config: SdkConfig): Promise<BigInteger>;
