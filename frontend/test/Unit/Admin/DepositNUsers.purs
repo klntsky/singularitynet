@@ -10,6 +10,7 @@ import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
+import Data.Maybe(Maybe(Nothing), isNothing)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
@@ -56,15 +57,15 @@ test initParams userCount batchSize = withWalletsAndPool initParams
     withKeyWallet adminWallet do
       waitFor AdminPeriod
       initialFakegix <- getWalletFakegix
-      failedIndices <- lift $ depositUnbondedPoolContract depositAmt
+      failedDeposits <- lift $ depositUnbondedPoolContract depositAmt
         unbondedPoolParams
         scriptVersion
         (nat batchSize)
-        []
-      when (not $ Array.null failedIndices)
+        Nothing
+      when (not $ isNothing failedDeposits)
         $ lift
         $ throwContractError
-        $ "Some entries failed to be updated " <> show failedIndices
+        $ "Some entries failed to be updated " <> show failedDeposits
       finalFakegix <- getWalletFakegix
       when (not $ initialFakegix == finalFakegix)
         $ lift
@@ -73,12 +74,12 @@ test initParams userCount batchSize = withWalletsAndPool initParams
     withKeyWallet adminWallet do
       waitForNext AdminPeriod
       initialFakegix <- getWalletFakegix
-      failedIndices <- lift $ depositUnbondedPoolContract zero
+      failedDeposits <- lift $ depositUnbondedPoolContract zero
         unbondedPoolParams
         scriptVersion
         (nat 0)
-        []
-      when (not $ Array.null failedIndices)
+        Nothing
+      when (not $ isNothing failedDeposits)
         $ lift
         $ throwContractError "Some entries failed to be updated"
       finalFakegix <- getWalletFakegix
