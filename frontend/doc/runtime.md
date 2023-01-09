@@ -44,7 +44,7 @@ Make sure that you have installed and configured [Nix](./nix.md) as described in
 
 #### Version
 
-`v1.35.3` is required.
+`v1.35.4` is required.
 
 #### Installation
 
@@ -55,7 +55,7 @@ docker run --rm \
   -e NETWORK=testnet \
   -v "$PWD"/node/socket:/ipc \
   -v "$PWD"/node/data:/data \
-  inputoutput/cardano-node:1.35.0
+  inputoutput/cardano-node:1.35.4
 ```
 
 #### Configuration
@@ -77,7 +77,7 @@ https://github.com/input-output-hk/cardano-node
 
 #### Version
 
-Revision `9c04524d45de2c417ddda9e7ab0d587a54954c57`
+Version `v5.5.7`
 
 #### Installation
 
@@ -118,14 +118,14 @@ https://github.com/input-output-hk/cardano-configurations
 
 #### Version
 
-Revision `880a69a03fbfd06a4990ba8873f06907d4cd16a7`
+Revision `862c6bfcb6110b8fe816e26b3bba105dfb492b24`
 
 #### Installation
 
 First, clone the [repository](https://github.com/mlabs-haskell/ogmios-datum-cache), then:
 
 ```
-git checkout 880a69a03fbfd06a4990ba8873f06907d4cd16a7
+git checkout 862c6bfcb6110b8fe816e26b3bba105dfb492b24
 
 nix build .
 ```
@@ -171,35 +171,26 @@ The `--server-*` options above refer to configuration options for ODC itself; th
 
 https://github.com/mlabs-haskell/ogmios-datum-cache
 
-### `ctl-server`
+### `kupo`
 
-#### Version
+#### Version 
 
-The version of `ctl-server` corresponds to the CTL tag/revision being used, currently `767e1f35b8b1f243f31ed3360d85a59ef695262b`, and the code resides in the same repository as CTL.
+Version `v2.2.0`
 
-#### Installation
+#### Installation 
 
-```
-git checkout 767e1f35b8b1f243f31ed3360d85a59ef695262b
+- Use the container provided in [dockerhub](https://hub.docker.com/r/cardanosolutions/kupo)
+- Follow the instructions, you need to mount three volumes: one for the DB that Kupo will be syncing (new), one for the cardano node configuration and another for the IPC socket the node uses.
+- By default our Kupo setup doesn't pattern match any TX (meaning that Kupo looks up all transaction in the network). So you should do the same and start Kupo with a */* pattern.
+- By default our Kupo setup syncs from the "origin", meaning it syncs all history. So you should provide an origin argument to the --since CLI option (Not syncing up all history can accelerate Kupo's startup time, but it can also fail if the Node is not synced up to the start value provided to Kupo).
+- You need to set up the --host option accordingly. In our case we use localhost because all our infra runs in the same server, but you will probably have to change it.
 
-nix build .#ctl-server:exe:ctl-server
-```
-
-The binary will be under `./result/bin/ctl-server`
-
-#### Configuration
-
-CTL server can also be configured using command-line parameters. Currently, only one option is available:
-
-```
-
-ctl-server --port <PORT>
-
-```
+Running the official container with all this options should just work. But naturally you will need to make sure that Kupo starts after the Cardano node.
 
 #### Links
 
-https://github.com/Plutonomicon/cardano-transaction-lib
+- https://github.com/CardanoSolutions/kupo
+
 
 ## Configuring CTL contract execution
 
