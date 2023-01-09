@@ -19,6 +19,12 @@ source-repository head
   type:     git
   location: https://github.com/mlabs-haskell/singularitynet
 
+-- Configuration
+
+Flag TimeChecks
+  Description: Enable time checks in serialised validators
+  Default: True
+
 -- Common sections
 
 common common-lang
@@ -166,6 +172,7 @@ executable serialise
     , base
     , base16-bytestring
     , bytestring
+    , filepath
     , optparse-applicative
     , plutarch
     , plutus-ledger-api
@@ -175,3 +182,5 @@ executable serialise
     , text
 
   hs-source-dirs: exe
+  if flag(TimeChecks)
+    cpp-options: -DTimeChecks
