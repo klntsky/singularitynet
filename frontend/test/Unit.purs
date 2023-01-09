@@ -1,11 +1,10 @@
 module SNet.Test.Unit (main, unitTests) where
 
 import Contract.Prelude
-
 import Contract.Monad (Contract, launchAff_)
 import Contract.Test.Mote (interpretWithConfig)
 import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
-import Mote (MoteT, group, skip, test)
+import Mote (MoteT, group, test)
 import Options.Applicative
   ( Parser
   , execParser
@@ -81,8 +80,7 @@ unitTests initParams =
           test ("Stake and withdraw after " <> show n <> " cycles")
             $ StakeWaitAndWithdraw.test n initParams
       )
-      -- TODO: Fix script validation error.
-      skip $ test "Withdraw from a closed pool" $ WithdrawFromClosed.test
+      test "Withdraw from a closed pool" $ WithdrawFromClosed.test
         initParams
 
 suite :: Boolean -> Effect Unit
