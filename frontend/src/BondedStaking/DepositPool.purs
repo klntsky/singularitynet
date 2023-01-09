@@ -3,12 +3,8 @@ module DepositPool (depositBondedPoolContract) where
 import Contract.Prelude
 
 import BondedStaking.TimeUtils (getBondingTime)
-import Contract.Address
-  ( getNetworkId
-  , getWalletAddress
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (getNetworkId, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -16,7 +12,7 @@ import Contract.Monad
   , liftedM
   , throwContractError
   )
-import Contract.Log (logInfo')
+import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational, (%))
 import Contract.PlutusData
   ( Datum(Datum)
@@ -39,9 +35,9 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (!!))
 import Data.BigInt (BigInt)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
   ( bondedStakingTokenName
@@ -53,24 +49,26 @@ import Types
   , BondedStakingAction(AdminAct)
   , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   , Entry(Entry)
+  , ScriptVersion
   )
-import Contract.Numeric.Natural (Natural)
 import Utils
-  ( getUtxoWithNFT
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
   , logInfo_
   , mkOnchainAssocList
   , mkRatUnsafe
+  , mustPayToScript
   , roundUp
   , splitByLength
+  , submitBatchesSequentially
   , submitTransaction
   , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
   )
 
 -- Deposits a certain amount in the pool
 depositBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
@@ -82,6 +80,7 @@ depositBondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   batchSize
   depositList = do
   -- Fetch information related to the pool
@@ -92,15 +91,9 @@ depositBondedPoolContract
   unless (userPkh == admin) $ throwContractError
     "depositBondedPoolContract: Admin is not current user"
   logInfo_ "depositBondedPoolContract: Admin PaymentPubKeyHash" userPkh
-  -- Get the (Nami) wallet address
-  adminAddr <-
-    liftedM "depositBondedPoolContract: Cannot get wallet Address"
-      getWalletAddress
-  -- Get utxos at the wallet address
-  adminUtxos <- utxosAt adminAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "depositBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "depositBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -152,7 +145,6 @@ depositBondedPoolContract
         lookups :: ScriptLookups.ScriptLookups PlutusData
         lookups =
           ScriptLookups.validator validator
-            <> ScriptLookups.unspentOutputs adminUtxos
             <> ScriptLookups.unspentOutputs bondedPoolUtxos
 
       -- If depositList is null, update all entries in assocList
@@ -168,15 +160,20 @@ depositBondedPoolContract
       -- Submit transaction with possible batching
       failedDeposits <-
         if batchSize == zero then
-          submitTransaction constraints lookups updateList confirmationTimeout
+          submitTransaction
+            constraints
+            lookups
+            confirmationTimeout
             submissionAttempts
-        else
-          let
-            updateBatches = splitByLength (toIntUnsafe batchSize) updateList
-          in
-            mconcat <$> for updateBatches \txBatch ->
-              submitTransaction constraints lookups txBatch confirmationTimeout
-                submissionAttempts
+            updateList
+        else do
+          let updateBatches = splitByLength (toIntUnsafe batchSize) updateList
+          submitBatchesSequentially
+            constraints
+            lookups
+            confirmationTimeout
+            submissionAttempts
+            updateBatches
       logInfo_
         "depositBondedPoolContract: Finished updating pool entries. /\
         \Entries with failed updates"

@@ -3,11 +3,8 @@ module ClosePool (closeBondedPoolContract) where
 import Contract.Prelude
 
 import BondedStaking.TimeUtils (getClosingTime)
-import Contract.Address
-  ( getNetworkId
-  , ownPaymentPubKeyHash
-  , scriptHashAddress
-  )
+import Contract.Address (getNetworkId, ownPaymentPubKeyHash, scriptHashAddress)
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -15,7 +12,7 @@ import Contract.Monad
   , liftedM
   , throwContractError
   )
-import Contract.Log (logInfo')
+import Contract.Numeric.Natural (Natural)
 import Contract.PlutusData
   ( Datum(..)
   , Redeemer(Redeemer)
@@ -34,10 +31,10 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (elemIndex, (!!))
 import Data.Map (toUnfoldable)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
   ( bondedStakingTokenName
@@ -48,24 +45,27 @@ import Types
   ( BondedPoolParams(BondedPoolParams)
   , BondedStakingAction(CloseAct)
   , BondedStakingDatum
+  , ScriptVersion
   )
-import Contract.Numeric.Natural (Natural)
 import Utils
-  ( getUtxoWithNFT
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
   , logInfo_
   , splitByLength
+  , submitBatchesSequentially
   , submitTransaction
   , toIntUnsafe
-  , getUtxoDatumHash
   )
 
 closeBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
 closeBondedPoolContract
   params@(BondedPoolParams { admin, nftCs })
+  scriptVersion
   batchSize
   closeList = do
   -- Fetch information related to the pool
@@ -79,7 +79,7 @@ closeBondedPoolContract
   logInfo_ "closeBondedPoolContract: Admin PaymentPubKeyHash" admin
   -- Get the bonded pool validator and hash
   validator <- liftedE' "closeBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "closeBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -137,6 +137,8 @@ closeBondedPoolContract
       [ ScriptLookups.validator validator
       , ScriptLookups.unspentOutputs bondedPoolUtxos
       , bondedStateDatumLookup
+      -- We deliberately omit the admin utxos, since batching includes
+      -- them automatically before every batch.
       ]
 
     constraints :: TxConstraints Unit Unit
@@ -145,18 +147,26 @@ closeBondedPoolContract
         <> mustIncludeDatum bondedStateDatum
         <> mustValidateIn txRange
 
+  adminUtxos <- liftedM "closeBondedPoolContract: could not get admin's utxos" $
+    getWalletUtxos
+
   -- Submit transaction with possible batching
   failedDeposits <-
     if batchSize == zero then
-      submitTransaction constraints lookups spendList confirmationTimeout
+      submitTransaction
+        constraints
+        (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+        confirmationTimeout
         submissionAttempts
-    else
-      let
-        updateBatches = splitByLength (toIntUnsafe batchSize) spendList
-      in
-        mconcat <$> for updateBatches \txBatch ->
-          submitTransaction constraints lookups txBatch confirmationTimeout
-            submissionAttempts
+        spendList
+    else do
+      let updateBatches = splitByLength (toIntUnsafe batchSize) spendList
+      submitBatchesSequentially
+        constraints
+        lookups
+        confirmationTimeout
+        submissionAttempts
+        updateBatches
 
   logInfo_
     "closeBondedPoolContract: Finished updating pool entries. /\

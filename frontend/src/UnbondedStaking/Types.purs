@@ -1,5 +1,10 @@
 module UnbondedStaking.Types
-  ( Entry(..)
+  ( SnetInitialParams
+  , SnetContractEnv
+  , SnetContract
+  , Period(..)
+  , PeriodError(..)
+  , Entry(..)
   , InitialUnbondedParams(..)
   , UnbondedPoolParams(..)
   , UnbondedStakingAction(..)
@@ -9,6 +14,7 @@ module UnbondedStaking.Types
 import Contract.Prelude
 
 import Contract.Address (PaymentPubKeyHash)
+import Contract.Monad (Contract)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
 import Contract.PlutusData
@@ -28,9 +34,49 @@ import Contract.PlutusData
   , Z
   )
 import Contract.Prim.ByteArray (ByteArray)
+import Contract.Time (POSIXTime)
 import Contract.Value (CurrencySymbol)
+import Control.Monad.Reader (ReaderT)
 import Data.BigInt (BigInt)
-import Types (AssetClass, BurningAction, MintingAction)
+import Types (AssetClass, BurningAction, MintingAction, ScriptVersion)
+
+-- | The necessary data for initialising a pool.
+type SnetInitialParams =
+  { initialUnbondedParams :: InitialUnbondedParams
+  , scriptVersion :: ScriptVersion
+  }
+
+-- | The environment for executing any SNet contract
+type SnetContractEnv =
+  { unbondedPoolParams :: UnbondedPoolParams
+  , scriptVersion :: ScriptVersion
+  }
+
+type SnetContract a = ReaderT SnetContractEnv (Contract ()) a
+
+-- | This datatype is only used in offchain. It is used to specify a period to
+-- wait for. These match the three non-overlapping time intervals that conform
+-- a given cycle according to the spec. Additionally, there is a
+-- `ClosedPeriod`, which is used to wait until the pool is closed. Since the
+-- unbonded pool does not have an end time, this can wait an indefinite amount
+-- of time.
+data Period = UserPeriod | AdminPeriod | BondingPeriod | ClosedPeriod
+
+derive instance Eq Period
+derive instance Generic Period _
+
+instance Show Period where
+  show = genericShow
+
+data PeriodError
+  = TooSoon { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
+  | TooLate { current :: POSIXTime, start :: POSIXTime, end :: POSIXTime }
+
+derive instance Eq PeriodError
+derive instance Generic PeriodError _
+
+instance Show PeriodError where
+  show = genericShow
 
 -- TODO: Add missing `ToData` instances for POSIXTime and NatRatio.
 newtype UnbondedPoolParams =

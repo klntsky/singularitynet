@@ -9,6 +9,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
+import Contract.Log (logInfo', logAesonInfo)
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -16,10 +17,6 @@ import Contract.Monad
   , liftedE'
   , liftedM
   , throwContractError
-  )
-import Contract.Log
-  ( logInfo'
-  , logAesonInfo
   )
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.PlutusData
@@ -32,10 +29,7 @@ import Contract.PlutusData
   )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( balanceTx
-  , signTransaction
-  )
+import Contract.Transaction (balanceTx, signTransaction)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -46,8 +40,8 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (head)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
+import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkBondedPoolValidator)
 import Settings
@@ -56,12 +50,13 @@ import Settings
   , submissionAttempts
   )
 import Types
-  ( BondedStakingAction(StakeAct)
+  ( BondedPoolParams(BondedPoolParams)
+  , BondedStakingAction(StakeAct)
   , BondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
-  , BondedPoolParams(BondedPoolParams)
   , Entry(Entry)
   , ListAction(ListInsert)
   , MintingAction(MintHead)
+  , ScriptVersion
   , StakingType(Bonded)
   )
 import Utils
@@ -78,6 +73,7 @@ import Utils
 -- Deposits a certain amount in the pool
 userStakeBondedPoolContract
   :: BondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Contract ()
        { txId :: String }
@@ -91,6 +87,7 @@ userStakeBondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   amt = repeatUntilConfirmed confirmationTimeout submissionAttempts do
   -- Fetch information related to the pool
   -- Get network ID
@@ -107,7 +104,7 @@ userStakeBondedPoolContract
   logInfo_ "userStakeBondedPoolContract: User Address" userAddr
   -- Get the bonded pool validator and hash
   validator <- liftedE' "userStakeBondedPoolContract: Cannot create validator"
-    $ mkBondedPoolValidator params
+    $ mkBondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "userStakeBondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -144,7 +141,7 @@ userStakeBondedPoolContract
     assetTn = assetParams.tokenName
     stakeValue = singleton assetCs assetTn amtBigInt
   -- Get the minting policy and currency symbol from the list NFT:
-  listPolicy <- liftedE $ mkListNFTPolicy Bonded nftCs
+  listPolicy <- liftedE $ mkListNFTPolicy Bonded scriptVersion nftCs
   -- Get the token name for the user by hashing
   assocListTn <-
     liftContractM

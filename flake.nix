@@ -142,7 +142,7 @@
               packageJson = ./frontend/package.json;
               packageLock = ./frontend/package-lock.json;
               nodejs = pkgs.nodejs-14_x;
-              shell.packages = [ pkgs.fd ];
+              shell.packages = [ pkgs.fd pkgs.nodePackages.typescript-language-server ];
               strictComp = false;
             };
           in
@@ -166,7 +166,8 @@
 
               checks = {
                 frontend = project.runPlutipTest {
-                  testMain = "Test.Main";
+                  # We only run unit tests for now (without timechecks)
+                  testMain = "SNet.Test.Unit";
                 };
 
                 format-check = pkgs.runCommand "formatting-check"

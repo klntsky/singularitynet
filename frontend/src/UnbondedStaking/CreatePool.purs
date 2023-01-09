@@ -13,13 +13,7 @@ import Contract.Address
   , scriptHashAddress
   )
 import Contract.Log (logWarn')
-import Contract.Monad
-  ( Contract
-  , liftContractM
-  , liftedE
-  , liftedE'
-  , liftedM
-  )
+import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
@@ -53,7 +47,7 @@ import Settings
   , submissionAttempts
   , unbondedStakingTokenName
   )
-import Types (StakingType(Unbonded))
+import Types (ScriptVersion, StakingType(Unbonded))
 import UnbondedStaking.Types
   ( InitialUnbondedParams
   , UnbondedPoolParams
@@ -71,12 +65,13 @@ import Utils
 -- in the pool validator's address
 createUnbondedPoolContract
   :: InitialUnbondedParams
+  -> ScriptVersion
   -> Contract ()
        { txId :: String
        , unbondedPoolParams :: UnbondedPoolParams
        , address :: Bech32String
        }
-createUnbondedPoolContract iup =
+createUnbondedPoolContract iup scriptVersion =
   repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
     adminPkh <- liftedM "createUnbondedPoolContract: Cannot get admin's pkh"
       ownPaymentPubKeyHash
@@ -95,14 +90,14 @@ createUnbondedPoolContract iup =
         <$> (Array.head $ toUnfoldable adminUtxos)
     logInfo_ "createUnbondedPoolContract: Admin Utxos" adminUtxos
     -- Get the minting policy and currency symbol from the state NFT:
-    statePolicy <- liftedE $ mkStateNFTPolicy Unbonded txOutRef
+    statePolicy <- liftedE $ mkStateNFTPolicy Unbonded scriptVersion txOutRef
     stateNftCs <-
       liftContractM
         "createUnbondedPoolContract: Cannot get CurrencySymbol from /\
         \state NFT"
         $ scriptCurrencySymbol statePolicy
     -- Get the minting policy and currency symbol from the list NFT:
-    listPolicy <- liftedE $ mkListNFTPolicy Unbonded stateNftCs
+    listPolicy <- liftedE $ mkListNFTPolicy Unbonded scriptVersion stateNftCs
     assocListCs <-
       liftContractM
         "createUnbondedPoolContract: Cannot get CurrencySymbol from /\
@@ -118,7 +113,7 @@ createUnbondedPoolContract iup =
         iup
     -- Get the bonding validator and hash
     validator <- liftedE' "createUnbondedPoolContract: Cannot create validator"
-      $ mkUnbondedPoolValidator unbondedPoolParams
+      $ mkUnbondedPoolValidator unbondedPoolParams scriptVersion
     let
       valHash = validatorHash validator
       mintValue = singleton stateNftCs tokenName one
@@ -166,8 +161,9 @@ createUnbondedPoolContract iup =
 getUnbondedPoolsContract
   :: String
   -> InitialUnbondedParams
+  -> ScriptVersion
   -> Contract () (Array UnbondedPoolParams)
-getUnbondedPoolsContract addrStr ibp = do
+getUnbondedPoolsContract addrStr ibp scriptVersion = do
   -- Get all UTxOs locked in the protocol's address
   poolUtxos <- utxosAt =<< addressFromBech32 addrStr
   logInfo_ "(getUnbondedPoolContract) UTxOs at pool address: " (show poolUtxos)
@@ -190,7 +186,7 @@ getUnbondedPoolsContract addrStr ibp = do
     addListTokenCs
       :: CurrencySymbol -> Contract () (CurrencySymbol /\ CurrencySymbol)
     addListTokenCs stateNftCs = do
-      listPolicy <- liftedE (mkListNFTPolicy Unbonded stateNftCs)
+      listPolicy <- liftedE (mkListNFTPolicy Unbonded scriptVersion stateNftCs)
       listNftCs <-
         liftMaybe
           (Exception.error "Could not obtain currency symbol from list policy")

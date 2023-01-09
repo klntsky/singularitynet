@@ -40,17 +40,17 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (elemIndex, zip)
+import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Unfoldable (none)
-import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
   ( unbondedStakingTokenName
   , confirmationTimeout
   , submissionAttempts
   )
+import Types (ScriptVersion)
 import UnbondedStaking.Types
   ( Entry(Entry)
   , UnbondedPoolParams(UnbondedPoolParams)
@@ -59,15 +59,16 @@ import UnbondedStaking.Types
   )
 import UnbondedStaking.Utils (calculateRewards, getAdminTime)
 import Utils
-  ( getUtxoWithNFT
-  , mkOnchainAssocList
+  ( getUtxoDatumHash
+  , getUtxoWithNFT
   , logInfo_
+  , mkOnchainAssocList
+  , mustPayToScript
   , roundUp
   , splitByLength
+  , submitBatchesSequentially
   , submitTransaction
   , toIntUnsafe
-  , mustPayToScript
-  , getUtxoDatumHash
   , toRational
   )
 
@@ -80,6 +81,7 @@ import Utils
 depositUnbondedPoolContract
   :: BigInt
   -> UnbondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Array Int
   -> Contract () (Array Int)
@@ -92,6 +94,7 @@ depositUnbondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   batchSize
   _depositList = do
   -- Fetch information related to the pool
@@ -110,7 +113,7 @@ depositUnbondedPoolContract
   adminUtxos <- utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "depositUnbondedPoolContract: Cannot create validator"
-    $ mkUnbondedPoolValidator params
+    $ mkUnbondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "depositUnbondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -139,7 +142,7 @@ depositUnbondedPoolContract
       $ fromData (unwrap poolDatum)
   -- Get the validitiy range to use
   logInfo' "depositUnbondedPoolContract: Getting admin range..."
-  { currTime, range } <- getAdminTime params
+  { currTime, range } <- getAdminTime params scriptVersion
   logInfo_ "depositUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "depositUnbondedPoolContract: TX Range" range
   -- Update the association list
@@ -171,17 +174,9 @@ depositUnbondedPoolContract
       entryUpdates
         :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
         traverse (updateEntryTx params valHash)
-          (zip entriesInputs (zip entriesDatums updatedEntriesDatums))
-
-      -- updateList <-
-      --   if null depositList then
-      --     traverse (mkEntryUpdateList depositAmt params valHash) assocList
-      --   else do
-      --     constraintsLookupsList <-
-      --       traverse (mkEntryUpdateList depositAmt params valHash) assocList
-      --     liftContractM
-      --       "depositUnbondedPoolContract: Failed to create updateList'" $
-      --       traverse ((!!) constraintsLookupsList) depositList
+          ( Array.zip entriesInputs
+              (Array.zip entriesDatums updatedEntriesDatums)
+          )
 
       let
         constraints :: TxConstraints Unit Unit
@@ -193,33 +188,28 @@ depositUnbondedPoolContract
         lookups =
           ScriptLookups.validator validator
             <> ScriptLookups.unspentOutputs unbondedPoolUtxos
-            <> ScriptLookups.unspentOutputs adminUtxos
-
-        submitBatch
-          :: Array
-               ( Tuple
-                   (TxConstraints Unit Unit)
-                   (ScriptLookups.ScriptLookups PlutusData)
-               )
-          -> Contract ()
-               ( Array
-                   ( Tuple
-                       (TxConstraints Unit Unit)
-                       (ScriptLookups.ScriptLookups PlutusData)
-                   )
-               )
-        submitBatch txBatch = do
-          submitTransaction constraints lookups txBatch confirmationTimeout
-            submissionAttempts
+      -- We deliberately omit the admin utxos, since batching includes
+      -- them automatically before every batch.
 
       -- Submit transaction with possible batching
       failedDeposits <-
         if batchSize == zero then
-          submitBatch entryUpdates
+          submitTransaction
+            constraints
+            (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+            confirmationTimeout
+            submissionAttempts
+            entryUpdates
         else do
-          let updateBatches = splitByLength (toIntUnsafe batchSize) entryUpdates
-          failedDeposits' <- traverse submitBatch updateBatches
-          pure $ mconcat failedDeposits'
+          let
+            entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
+              entryUpdates
+          submitBatchesSequentially
+            constraints
+            lookups
+            confirmationTimeout
+            submissionAttempts
+            entryUpdateBatches
       logInfo_
         "depositUnbondedPoolContract: Finished updating pool entries. /\
         \Entries with failed updates"
@@ -228,7 +218,7 @@ depositUnbondedPoolContract
         liftContractM
           "depositUnbondedPoolContract: Failed to create /\
           \failedDepositsIndicies list" $
-          traverse (flip elemIndex entryUpdates) failedDeposits
+          traverse (flip Array.elemIndex entryUpdates) failedDeposits
       pure failedDepositsIndicies
     -- Other error cases:
     StateDatum { maybeEntryName: Nothing, open: true } ->

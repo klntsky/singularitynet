@@ -8,7 +8,8 @@
     "test": "test"
   },
   "scripts": {
-    "test": "spago run --main Test.Main",
+    "unit": "spago run -b 'unit' --main SNet.Test.Unit",
+    "unit-withtimechecks": "spago run -b 'unit --with-timechecks' --main SNet.Test.Unit",
     "ps:dev": "make ps-dev",
     "ps:build": "make ps-build",
     "js:build": "make js-build"

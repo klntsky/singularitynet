@@ -25,7 +25,7 @@ import DepositPool (depositBondedPoolContract)
 import Effect.Aff (delay)
 import Effect.Exception (error)
 import Settings (testInitBondedParams)
-import Types (BondedPoolParams(..))
+import Types (BondedPoolParams(..), ScriptVersion(..))
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (logInfo_, countdownTo)
@@ -64,7 +64,7 @@ testBonded = launchAff_ do
       initParams' /\ currTime <- startPoolFromNow startDelay initParams
       logInfo_ "Pool creation time" currTime
       -- We build the transaction and submit it. We finally get all the parameters of the pool
-      { bondedPoolParams } <- createBondedPoolContract initParams'
+      { bondedPoolParams } <- createBondedPoolContract initParams' Production
       logInfo_ "Pool parameters" bondedPoolParams
       pure bondedPoolParams
 
@@ -76,7 +76,7 @@ testBonded = launchAff_ do
   userStake <- liftM (error "main: Cannot create userStake from String") $
     Natural.fromString "40000"
   _ <- runContract_ $
-    userStakeBondedPoolContract bondedParams userStake
+    userStakeBondedPoolContract bondedParams Production userStake
 
   waitForWalletChange "ADMIN"
   log "Waiting for bonding period..."
@@ -89,6 +89,7 @@ testBonded = launchAff_ do
     void $
       depositBondedPoolContract
         bondedParams
+        Production
         depositBatchSize
         []
 
@@ -98,7 +99,7 @@ testBonded = launchAff_ do
 
   ---- User 1 withdraws ----
   _ <- runContract_ $
-    userWithdrawBondedPoolContract bondedParams
+    userWithdrawBondedPoolContract bondedParams Production
 
   waitForWalletChange "ADMIN"
   log "Waiting for closing period..."
@@ -108,7 +109,7 @@ testBonded = launchAff_ do
   closeBatchSize <-
     liftM (error "Cannot create Natural") $ Natural.fromString "10"
   runContract_ do
-    void $ closeBondedPoolContract bondedParams closeBatchSize []
+    void $ closeBondedPoolContract bondedParams Production closeBatchSize []
     logInfo' "main: Pool closed"
 
 -- Unbonded: admin create pool, user stake, admin deposit (rewards),

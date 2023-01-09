@@ -8,6 +8,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -16,7 +17,6 @@ import Contract.Monad
   , liftedM
   , throwContractError
   )
-import Contract.Log (logInfo')
 import Contract.Numeric.Natural (Natural, toBigInt)
 import Contract.PlutusData
   ( PlutusData
@@ -28,11 +28,7 @@ import Contract.PlutusData
   )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionOutput
-  , balanceTx
-  , signTransaction
-  )
+import Contract.Transaction (TransactionOutput, balanceTx, signTransaction)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -43,8 +39,8 @@ import Contract.TxConstraints
 import Contract.Utxos (utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
-import Data.Array (head)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
+import Data.Array (head)
 import Scripts.ListNFT (mkListNFTPolicy)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
@@ -55,6 +51,7 @@ import Settings
 import Types
   ( ListAction(ListInsert)
   , MintingAction(MintHead)
+  , ScriptVersion
   , StakingType(Unbonded)
   )
 import UnbondedStaking.Types
@@ -78,6 +75,7 @@ import Utils
 -- Deposits a certain amount in the pool
 userStakeUnbondedPoolContract
   :: UnbondedPoolParams
+  -> ScriptVersion
   -> Natural
   -> Contract ()
        { txId :: String }
@@ -91,6 +89,7 @@ userStakeUnbondedPoolContract
         , assocListCs
         }
     )
+  scriptVersion
   amt = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
   -- Fetch information related to the pool
   -- Get network ID
@@ -109,7 +108,7 @@ userStakeUnbondedPoolContract
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
-    $ mkUnbondedPoolValidator params
+    $ mkUnbondedPoolValidator params scriptVersion
   let valHash = validatorHash validator
   logInfo_ "userStakeUnbondedPoolContract: validatorHash" valHash
   let poolAddr = scriptHashAddress valHash Nothing
@@ -152,7 +151,7 @@ userStakeUnbondedPoolContract
   logInfo_ "userStakeUnbondedPoolContract: Hashed user PKH" hashedUserPkh
 
   -- Get the minting policy and currency symbol from the list NFT:
-  listPolicy <- liftedE $ mkListNFTPolicy Unbonded nftCs
+  listPolicy <- liftedE $ mkListNFTPolicy Unbonded scriptVersion nftCs
 
   -- Get the token name for the user by hashing
   assocListTn <-
@@ -164,9 +163,9 @@ userStakeUnbondedPoolContract
 
   -- Get the staking range to use
   logInfo' "userStakeUnbondedPoolContract: Getting user time range..."
-  { currTime, range } <- getUserTime params
-  logInfo_ "userStakeUnbondedPoolContract: Current time: " $ show currTime
-  logInfo_ "userStakeUnbondedPoolContract: TX Range" range
+  { currTime, range } <- getUserTime params scriptVersion
+  logInfo' $ "userStakeUnbondedPoolContract: Current time: " <> show currTime
+  logInfo' $ "userStakeUnbondedPoolContract: TX Range" <> show range
 
   -- Figure out where in the linked list the new stake goes
   constraints /\ lookup <- case unbondedStakingDatum of

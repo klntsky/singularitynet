@@ -21,7 +21,9 @@ module Utils
   , roundUp
   , splitByLength
   , submitTransaction
+  , submitBatchesSequentially
   , toIntUnsafe
+  , valueOf'
   , repeatUntilConfirmed
   , mustPayToScript
   , getUtxoDatumHash
@@ -37,6 +39,7 @@ import Contract.Monad
   ( Contract
   , liftContractM
   , liftedE
+  , liftedM
   , tag
   , throwContractError
   )
@@ -50,6 +53,7 @@ import Contract.PlutusData
   , OutputDatum(OutputDatumHash)
   )
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray, byteArrayToHex)
+import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript, ValidatorHash)
 import Contract.Time
@@ -77,7 +81,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   )
 import Contract.TxConstraints as TxConstraints
-import Contract.Utxos (UtxoMap)
+import Contract.Utxos (UtxoMap, getWalletUtxos)
 import Contract.Value
   ( CurrencySymbol
   , TokenName
@@ -465,17 +469,18 @@ splitByLength size array
         map (\i -> slice (i * size) ((i * size) + size) array) $
           0 .. sublistCount
 
--- | Submits a transaction with the given list of constraints/lookups
+-- | Submits a transaction with the given list of constraints/lookups. It
+-- returns the same constraints/lookups if it fails.
 submitTransaction
   :: TxConstraints Unit Unit
   -> ScriptLookups.ScriptLookups PlutusData
+  -> Seconds
+  -> Int
   -> Array
        ( Tuple
            (TxConstraints Unit Unit)
            (ScriptLookups.ScriptLookups PlutusData)
        )
-  -> Seconds
-  -> Int
   -> Contract ()
        ( Array
            ( Tuple
@@ -483,7 +488,7 @@ submitTransaction
                (ScriptLookups.ScriptLookups PlutusData)
            )
        )
-submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
+submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
   do
     let
       constraintList = fst <$> updateList
@@ -504,6 +509,44 @@ submitTransaction baseConstraints baseLookups updateList timeout maxAttempts =
         pure updateList
       Right _ ->
         pure []
+
+-- Submits a series of batches to be executed sequentially, where each batch
+-- is defined by a given list of constraints/lookups. Importantly, for each
+-- batch the wallet's UTxOs are fetched and added to the lookups.
+submitBatchesSequentially
+  :: TxConstraints Unit Unit
+  -> ScriptLookups PlutusData
+  -> Seconds
+  -> Int
+  -> Array
+       ( Array
+           ( Tuple
+               (TxConstraints Unit Unit)
+               (ScriptLookups.ScriptLookups PlutusData)
+           )
+       )
+  -> Contract ()
+       ( Array
+           ( Tuple
+               (TxConstraints Unit Unit)
+               (ScriptLookups.ScriptLookups PlutusData)
+           )
+       )
+submitBatchesSequentially
+  constraints
+  lookups
+  confirmationTimeout
+  submissionAttempts
+  batches = do
+  mconcat <$> traverse submitTransaction' batches
+  where
+  submitTransaction' batch = do
+    utxos <- liftedM "submitBatchesSequentially: could not get wallet utxos" $
+      getWalletUtxos
+    let lookups' = lookups <> ScriptLookups.unspentOutputs utxos
+    submitTransaction constraints lookups' confirmationTimeout
+      submissionAttempts
+      batch
 
 -- | This function executes a `Contract` that returns a `BalancedSignedTransaction`,
 -- | submits it, and waits `timeout` seconds for it to succeed. If it does not,
@@ -570,3 +613,7 @@ addressFromBech32 str = do
   when (networkId /= SA.addressNetworkId cslAddress)
     (throwError $ error "addressFromBech32: address has wrong NetworkId")
   pure address
+
+-- | `valueOf` but with sane argument ordering.
+valueOf' :: CurrencySymbol -> TokenName -> Value -> BigInt
+valueOf' cs tn v = valueOf v cs tn
