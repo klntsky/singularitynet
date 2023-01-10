@@ -1,4 +1,9 @@
-module UnbondedStaking.DepositPool (depositUnbondedPoolContract) where
+module UnbondedStaking.DepositPool
+  ( depositUnbondedPoolContract
+  , updateEntryTx
+  , updateEntriesList
+  , updateOutdatedEntriesList
+  ) where
 
 import Contract.Prelude
 
@@ -61,7 +66,7 @@ import UnbondedStaking.Types
   , UnbondedStakingAction(AdminAct)
   , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   )
-import UnbondedStaking.Utils (calculateRewards, getAdminTime)
+import UnbondedStaking.Utils (calculateRewards, getAdminTime, getListDatums)
 import Utils
   ( getUtxoDatumHash
   , getUtxoWithNFT
@@ -184,18 +189,23 @@ depositUnbondedPoolContract
           Just (IncompleteDeposit incompDeposit) -> do
             -- Use only the entries with the given keys
             let
-              assocList' :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
+              assocList'
+                :: Array
+                     ( ByteArray /\ TransactionInput /\
+                         TransactionOutputWithRefScript
+                     )
               assocList' = Array.filter
                 (\(ba /\ _) -> Array.elem ba incompDeposit.failedKeys)
                 assocList
               entriesInputs = map (fst <<< snd) assocList'
             entriesDatums <- getListDatums assocList'
             -- Assign rewards and update fields to outdated entries
-            let updatedEntriesDatums =
-                   updateOutdatedEntriesList
-                      incompDeposit.nextDepositAmt
-                      incompDeposit.totalDeposited
-                      entriesDatums
+            let
+              updatedEntriesDatums =
+                updateOutdatedEntriesList
+                  incompDeposit.nextDepositAmt
+                  incompDeposit.totalDeposited
+                  entriesDatums
             pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
 
       -- Generate constraints/lookups for updating each entry
@@ -272,34 +282,6 @@ depositUnbondedPoolContract
     _ ->
       throwContractError "depositUnbondedPoolContract: Datum incorrect type"
 
--- | Get all entries' datums
-getListDatums
-  :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
-  -> Contract () (Array Entry)
-getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
-  -- Get the entry's datum
-  dHash <-
-    liftContractM
-      "getListDatums: Could not get entry's datum hash"
-      $ getUtxoDatumHash txOut
-  dat <-
-    liftedM
-      "getListDatums: Cannot get entry's datum" $ getDatumByHash dHash
-  -- Parse it
-  unbondedListDatum :: UnbondedStakingDatum <-
-    liftContractM
-      "getListDatums: Cannot parse entry's datum"
-      $ fromData (unwrap dat)
-  -- The get the entry datum
-  case unbondedListDatum of
-    EntryDatum { entry } -> pure entry
-    StateDatum _ ->
-      throwContractError
-        "getListDatums: Expected a list datum but found a state datum"
-    AssetDatum ->
-      throwContractError
-        "getListDatums: Expected an list datum but found an asset datum"
-
 -- | Updates all entries in two passes. We need two passes because all
 -- entries must contain the `totalDeposited` amount in the pool, which requires
 -- traversing the array at least once.
@@ -320,12 +302,12 @@ updateOutdatedEntriesList
   -> Array Entry
   -> Array Entry
 updateOutdatedEntriesList nextDepositAmt totalDeposited =
-    map \entry@(Entry e) ->
-      Entry $ e {
-        newDeposit = zero,
-        rewards = calculateRewards entry,
-        totalRewards = nextDepositAmt,
-        totalDeposited = totalDeposited
+  map \entry@(Entry e) ->
+    Entry $ e
+      { newDeposit = zero
+      , rewards = calculateRewards entry
+      , totalRewards = nextDepositAmt
+      , totalDeposited = totalDeposited
       }
 
 -- | Assign rewards to each entry, set `newDeposit` to zero, set next

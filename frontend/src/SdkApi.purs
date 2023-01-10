@@ -171,8 +171,8 @@ fromSdkIncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt } =
     }
 
 fromSdkIncompleteClose :: SdkIncompleteClose -> IncompleteClose
-fromSdkIncompleteClose { failedKeys: fk } =
-  IncompleteClose { failedKeys: map wrap fk }
+fromSdkIncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited } =
+  IncompleteClose { failedKeys: map wrap fk, stateUtxoConsumed, totalDeposited }
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
@@ -251,8 +251,9 @@ toSdkIncompleteDeposit
   }
 
 toSdkIncompleteClose :: IncompleteClose -> SdkIncompleteClose
-toSdkIncompleteClose (IncompleteClose { failedKeys: fk }) =
-  { failedKeys: map unwrap fk }
+toSdkIncompleteClose
+  (IncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited }) =
+  { failedKeys: map unwrap fk, stateUtxoConsumed, totalDeposited }
 
 fromSdkNat :: String -> String -> BigInt -> Either Error Natural
 fromSdkNat context name bint = note (error msg) $ fromBigInt bint
@@ -516,6 +517,8 @@ type SdkIncompleteDeposit =
 
 type SdkIncompleteClose =
   { failedKeys :: Array Uint8Array
+  , totalDeposited :: BigInt
+  , stateUtxoConsumed :: Boolean
   }
 
 callCreateUnbondedPool
@@ -554,19 +557,23 @@ callDepositUnbondedPool cfg amt upa bi id' = Promise.fromAff $ runContract cfg
     nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
       $ fromBigInt bi
     let id = fromSdkIncompleteDeposit <$> id'
-    map toSdkIncompleteDeposit <$> depositUnbondedPoolContract amt upp Production nat id
+    map toSdkIncompleteDeposit <$> depositUnbondedPoolContract amt upp
+      Production
+      nat
+      id
 
 callCloseUnbondedPool
   :: ConfigParams ()
   -> UnbondedPoolArgs
   -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callCloseUnbondedPool cfg upa bi arr = Promise.fromAff $ runContract cfg do
+  -> Maybe SdkIncompleteClose
+  -> Effect (Promise (Maybe SdkIncompleteClose))
+callCloseUnbondedPool cfg upa bi ic' = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callCloseUnbondedPool: Invalid natural number")
     $ fromBigInt bi
-  closeUnbondedPoolContract upp Production nat arr
+  let ic = fromSdkIncompleteClose <$> ic'
+  map toSdkIncompleteClose <$> closeUnbondedPoolContract upp Production nat ic
 
 callUserStakeUnbondedPool
   :: ConfigParams ()
@@ -721,17 +728,18 @@ callGetNodeTime cfg = fromAff
 
 -- We export constructors and consumers of `Maybe` for the JS code
 
-callJust :: forall a . a -> Maybe a
+callJust :: forall a. a -> Maybe a
 callJust = Just
 
-callNothing :: forall a . Maybe a
+callNothing :: forall a. Maybe a
 callNothing = Nothing
 
 -- We need this escape hatch to allow the JS code to consume a `Maybe a`
 -- however it wants
 foreign import data AnyType :: Type
 
-callConsumeMaybe :: forall a . (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> AnyType
+callConsumeMaybe
+  :: forall a. (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> AnyType
 callConsumeMaybe just nothing = case _ of
-    Nothing -> nothing unit
-    Just x -> just x
+  Nothing -> nothing unit
+  Just x -> just x

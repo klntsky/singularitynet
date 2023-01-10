@@ -10,6 +10,7 @@ import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
+import Data.Maybe (Maybe(..), isNothing)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
@@ -52,14 +53,14 @@ test initialParams userCount batchSize = withWalletsAndPool initialParams
               "Incorrect amount of FAKEGIX deducted from user wallet"
     withKeyWallet adminWallet do
       waitFor AdminPeriod
-      failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams
+      failedCloses <- lift $ closeUnbondedPoolContract unbondedPoolParams
         scriptVersion
         (nat batchSize)
-        []
-      when (not $ Array.null failedIndices)
+        Nothing
+      when (not $ isNothing failedCloses)
         $ lift
         $ throwContractError
-        $ "Some entries failed to be closed " <> show failedIndices
+        $ "Some entries failed to be closed " <> show failedCloses
   where
   usersInitialUtxos :: Array (InitialUTxOs /\ BigInt)
   usersInitialUtxos = Array.replicate userCount $

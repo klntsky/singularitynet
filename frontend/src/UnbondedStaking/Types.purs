@@ -342,15 +342,17 @@ data IncompleteDeposit = IncompleteDeposit
 derive instance Generic IncompleteDeposit _
 
 instance Show IncompleteDeposit where
-    show = genericShow
+  show = genericShow
 
 -- | Serves same purpose as `IncompleteDeposit`, but for the close action.
 data IncompleteClose = IncompleteClose
   { failedKeys :: Array ByteArray
+  , totalDeposited :: BigInt
+  , stateUtxoConsumed :: Boolean
   }
 
 derive instance Generic IncompleteClose _
 
 instance Show IncompleteClose where
-    show = genericShow
+  show = genericShow
 

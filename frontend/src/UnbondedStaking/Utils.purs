@@ -8,6 +8,7 @@ module UnbondedStaking.Utils
   , getPeriodRange
   , getNextPeriodRange
   , mkUnbondedPoolParams
+  , getListDatums
   , queryAssocListUnbonded
   , queryStateUnbonded
   ) where
