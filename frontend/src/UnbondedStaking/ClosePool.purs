@@ -166,9 +166,9 @@ closeUnbondedPoolContract
         constraints :: TxConstraints Unit Unit
         constraints =
           mustBeSignedBy admin
-            <> mustIncludeDatum poolDatum
             <> mustValidateIn range
 
+        -- TODO: Consume the state UTxO!
         lookups :: ScriptLookups.ScriptLookups PlutusData
         lookups =
           ScriptLookups.validator validator

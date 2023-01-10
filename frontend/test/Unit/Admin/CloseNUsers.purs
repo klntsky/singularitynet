@@ -2,7 +2,7 @@ module SNet.Test.Unit.Admin.CloseNUser (test) where
 
 import Prelude
 
-import Contract.Monad (throwContractError)
+import Contract.Monad (Contract, throwContractError)
 import Contract.Numeric.Natural as Natural
 import Contract.Test.Plutip (PlutipTest, InitialUTxOs)
 import Control.Monad.Reader (ask, lift)
@@ -16,26 +16,30 @@ import SNet.Test.Common
   ( getAdminWallet
   , getUserWallet
   , getWalletFakegix
-  , testInitialParamsNoTimeChecks
-  , withWalletsAndPool
+  , waitFor
   , withKeyWallet
+  , withWalletsAndPool
   )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
+import UnbondedStaking.Types
+  ( Period(UserPeriod, AdminPeriod)
+  , SnetInitialParams
+  )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import Utils (nat)
 
 -- | The admin closes a pool with `n` user entries.
-test :: Int -> Int -> PlutipTest
-test userCount batchSize = withWalletsAndPool testInitialParamsNoTimeChecks
+test :: Contract () SnetInitialParams -> Int -> Int -> PlutipTest
+test initialParams userCount batchSize = withWalletsAndPool initialParams
   usersInitialUtxos
   \wallets -> do
     adminWallet <- getAdminWallet wallets
     { unbondedPoolParams, scriptVersion } <- ask
     let stakeAmtBase = BigInt.fromInt 1000
-    --expectedPoolValue = sum $ map (_ * stakeAmtBase) $ BigInt.fromInt <$> 0 .. (userCount - 1)
     for_ (0 .. (userCount - 1)) \idx -> getUserWallet idx wallets >>= flip
       withKeyWallet
       do
+        waitFor UserPeriod
         let stakeAmt = BigInt.fromInt (idx + 1) * stakeAmtBase
         initialFakegix <- getWalletFakegix
         _txId <- lift
@@ -47,6 +51,7 @@ test userCount batchSize = withWalletsAndPool testInitialParamsNoTimeChecks
           $ throwContractError
               "Incorrect amount of FAKEGIX deducted from user wallet"
     withKeyWallet adminWallet do
+      waitFor AdminPeriod
       failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams
         scriptVersion
         (nat batchSize)
