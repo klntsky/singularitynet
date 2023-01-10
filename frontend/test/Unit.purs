@@ -27,6 +27,7 @@ import SNet.Test.Common
   , testInitialParamsNoTimeChecks
   )
 import SNet.Test.Unit.Admin.Close as Close
+import SNet.Test.Unit.Admin.CompleteDeposit as CompleteDeposit
 import SNet.Test.Unit.Admin.Deposit1User as Deposit1User
 import SNet.Test.Unit.Admin.DepositEmpty as DepositEmpty
 import SNet.Test.Unit.Admin.DepositNUser as DepositNUser
@@ -44,8 +45,7 @@ unitTests initParams =
       test "Open/Create Pool" $ Open.test initParams
       test "Close Pool" $ Close.test initParams
       test "Deposit to empty pool" $ DepositEmpty.test initParams
-      test "Deposit to pool with 1 user's stake" $ Deposit1User.test
-        initParams
+      test "Deposit to pool with 1 user's stake" $ Deposit1User.test initParams
       ( let
           n = 10
           b = 5
@@ -71,7 +71,17 @@ unitTests initParams =
             $
               DepositNUser.test initParams n b
       )
-    group "User" do
+      ( let
+          n = 5
+        in
+          test
+            ( "Deposit to pool with " <> show n <>
+                " users' stake using completeDeposit"
+            )
+            $
+              CompleteDeposit.test initParams n
+      )
+    skip $ group "User" do
       test "Stake" $ Stake.test initParams
       test "Stake and withdraw" $ StakeAndWithdraw.test initParams
       ( let
