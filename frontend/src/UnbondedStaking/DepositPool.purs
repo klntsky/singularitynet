@@ -13,7 +13,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo')
+import Contract.Log (logInfo', logWarn')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -199,6 +199,18 @@ depositUnbondedPoolContract
                 assocList
               entriesInputs = map (fst <<< snd) assocList'
             entriesDatums <- getListDatums assocList'
+            -- Print warning if some of the failed keys were not found in the pool
+            let
+              keysNotFound :: Array ByteArray
+              keysNotFound =
+                Array.difference
+                  (fst <$> assocList)
+                  incompDeposit.failedKeys
+            when (Array.length keysNotFound /= 0)
+              $ logWarn'
+              $ show (Array.length keysNotFound)
+              <> " of the outdated entries were not found in the pool: "
+              <> show keysNotFound
             -- Assign rewards and update fields to outdated entries
             let
               updatedEntriesDatums =

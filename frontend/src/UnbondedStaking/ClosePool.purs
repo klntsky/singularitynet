@@ -8,7 +8,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo')
+import Contract.Log (logInfo', logWarn')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -176,6 +176,18 @@ closeUnbondedPoolContract
             (\(ba /\ _) -> Array.elem ba incompClose.failedKeys)
             assocList
           entriesInputs = map (fst <<< snd) assocList'
+        -- Print warning if some of the failed keys were not found in the pool
+        let
+          keysNotFound :: Array ByteArray
+          keysNotFound =
+            Array.difference
+              (fst <$> assocList)
+              incompClose.failedKeys
+        when (Array.length keysNotFound /= 0)
+          $ logWarn'
+          $ show (Array.length keysNotFound)
+          <> " of the outdated entries were not found in the pool: "
+          <> show keysNotFound
         entriesDatums <- getListDatums assocList'
         -- Assign rewards and close the outdated entries
         let
