@@ -29,6 +29,7 @@ import SNet.Test.Common
 import SNet.Test.Unit.Admin.Close as Close
 import SNet.Test.Unit.Admin.CloseNUser as CloseNUser
 import SNet.Test.Unit.Admin.CompleteDeposit as CompleteDeposit
+import SNet.Test.Unit.Admin.CompleteClose as CompleteClose
 import SNet.Test.Unit.Admin.Deposit1User as Deposit1User
 import SNet.Test.Unit.Admin.DepositEmpty as DepositEmpty
 import SNet.Test.Unit.Admin.DepositNUser as DepositNUser
@@ -53,11 +54,11 @@ unitTests initParams =
           b = 5
         in
           test
-                ( "Deposit to pool with " <> show n
-                    <> " users' stake (batch size = "
-                    <> show b
-                    <> ")"
-                )
+            ( "Deposit to pool with " <> show n
+                <> " users' stake (batch size = "
+                <> show b
+                <> ")"
+            )
             $
               DepositNUser.test initParams n b
       )
@@ -77,11 +78,21 @@ unitTests initParams =
           n = 5
         in
           test
-                ( "Deposit to pool with " <> show n <>
-                    " users' stake using completeDeposit"
-                )
+            ( "Deposit to pool with " <> show n <>
+                " users' stake using completeDeposit"
+            )
             $
               CompleteDeposit.test initParams n
+      )
+      ( let
+          n = 5
+        in
+          test
+            ( "Close pool with " <> show n <>
+                " users' stake using closeDeposit"
+            )
+            $
+              CompleteClose.test initParams n
       )
     group "User" do
       test "Stake" $ Stake.test initParams
