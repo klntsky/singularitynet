@@ -20,12 +20,11 @@ import Contract.Numeric.Natural (Natural)
 import Contract.PlutusData
   ( PlutusData
   , Redeemer(Redeemer)
-  , fromData
   , getDatumByHash
   , toData
   )
 import Contract.Prim.ByteArray (ByteArray)
-import Contract.ScriptLookups (ScriptLookups(..))
+import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)

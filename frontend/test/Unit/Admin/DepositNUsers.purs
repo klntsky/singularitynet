@@ -10,7 +10,7 @@ import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
-import Data.Maybe(Maybe(Nothing), isNothing)
+import Data.Maybe (Maybe(Nothing), isNothing)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common

@@ -10,7 +10,15 @@ import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Maybe (Maybe(..), isNothing)
 import Data.Tuple.Nested (type (/\), (/\))
-import SNet.Test.Common (getAdminWallet, getUserWallet, getWalletFakegix, waitFor, waitForNext, withKeyWallet, withWalletsAndPool)
+import SNet.Test.Common
+  ( getAdminWallet
+  , getUserWallet
+  , getWalletFakegix
+  , waitFor
+  , waitForNext
+  , withKeyWallet
+  , withWalletsAndPool
+  )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)

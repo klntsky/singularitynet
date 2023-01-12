@@ -8,7 +8,7 @@ import Control.Monad.Error.Class (try)
 import Control.Monad.Reader (ask, lift)
 import Data.BigInt as BigInt
 import Data.Either (isRight)
-import Data.Maybe(Maybe(Nothing))
+import Data.Maybe (Maybe(Nothing))
 import SNet.Test.Common
   ( getAdminWallet
   , waitFor
