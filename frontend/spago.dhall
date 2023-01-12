@@ -27,6 +27,7 @@ You can edit this file as you like.
   , "optparse"
   , "partial"
   , "prelude"
+  , "purescript-quickcheck"
   , "record"
   , "strings"
   , "spec"
