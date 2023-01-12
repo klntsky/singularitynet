@@ -343,12 +343,8 @@ userWithdrawUnbondedPoolContract
                     poolTxInput
                     entryInput
                 -- New state lookup
-                stateDatumLookup <-
-                  liftContractM
-                    "userWithdrawUnbondedPoolContract: Could not create state datum \
-                    \lookup"
-                    $ ScriptLookups.datum newState
                 let
+                  stateDatumLookup = ScriptLookups.datum newState
                   stateTokenValue = singleton nftCs tokenName one
 
                   constraints :: TxConstraints Unit Unit
@@ -402,14 +398,10 @@ userWithdrawUnbondedPoolContract
                         { next = burnEntry.next
                         }
                     }
-                prevEntryDatumLookup <-
-                  liftContractM
-                    "userWithdrawUnbondedPoolContract: Could not create updated prev \
-                    \ entry datum lookup"
-                    $ ScriptLookups.datum prevEntryUpdated
 
                 -- Build validator redeemer
                 let
+                  prevEntryDatumLookup = ScriptLookups.datum prevEntryUpdated
                   valRedeemer = Redeemer <<< toData $
                     WithdrawAct
                       { stakeHolder: userPkh
