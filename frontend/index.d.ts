@@ -8,8 +8,9 @@ export declare class Pool<T> {
   constructor(config: SdkConfig, args: T, address: string);
 
   deposit(amount: BigInteger, batchSize: BigInteger): Promise<IncompleteDeposit | null>;
-  completeDeposit(incompleteDeposit: IncompleteDeposit, batchSize: BigInteger): Promise<Incompleteeposit | null>;
+  completeDeposit(incompleteDeposit: IncompleteDeposit, batchSize: BigInteger): Promise<IncompleteDeposit | null>;
   close(batchSize: BigInteger, idxArray: int[]): Promise<int[]>;
+  completeClose(incompleteClose: IncompleteClose, batchSize: BigInteger): Promise<IncompleteDeposit | null>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
   getAssocList(): Promise<EntryList>;

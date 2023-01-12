@@ -86,9 +86,20 @@ exports.UnbondedPool = class UnbondedPool {
   async close(batchSize, idxArray) {
     const contracts = await frontend;
     const _config = await this._config;
+    const incompleteCloseMaybe = frontend.callNothing;
     return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
-      idxArray
+      incompleteCloseMaybe
     )();
+  }
+
+  async completeClose(incompleteClose, batchSize) {
+    const contracts = await frontend;
+    const _config = await this._config;
+    const incompleteCloseMaybe = frontend.callJust(incompleteClose);
+    const result = await contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
+      incompleteCloseMaybe
+    )();
+    return frontend.callConsumeMaybe(x => x)(x => null)(result);
   }
 
   async userStake(amount) {

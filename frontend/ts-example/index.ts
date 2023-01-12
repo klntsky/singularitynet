@@ -104,7 +104,7 @@ const main = async () => {
   );
   const depositBatchSize = BigInteger(0);
   const adminDeposit = BigInteger(40000);
-  const r2 = await unbondedPool.deposit(adminDeposit, depositBatchSize, []);
+  const r2 = await unbondedPool.deposit(adminDeposit, depositBatchSize);
   console.log(JSON.stringify(r2));
   const l2 = await unbondedPool.getAssocList()
   console.log(JSON.stringify(l2))
