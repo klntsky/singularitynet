@@ -27,7 +27,7 @@ You can edit this file as you like.
   , "optparse"
   , "partial"
   , "prelude"
-  , "purescript-quickcheck"
+  , "quickcheck"
   , "record"
   , "strings"
   , "spec"
@@ -35,6 +35,7 @@ You can edit this file as you like.
   , "tuples"
   , "uint"
   , "unfoldable"
+  , "undefined"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "exe/**/*.purs", "test/**/*.purs" ]

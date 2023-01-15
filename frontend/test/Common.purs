@@ -182,7 +182,7 @@ waitFor :: Period -> SnetContract Unit
 waitFor period = waitFor' period false
 
 -- Wait for a given period to start. It can either wait for the period in the
--- current cycle of the next one.
+-- current cycle or the next one.
 waitFor' :: Period -> Boolean -> SnetContract Unit
 waitFor' period skipCurrent = do
   { unbondedPoolParams, scriptVersion: sv } <- ask
