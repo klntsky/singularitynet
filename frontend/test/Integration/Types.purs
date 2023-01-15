@@ -1,10 +1,20 @@
-module Test.Integration.Types where
+module SNet.Test.Integration.Types
+  ( StateMachineInputs(..)
+  , MachineState(..)
+  , IntegrationFailure(..)
+  , InputConfig(..)
+  , UserCommand(..)
+  , AdminCommand(..)
+  , UserIdx
+  , Fakegix
+  ) where
 
-import Contract.Monad (Contract)
+import Prelude
+
 import Data.BigInt (BigInt)
-import UnbondedStaking.Types (SnetInitialParams)
-import Test.QuickCheck.Arbitrary (class Arbitrary)
-import Undefined (undefined)
+import Data.Show.Generic (genericShow)
+import Data.Generic.Rep (class Generic)
+import Data.Tuple.Nested (type (/\))
 
 type UserIdx = Int
 type Fakegix = BigInt
@@ -12,30 +22,49 @@ type Fakegix = BigInt
 -- This module has type definitions to test a state machine using purescript-quickcheck.
 --
 -- Datatype representing the inputs of the state machine.
--- There is one input per user/per cycle.
-type StateMachineInputs =
-  { userInputs :: Array (Array UserInput)
-  , adminInput :: Array AdminInput
+-- There is at least one input per user/per cycle.
+newtype StateMachineInputs =
+  StateMachineInputs
+    { userInputs :: Array (Array (Array UserCommand))
+    , adminInput :: Array AdminCommand
+    }
+
+derive instance Generic StateMachineInputs _
+instance Show StateMachineInputs where
+  show = genericShow
+
+-- Datatype that represents how to generate the inputs for the state machine
+newtype InputConfig = InputConfig
+  { stakeRange :: Int /\ Int
+  , depositRange :: Int /\ Int
+  , nUsers :: Int
+  , nCycles :: Int
+  , maxUserActionsPerCycle :: Int
   }
 
-type UserInput =
-  { userIdx :: UserIdx
-  , command :: UserCommand
-  }
+derive instance Generic InputConfig _
+instance Show InputConfig where
+  show = genericShow
 
--- A user may either stake, withdraw or abstain from doing anything.
+-- A user may either stake, withdraw or do nothing
 data UserCommand
   = UserStake BigInt
   | UserWithdraw
   | DoNothing
 
-type AdminInput = { command :: AdminCommand }
+derive instance Generic UserCommand _
+instance Show UserCommand where
+  show = genericShow
 
 -- The admin does not get the opportunity to do nothing, since this breaks the
 -- assumptions of the protocol. Pool creation is taken for granted.
 data AdminCommand
   = AdminDeposit BigInt
   | AdminClose
+
+derive instance Generic AdminCommand _
+instance Show AdminCommand where
+  show = genericShow
 
 -- The state of the machine after each cycle.
 type MachineState =
@@ -47,14 +76,6 @@ type MachineState =
 data IntegrationFailure =
   BadWithdrawnAmount
 
--- The type of an integration test. This type is generated randomly
-newtype IntegrationTest = IntegrationTest
-  { cycles :: Int
-  , users :: Int
-  , testInitialParams :: Contract () SnetInitialParams
-  , stateMachineInputs :: StateMachineInputs
-  }
-
--- TODO: Write `Arbitrary` instance for `IntegrationTest`
-instance Arbitrary IntegrationTest where
-  arbitrary = undefined
+derive instance Generic IntegrationFailure _
+instance Show IntegrationFailure where
+  show = genericShow
