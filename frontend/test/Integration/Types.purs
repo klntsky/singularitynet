@@ -12,9 +12,10 @@ module SNet.Test.Integration.Types
 import Prelude
 
 import Data.BigInt (BigInt)
-import Data.Show.Generic (genericShow)
 import Data.Generic.Rep (class Generic)
+import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\))
+import UnbondedStaking.Types (Entry)
 
 type UserIdx = Int
 type Fakegix = BigInt
@@ -69,6 +70,8 @@ instance Show AdminCommand where
 -- The state of the machine after each cycle.
 type MachineState =
   { totalFakegix :: Fakegix
+  , poolOpen :: Boolean
+  , entries :: Array Entry
   }
 
 -- The errors that might be thrown by a post-condition after a state

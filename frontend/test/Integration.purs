@@ -160,11 +160,18 @@ getUserKeys wallets = traverse (\k -> withKeyWallet k getKey) wallets
     (liftAff <<< hashPkh) =<<
       (lift $ liftedM "getUserKeys: Cannot get user's pkh" ownPaymentPubKeyHash)
 
--- TODO
+-- | Query the pool and construct the state of it
 getMachineState :: SnetContract MachineState
-getMachineState = undefined
-
--- TODO: How to link each user action to a given user key?
--- * runMachine must provide the previous and current state of the pool
--- * and the key of the relevant user
--- * and the result of the contract execution
+getMachineState = do
+  -- Get list entries
+  { unbondedPoolParams, scriptVersion } <- ask
+  entries <- lift $ queryAssocListUnbonded unbondedPoolParams scriptVersion
+  -- Get pool state
+  maybePoolState <- lift $ queryStateUnbonded unbondedPoolParams scriptVersion
+  -- Get all asset utxos
+  { stakedAsset } <- lift $ queryAssetsUnbonded unbondedPoolParams scriptVersion
+  pure
+    { entries
+    , totalFakegix: stakedAsset
+    , poolOpen: maybe false _.open maybePoolState
+    }
