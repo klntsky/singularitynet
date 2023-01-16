@@ -300,7 +300,8 @@ queryAssocListUnbonded
 queryStateUnbonded
   :: UnbondedPoolParams
   -> ScriptVersion
-  -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
+  -> Contract ()
+       (Maybe ({ maybeEntryName :: Maybe ByteArray, open :: Boolean }))
 queryStateUnbonded
   params@
     ( UnbondedPoolParams
@@ -323,11 +324,10 @@ queryStateUnbonded
     hasStateNft = unwrap >>> _.output >>> unwrap >>> _.amount
       >>> valueOf' nftCs nftTn
       >>> (_ == one)
-  stateTxOut <- liftContractM "queryStateUnbonded: Could not find state utxo"
-    <<< Array.head
-    <<< Array.fromFoldable
+  traverse getDatum
+    $ Array.head
+    $ Array.fromFoldable
     $ Map.filter hasStateNft unbondedPoolUtxos
-  getDatum stateTxOut
   where
   getDatum
     :: TransactionOutputWithRefScript

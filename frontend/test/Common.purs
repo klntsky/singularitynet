@@ -198,7 +198,8 @@ waitFor' period skipCurrent = do
   currTime <- lift $
     (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$>
       currentRoundedTime
-  { open: isOpen } <- lift $ queryStateUnbonded unbondedPoolParams sv
+  { open: isOpen } <- lift $ liftedM "waitFor': Pool state utxo not found" $
+    queryStateUnbonded unbondedPoolParams sv
   when (period /= ClosedPeriod && not isOpen)
     $ lift
     $ throwContractError
@@ -249,7 +250,11 @@ waitUntil limit = do
 waitUntilClosed :: SnetContract Unit
 waitUntilClosed = do
   { unbondedPoolParams: ubp, scriptVersion: sv } <- ask
-  isOpen <- lift $ _.open <$> queryStateUnbonded ubp sv
+  maybeState <- lift $ queryStateUnbonded ubp sv
+  let
+    isOpen = case maybeState of
+      Nothing -> false
+      Just { open: b } -> b
   if isOpen then pure unit
   else (liftAff $ delay $ wrap 1_000.0) *> waitUntilClosed
 
