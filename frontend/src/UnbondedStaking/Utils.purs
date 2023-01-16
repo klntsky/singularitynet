@@ -10,6 +10,7 @@ module UnbondedStaking.Utils
   , mkUnbondedPoolParams
   , queryAssocListUnbonded
   , queryStateUnbonded
+  , queryAssetsUnbonded
   ) where
 
 import Contract.Prelude hiding (length)
@@ -25,7 +26,7 @@ import Contract.Monad
   , throwContractError
   )
 import Contract.Numeric.Rational (Rational, (%))
-import Contract.PlutusData (getDatumByHash, fromData)
+import Contract.PlutusData (Datum(Datum), getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Scripts (validatorHash)
 import Contract.Time
@@ -36,7 +37,8 @@ import Contract.Time
   )
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.Utxos (utxosAt)
-import Contract.Value (CurrencySymbol)
+import Contract.Value (CurrencySymbol, Value, adaSymbol, adaToken)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
@@ -337,6 +339,50 @@ queryStateUnbonded
       Just (StateDatum r) -> pure r
       Just _ -> throwContractError "queryStateUnbonded: Expected a state datum"
       Nothing -> throwContractError "queryStateUnbonded: Could not parse datum"
+
+-- | Return all the funds locked in the asset UTxOs of the pool
+queryAssetsUnbonded
+  :: UnbondedPoolParams
+  -> ScriptVersion
+  -> Contract () { ada :: BigInt, stakedAsset :: BigInt }
+queryAssetsUnbonded unbondedPoolParams@(UnbondedPoolParams ubp) scriptVersion =
+  do
+    -- Fetch information related to the pool
+    let
+      { currencySymbol: assetSymbol, tokenName: assetToken } =
+        unwrap $ ubp.unbondedAssetClass
+    validator <- liftedE' "queryStateUnbonded: Cannot create validator"
+      $ mkUnbondedPoolValidator unbondedPoolParams scriptVersion
+    let
+      valHash = validatorHash validator
+      poolAddr = scriptHashAddress valHash Nothing
+    -- Get all utxos in the pool and add up values of asset utxos
+    unbondedPoolUtxos <- utxosAt poolAddr
+    totalValue <- mconcat <<< map (getValue <<< fst)
+      <$> Array.filter (byAssetDatum <<< snd)
+      <$> traverse addDatum (Array.fromFoldable unbondedPoolUtxos)
+    pure
+      { ada: valueOf' adaSymbol adaToken totalValue
+      , stakedAsset: valueOf' assetSymbol assetToken totalValue
+      }
+  where
+  getValue :: TransactionOutputWithRefScript -> Value
+  getValue = unwrap >>> _.output >>> unwrap >>> _.amount
+
+  addDatum
+    :: TransactionOutputWithRefScript
+    -> Contract () (TransactionOutputWithRefScript /\ Datum)
+  addDatum txOut = do
+    dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash
+      txOut
+    pure $ txOut /\ dat
+
+  byAssetDatum :: Datum -> Boolean
+  byAssetDatum dat =
+    case fromData $ unwrap dat of
+      Just AssetDatum -> true
+      Just _ -> false
+      Nothing -> false
 
 -- | Get all entries' datums
 getListDatums
