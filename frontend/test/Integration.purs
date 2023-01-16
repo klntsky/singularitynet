@@ -2,18 +2,19 @@ module SNet.Test.Integration (main, runMachine') where
 
 import Contract.Prelude
 
-import Contract.Monad (Contract, throwContractError)
+import Contract.Address (ownPaymentPubKeyHash)
+import Contract.Monad (Contract, throwContractError, liftedM)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Test.Plutip (PlutipTest)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
-import Control.Monad.Reader (lift)
+import Control.Monad.Reader (ask, lift)
 import Data.Array (zip)
 import Data.Array as Array
 import Data.BigInt as BigInt
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
-import SNet.Test.Common (withWalletsAndPool)
+import SNet.Test.Common (withKeyWallet, withWalletsAndPool)
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
 import SNet.Test.Integration.Types
   ( InputConfig(InputConfig)
@@ -25,7 +26,13 @@ import SNet.Test.Integration.Types
   )
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types (SnetInitialParams, SnetContract)
+import UnbondedStaking.Utils
+  ( queryAssocListUnbonded
+  , queryStateUnbonded
+  , queryAssetsUnbonded
+  )
 import Undefined (undefined)
+import Utils (hashPkh)
 
 -- This module does integration testing on a state machine.
 --
@@ -143,11 +150,15 @@ runMachine'
                 show e
             _ -> pure unit
 
--- Execute checks from all users
-
--- TODO
+-- | Get all the users's keys to be able to provide them to each user
+-- post-condition.
 getUserKeys :: Array KeyWallet -> SnetContract (Array ByteArray)
-getUserKeys = undefined
+getUserKeys wallets = traverse (\k -> withKeyWallet k getKey) wallets
+  where
+  getKey :: SnetContract ByteArray
+  getKey =
+    (liftAff <<< hashPkh) =<<
+      (lift $ liftedM "getUserKeys: Cannot get user's pkh" ownPaymentPubKeyHash)
 
 -- TODO
 getMachineState :: SnetContract MachineState
