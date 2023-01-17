@@ -3,9 +3,10 @@ module SNet.Test.Integration (main, runMachine') where
 import Contract.Prelude
 
 import Contract.Address (ownPaymentPubKeyHash)
-import Contract.Monad (Contract, throwContractError, liftedM)
+import Contract.Monad (Contract, launchAff_, liftedM, throwContractError)
 import Contract.Prim.ByteArray (ByteArray)
-import Contract.Test.Plutip (PlutipTest)
+import Contract.Test.Mote (interpretWithConfig)
+import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
 import Control.Monad.Reader (ask, lift)
@@ -14,16 +15,25 @@ import Data.Array as Array
 import Data.BigInt as BigInt
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
-import SNet.Test.Common (withKeyWallet, withWalletsAndPool)
+import Mote (MoteT, group, test)
+import SNet.Test.Common
+  ( localPlutipCfg
+  , testConfig
+  , testInitialParamsNoTimeChecks
+  , withKeyWallet
+  , withWalletsAndPool
+  )
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
 import SNet.Test.Integration.Types
-  ( InputConfig(InputConfig)
-  , StateMachineInputs(StateMachineInputs)
-  , AdminCommand
-  , UserCommand
-  , MachineState
+  ( AdminCommand(..)
+  , InputConfig(InputConfig)
   , IntegrationFailure
+  , MachineState
+  , StateMachineInputs(StateMachineInputs)
+  , UserCommand(..)
   )
+import SNet.Test.Integration.User as Admin
+import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types (SnetInitialParams, SnetContract)
 import UnbondedStaking.Utils
@@ -55,15 +65,60 @@ import Utils (hashPkh)
 -- `IntegrationError`, then the test succeeded.
 
 main :: Effect Unit
-main = do
-  log "HELLO THERE"
+main = launchAff_ $ interpretWithConfig testConfig $ testPlutipContracts
+  localPlutipCfg
+  suite
 
-runMachine'
+suite :: MoteT Aff PlutipTest Aff Unit
+suite =
+  group "Integration tests" do
+    test "Hardcoded" $
+      runMachine'
+        testInitialParamsNoTimeChecks
+        (Left fixedInputs)
+        adminTransition
+        userTransition
+        adminChecks
+        userChecks
+    test "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg
+
+runMachine
   ::
      -- | Initial state of the machine
      Contract () SnetInitialParams
   -- | Inputs (randomly generated)
   -> InputConfig
+  -> PlutipTest
+runMachine initParams inputConfig =
+  runMachine'
+    initParams
+    (Right inputConfig)
+    adminTransition
+    userTransition
+    adminChecks
+    userChecks
+
+fixedInputs :: StateMachineInputs
+fixedInputs = StateMachineInputs
+  { userInputs: [ [ [ UserStake $ BigInt.fromInt 1000 ] ] ]
+  , adminInput: [ AdminDeposit $ BigInt.fromInt 1000 ]
+  }
+
+inputCfg :: InputConfig
+inputCfg = InputConfig
+  { stakeRange: 1000 /\ 2000
+  , depositRange: 1000 /\ 2000
+  , nUsers: 1
+  , nCycles: 1
+  , maxUserActionsPerCycle: 1
+  }
+
+runMachine'
+  ::
+     -- | Initial state of the machine
+     Contract () SnetInitialParams
+  -- | Either the inputs or the inputs config to generate them randomly
+  -> Either StateMachineInputs InputConfig
   -- | Transitions for `AdminCommand` inputs
   -> (AdminCommand -> KeyWallet -> SnetContract Unit)
   -- | Transitions for `UserCommand` inputs
@@ -80,23 +135,22 @@ runMachine'
   -> PlutipTest
 runMachine'
   initialParams
-  inputConfig@(InputConfig inputCfg)
+  eitherInputsConfig
   transAdmin
   transUser
   condAdmin
   condUser = do
   let
+    nUsers = 1
     distr =
-      Array.replicate inputCfg.nUsers
+      Array.replicate nUsers
         $ map BigInt.fromInt [ 10_000_000, 100_000_000 ]
         /\
           (BigInt.fromInt 1_000_000_000)
-
   withWalletsAndPool initialParams distr \wallets -> do
-    -- Generate random inputs
-    (StateMachineInputs { userInputs, adminInput }) <- liftEffect
-      $ randomSampleOne
-      $ arbitraryInputs inputConfig
+    -- Get inputs
+    (StateMachineInputs { userInputs, adminInput }) <-
+      either pure genInputs eitherInputsConfig
     -- Get the wallets of users and admin
     userWallets <- liftMaybe (Exception.error "Could not get user wallets") $
       Array.tail wallets
@@ -175,3 +229,31 @@ getMachineState = do
     , totalFakegix: stakedAsset
     , poolOpen: maybe false _.open maybePoolState
     }
+
+-- | Generate the inputs from their configuration
+genInputs :: InputConfig -> SnetContract StateMachineInputs
+genInputs = liftEffect <<< randomSampleOne <<< arbitraryInputs
+
+userTransition :: UserCommand -> KeyWallet -> SnetContract Unit
+userTransition command wallet = case command of
+  UserStake amt -> User.stake wallet amt
+  UserWithdraw -> pure unit
+  DoNothing -> pure unit
+
+adminTransition :: AdminCommand -> KeyWallet -> SnetContract Unit
+adminTransition command wallet = case command of
+  AdminDeposit amt -> Admin.stake wallet amt
+  AdminClose -> pure unit
+
+userChecks
+  :: UserCommand
+  -> ByteArray
+  -> MachineState
+  -> MachineState
+  -> Maybe IntegrationFailure
+userChecks _ _ _ _ = Nothing
+
+adminChecks
+  :: AdminCommand -> MachineState -> MachineState -> Maybe IntegrationFailure
+adminChecks _ _ _ = Nothing
+
