@@ -1,4 +1,4 @@
-module SNet.Test.Integration.User (stake) where
+module SNet.Test.Integration.User (stake, withdraw) where
 
 import Contract.Prelude
 
@@ -10,6 +10,7 @@ import Data.BigInt (BigInt)
 import SNet.Test.Common (waitFor)
 import UnbondedStaking.Types (Period(UserPeriod), SnetContract)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
+import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 
 stake :: KeyWallet -> BigInt -> SnetContract Unit
 stake wallet amt = do
@@ -20,3 +21,29 @@ stake wallet amt = do
       scriptVersion
       (Natural.fromBigInt' amt)
     pure unit
+
+{- Conditions to check:
+      * If the pool is closed, the stake should fail and the funds distribution
+        should not change.
+           -> No entry should be found with the user key
+           -> The amount of funds in the user wallet should be the same
+      * If the stake succeeds, the appropriate amount of funds should be moved
+        from the wallet to the pool.
+           -> There should be an entry with the correct `deposited` amount
+           -> The amount of funds in the user wallet should be diminished by
+              the stake amount
+-}
+
+withdraw :: KeyWallet -> SnetContract Unit
+withdraw wallet = do
+  waitFor UserPeriod
+  { unbondedPoolParams, scriptVersion } <- ask
+  lift $ withKeyWallet wallet do
+    _txId <- userWithdrawUnbondedPoolContract unbondedPoolParams
+      scriptVersion
+    pure unit
+
+{-
+      * If the pool is closed, the stake should fail and the funds distribution
+      should not change.
+-}

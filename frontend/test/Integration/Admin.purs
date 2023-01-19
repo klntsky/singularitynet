@@ -1,4 +1,4 @@
-module SNet.Test.Integration.Admin (deposit) where
+module SNet.Test.Integration.Admin (deposit, close) where
 
 import Contract.Prelude
 
@@ -8,12 +8,12 @@ import Control.Monad.Reader (ask, lift)
 import Data.BigInt (BigInt)
 import SNet.Test.Common (waitFor)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
-import UnbondedStaking.Types (Period(UserPeriod), SnetContract)
+import UnbondedStaking.Types (Period(AdminPeriod), SnetContract)
 import Utils (nat)
 
 deposit :: KeyWallet -> BigInt -> SnetContract Unit
 deposit wallet amt = do
-  waitFor UserPeriod
+  waitFor AdminPeriod
   { unbondedPoolParams, scriptVersion } <- ask
   lift $ withKeyWallet wallet do
     _txId <- depositUnbondedPoolContract
@@ -21,6 +21,19 @@ deposit wallet amt = do
       unbondedPoolParams
       scriptVersion
       -- No batching 
+      (nat 0)
+      []
+    pure unit
+
+close :: KeyWallet -> SnetContract Unit
+close wallet = do
+  waitFor AdminPeriod
+  { unbondedPoolParams, scriptVersion } <- ask
+  lift $ withKeyWallet wallet do
+    -- FIXME: Use result
+    _ <- depositUnbondedPoolContract zero
+      unbondedPoolParams
+      scriptVersion
       (nat 0)
       []
     pure unit
