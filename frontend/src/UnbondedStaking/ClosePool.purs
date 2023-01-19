@@ -336,10 +336,7 @@ mkEntryUpdateList
             , mustPayToScript valHash entryDatum entryValue
             , mustSpendScriptOutput txIn valRedeemer
             ]
-      entryDatumLookup <-
-        liftContractM
-          "mkEntryUpdateList: Could not create state datum lookup"
-          $ ScriptLookups.datum entryDatum
+      let entryDatumLookup = ScriptLookups.datum entryDatum
       pure (constraints /\ entryDatumLookup)
     _ -> throwContractError
       "mkEntryUpdateList: Datum not Entry constructor"

@@ -207,15 +207,10 @@ userStakeUnbondedPoolContract
               }
           }
 
-      unbondedStateDatumLookup <-
-        liftContractM
-          "userStakeUnbondedPoolContract: Could not create state datum lookup"
-          $ ScriptLookups.datum unbondedStateDatum
-      entryDatumLookup <-
-        liftContractM
-          "userStakeUnbondedPoolContract: Could not create entry datum lookup"
-          $ ScriptLookups.datum entryDatum
       let
+        unbondedStateDatumLookup = ScriptLookups.datum unbondedStateDatum
+        entryDatumLookup = ScriptLookups.datum entryDatum
+
         constraints :: TxConstraints Unit Unit
         constraints =
           mconcat
@@ -290,15 +285,10 @@ userStakeUnbondedPoolContract
               }
 
           logInfo_ "userStakeUnbondedPoolContract: Minting action" mh
-          unbondedStateDatumLookup <-
-            liftContractM
-              "userStakeUnbondedPoolContract: Could not create state datum lookup"
-              $ ScriptLookups.datum unbondedStateDatum
-          entryDatumLookup <-
-            liftContractM
-              "userStakeUnbondedPoolContract: Could not create entry datum lookup"
-              $ ScriptLookups.datum entryDatum
+          let unbondedStateDatumLookup = ScriptLookups.datum unbondedStateDatum
           let
+            entryDatumLookup = ScriptLookups.datum entryDatum
+
             constraints :: TxConstraints Unit Unit
             constraints =
               mconcat
@@ -379,11 +369,9 @@ userStakeUnbondedPoolContract
               "userStakeUnbondedPoolContract: Datum not \
               \Entry constructor"
 
-          entryDatumLookup <-
-            liftContractM
-              "userStakeUnbondedPoolContract: Could not create state datum lookup"
-              $ ScriptLookups.datum entryDatum
           let
+            entryDatumLookup = ScriptLookups.datum entryDatum
+
             constraints :: TxConstraints Unit Unit
             constraints =
               mconcat
@@ -466,12 +454,9 @@ userStakeUnbondedPoolContract
                         , deposited = updateDeposited
                         }
                     }
-              firstEntryDatumLookup <-
-                liftContractM
-                  "userStakeUnbondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum firstEntryDatum
               let
+                firstEntryDatumLookup = ScriptLookups.datum firstEntryDatum
+
                 firstTxOutput :: TransactionOutput
                 firstTxOutput = (unwrap firstOutput).output
 
@@ -520,12 +505,8 @@ userStakeUnbondedPoolContract
                       }
                   }
 
-              entryDatumLookup <-
-                liftContractM
-                  "userStakeUnbondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum entryDatum
               let
+                entryDatumLookup = ScriptLookups.datum entryDatum
                 constr = mconcat
                   [ mustMintValueWithRedeemer mintRedeemer entryValue
                   , mustPayToScript valHash entryDatum entryValue
@@ -564,12 +545,8 @@ userStakeUnbondedPoolContract
                   "userStakeUnbondedPoolContract: Datum not \
                   \Entry constructor"
 
-              lastEntryDatumLookup <-
-                liftContractM
-                  "userStakeUnbondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum lastEntryDatum
               let
+                lastEntryDatumLookup = ScriptLookups.datum lastEntryDatum
                 constr = mempty
                 lu = mconcat
                   [ lastEntryDatumLookup
