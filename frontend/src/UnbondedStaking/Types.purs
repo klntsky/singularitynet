@@ -17,6 +17,7 @@ import Contract.Address (PaymentPubKeyHash)
 import Contract.Monad (Contract)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
+import Contract.Numeric.BigNum as BigNum
 import Contract.PlutusData
   ( class FromData
   , class HasPlutusSchema
@@ -128,7 +129,7 @@ instance Show InitialUnbondedParams where
 -- We copy the order of the fields from the Haskell implementation
 instance ToData UnbondedPoolParams where
   toData (UnbondedPoolParams params) =
-    Constr zero
+    Constr (BigNum.fromInt 0)
       [ toData params.start
       , toData params.userLength
       , toData params.adminLength

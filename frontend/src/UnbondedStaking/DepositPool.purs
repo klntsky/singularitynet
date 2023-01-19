@@ -340,9 +340,6 @@ updateEntryTx
         , mustPayToScript valHash entryDatum entryValue
         , mustSpendScriptOutput txInput valRedeemer
         ]
-  entryDatumLookup <-
-    liftContractM
-      "updateEntryTx: Could not create state datum lookup"
-      $ ScriptLookups.datum entryDatum
+  let entryDatumLookup = ScriptLookups.datum entryDatum
   pure (constraints /\ entryDatumLookup)
 

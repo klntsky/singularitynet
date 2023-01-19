@@ -106,12 +106,9 @@ closeBondedPoolContract
     liftContractM
       "closeBondedPoolContract: Cannot extract NFT State datum"
       $ fromData (unwrap poolDatum)
-  let bondedStateDatum = Datum $ toData bondedStakingDatum
-  bondedStateDatumLookup <-
-    liftContractM
-      "closeBondedPoolContract: Could not create state datum lookup"
-      $ ScriptLookups.datum bondedStateDatum
-
+  let
+    bondedStateDatum = Datum $ toData bondedStakingDatum
+    bondedStateDatumLookup = ScriptLookups.datum bondedStateDatum
   -- Get the withdrawing range to use
   logInfo' "closeBondedPoolContract: Getting withdrawing range..."
   { currTime, range: txRange } <- getClosingTime params

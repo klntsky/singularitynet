@@ -477,9 +477,8 @@ newStakeLogic txInfoF paramsF spentInputF datum holderPkh stakeAmt mintAct = do
             "newStakeLogic (mintEnd): the previous \
             \ entry does not point to another entry"
       ---- BUSINESS LOGIC ----
-      pguardC "newStakeLogic: update failed because pool state is not open" $
+      pguardC "newStakeLogic: update failed because previous entry is not open" $
         toPBool # prevEntryF.open
-          #&& toPBool # newEntryF.open
       -- Validate initialization of new entry
       newEntryGuard paramsF newEntryF stakeAmt stakeHolderKey
       -- Previous entry should keep the same values when updated
@@ -526,9 +525,8 @@ newStakeLogic txInfoF paramsF spentInputF datum holderPkh stakeAmt mintAct = do
       newEntryF <-
         getOutputEntry poolAddr newEntryTok txInfoData txInfoF.outputs
       ---- BUSINESS LOGIC ----
-      pguardC "newStakeLogic: update failed because pool state is not open" $
+      pguardC "newStakeLogic: update failed because last entry is not open" $
         toPBool # endEntryF.open
-          #&& toPBool # newEntryF.open
       -- Validate initialization of new entry
       newEntryGuard paramsF newEntryF stakeAmt stakeHolderKey
       -- End entry should keep the same values when updated
@@ -876,6 +874,8 @@ newEntryGuard paramsF newEntryF stakeAmt stakeHolderKey = do
       #&& newEntryF.deposited #== stakeAmt
   pguardC "newEntryGuard: new entry does not have the stakeholder's key" $
     newEntryF.key #== stakeHolderKey
+  pguardC "newEntryGuard: new entry is not open" $
+    toPBool # newEntryF.open
   pguardC "newEntryGuard: new entry's stake not within stake bounds" $
     pfromData paramsF.minStake #<= newEntryF.deposited
       #&& pfromData newEntryF.deposited #<= paramsF.maxStake

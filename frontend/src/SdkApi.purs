@@ -256,7 +256,7 @@ fromSdkAdmin :: String -> String -> Either Error PaymentPubKeyHash
 fromSdkAdmin context admin = note (error msg)
   $ wrap
   <<< wrap
-  <$> (ed25519KeyHashFromBytes =<< hexToRawBytes admin)
+  <$> (ed25519KeyHashFromBytes <<< unwrap =<< hexToRawBytes admin)
   where
   msg :: String
   msg = context <> ": invalid admin"
