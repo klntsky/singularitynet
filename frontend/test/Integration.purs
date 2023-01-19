@@ -8,7 +8,7 @@ import Contract.Prim.ByteArray (ByteArray)
 import Contract.Test.Mote (interpretWithConfig)
 import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
 import Contract.Wallet (KeyWallet)
-import Control.Monad.Error.Class (liftMaybe)
+import Control.Monad.Error.Class (liftMaybe, try)
 import Control.Monad.Reader (ask, lift)
 import Data.Array (zip)
 import Data.Array as Array
@@ -23,16 +23,20 @@ import SNet.Test.Common
   , withKeyWallet
   , withWalletsAndPool
   )
+import SNet.Test.Integration.Admin as Admin
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
 import SNet.Test.Integration.Types
   ( AdminCommand(..)
+  , Array3
+  , CommandResult(..)
+  , EnrichedUserCommand
   , InputConfig(InputConfig)
-  , IntegrationFailure
+  , IntegrationFailure(..)
   , MachineState
   , StateMachineInputs(StateMachineInputs)
   , UserCommand(..)
+  , UserCommand'
   )
-import SNet.Test.Integration.User as Admin
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types (SnetInitialParams, SnetContract)
@@ -98,11 +102,14 @@ runMachine initParams inputConfig =
     adminChecks
     userChecks
 
+-- FIXME
 fixedInputs :: StateMachineInputs
-fixedInputs = StateMachineInputs
-  { userInputs: [ [ [ UserStake $ BigInt.fromInt 1000 ] ] ]
-  , adminInput: [ AdminDeposit $ BigInt.fromInt 1000 ]
-  }
+fixedInputs = undefined
+
+-- StateMachineInputs
+--   { userInputs: [ [ [ UserStake $ BigInt.fromInt 1000 ] ] ]
+--   , adminInput: [ AdminDeposit $ BigInt.fromInt 1000 ]
+--   }
 
 inputCfg :: InputConfig
 inputCfg = InputConfig
@@ -124,9 +131,15 @@ runMachine'
   -- | Transitions for `UserCommand` inputs
   -> (UserCommand -> KeyWallet -> SnetContract Unit)
   -- | Post-conditions for `AdminCommand` transitions
-  -> (AdminCommand -> MachineState -> MachineState -> Maybe IntegrationFailure)
+  -> ( AdminCommand
+       -> CommandResult
+       -> MachineState
+       -> MachineState
+       -> Maybe IntegrationFailure
+     )
   -- | Post-conditions for `UserCommand` transitions
   -> ( UserCommand
+       -> CommandResult
        -> ByteArray
        -> MachineState
        -> MachineState
@@ -149,60 +162,98 @@ runMachine'
           (BigInt.fromInt 1_000_000_000)
   withWalletsAndPool initialParams distr \wallets -> do
     -- Get inputs
-    (StateMachineInputs { userInputs, adminInput }) <-
+    (StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
       either pure genInputs eitherInputsConfig
     -- Get the wallets of users and admin
-    userWallets <- liftMaybe (Exception.error "Could not get user wallets") $
+    usersWallets <- liftMaybe (Exception.error "Could not get user wallets") $
       Array.tail wallets
     adminWallet <- liftMaybe (Exception.error "Could not get admin wallet") $
       Array.head wallets
-    -- Obtain keys of all users. Necessary for post-condition checks
-    keys <- getUserKeys userWallets
+    -- Obtain keys of all users.
+    usersKeys <- getUserKeys usersWallets
     let
-      loopInputs = zip ((\u -> zip u $ zip keys userWallets) <$> userInputs)
-        adminInput
-    for_ loopInputs
+      -- Enrich commands with this additional information
+      usersCommandsPerCycle
+        :: Array3 (EnrichedUserCommand (wallet :: KeyWallet, key :: ByteArray))
+      usersCommandsPerCycle =
+        map addWalletsAndKeys <$> map
+          (\userInputs -> zip usersWallets (zip usersKeys userInputs))
+          usersInputs
+    -- For each cycle, execute users and admin's actions, validate results and
+    -- evaluate post-conditions
+    for_ (zip usersCommandsPerCycle adminCommandsPerCycle)
       \(usersCommands /\ adminCommand) ->
         do
-          -- Get initial state of the machine
           machineState0 <- getMachineState
-          -- Execute commands from all users
-          for_ usersCommands \(userCommands /\ _ /\ userWallet) -> do
-            traverse_ (\command -> transUser command userWallet) userCommands
-          -- Get state of the machine after
+          -- Execute all commands for each user and validate the results with the
+          -- expected ones.
+          results <- for usersCommands \userCommands ->
+            for userCommands \{ command, wallet, result: expectedResult } -> do
+              executionResult <- toResult $ transUser command wallet
+              validateResult expectedResult executionResult
+          pure unit
           machineState1 <- getMachineState
-          -- Execute all user checks
+          -- Evaluate all users' post-conditions and report them
           let
+            userErrors :: Array IntegrationFailure
             userErrors =
-              Array.catMaybes $ Array.concatMap
-                ( \(userCommands /\ userKey /\ _) ->
-                    map
-                      ( \command -> condUser command userKey machineState0
-                          machineState1
-                      )
-                      userCommands
-                )
-                usersCommands
+              Array.catMaybes
+                <<<
+                  ( Array.concatMap $
+                      map
+                        ( \{ command, result, key } -> condUser command result
+                            key
+                            machineState0
+                            machineState1
+                        )
+                  )
+                $ usersCommands
+
           when (not $ Array.null userErrors)
             $ lift
             $ throwContractError
             $ "Failure during user checks: "
             <> show userErrors
-          -- Get state of the machine
+          -- Execute admin command and validate result
+          let { command, result: expectedResult } = adminCommand
+          executionResult <- toResult $ transAdmin command adminWallet
+          _ <- validateResult expectedResult executionResult
           machineState2 <- getMachineState
-          -- Execute admin command
-          transAdmin adminCommand adminWallet
-          -- Get state of the machine after
-          machineState3 <- getMachineState
-          -- Execute admin check
+          -- Evaluate admin's post-conditions and report them
           let
-            adminCheckResult = condAdmin adminCommand machineState2
-              machineState3
-          case adminCheckResult of
-            Just e -> lift $ throwContractError $ "Failure during admin check: "
-              <>
-                show e
-            _ -> pure unit
+            adminError :: Maybe IntegrationFailure
+            adminError = condAdmin command expectedResult machineState1
+              machineState2
+          case adminError of
+            Just e ->
+              lift
+                $ throwContractError
+                $ "Failure during admin checks: "
+                <> show e
+            Nothing -> pure unit
+
+-- | Converts a `SnetContract Unit` into a `SnetContract CommandResult` by
+-- wrapping the contract with a `try` and capturing the error.
+toResult :: SnetContract Unit -> SnetContract CommandResult
+toResult = map (either (Failure <<< Just) $ const Success) <<< try
+
+-- | Compares the command execution's result with the expected result.
+-- If they match, it returns the executtion's result. Otherwise, it throws
+-- an integration error.
+validateResult
+  ::
+     -- | ^ Expected result
+     CommandResult
+  ->
+  -- | ^ Execution result
+  CommandResult
+  -> SnetContract CommandResult
+validateResult Success Success = pure Success
+validateResult (Failure _) e@(Failure _) = pure e
+validateResult r1 r2 = lift $ throwContractError $ ResultMismatch
+  "There was a mismatch between the expected and the obtained result"
+  r1
+  r2
 
 -- | Get all the users's keys to be able to provide them to each user
 -- post-condition.
@@ -234,26 +285,45 @@ getMachineState = do
 genInputs :: InputConfig -> SnetContract StateMachineInputs
 genInputs = liftEffect <<< randomSampleOne <<< arbitraryInputs
 
+-- | Add the user wallets and keys to the user's commands
+addWalletsAndKeys
+  :: (KeyWallet /\ ByteArray /\ Array UserCommand')
+  -> Array (EnrichedUserCommand (wallet :: KeyWallet, key :: ByteArray))
+addWalletsAndKeys (kw /\ ba /\ commands) =
+  map (\{ command, result } -> { command, result, key: ba, wallet: kw })
+    commands
+
+-- | Map from each `UserCommand` to the matching contract
 userTransition :: UserCommand -> KeyWallet -> SnetContract Unit
 userTransition command wallet = case command of
   UserStake amt -> User.stake wallet amt
-  UserWithdraw -> pure unit
+  UserWithdraw -> User.withdraw wallet
   DoNothing -> pure unit
 
+-- | Map from each `AdminCommand` to the matching contract
 adminTransition :: AdminCommand -> KeyWallet -> SnetContract Unit
 adminTransition command wallet = case command of
-  AdminDeposit amt -> Admin.stake wallet amt
-  AdminClose -> pure unit
+  AdminDeposit amt -> Admin.deposit wallet amt
+  AdminClose -> Admin.close wallet
 
+-- | Map from each `UserCommand` to the matching post-conditions
+-- FIXME
 userChecks
   :: UserCommand
+  -> CommandResult
   -> ByteArray
   -> MachineState
   -> MachineState
   -> Maybe IntegrationFailure
-userChecks _ _ _ _ = Nothing
+userChecks _ _ _ _ _ = Nothing
 
+-- | Map from each `AdminCommand` to the matching post-conditions
+-- FIXME
 adminChecks
-  :: AdminCommand -> MachineState -> MachineState -> Maybe IntegrationFailure
-adminChecks _ _ _ = Nothing
+  :: AdminCommand
+  -> CommandResult
+  -> MachineState
+  -> MachineState
+  -> Maybe IntegrationFailure
+adminChecks _ _ _ _ = Nothing
 
