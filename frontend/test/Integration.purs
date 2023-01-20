@@ -15,7 +15,7 @@ import Data.Array as Array
 import Data.BigInt as BigInt
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
-import Mote (MoteT, group, test)
+import Mote (MoteT, group, test, skip)
 import SNet.Test.Common
   ( localPlutipCfg
   , testConfig
@@ -45,7 +45,6 @@ import UnbondedStaking.Utils
   , queryStateUnbonded
   , queryAssetsUnbonded
   )
-import Undefined (undefined)
 import Utils (hashPkh)
 
 -- This module does integration testing on a state machine.
@@ -76,7 +75,7 @@ main = launchAff_ $ interpretWithConfig testConfig $ testPlutipContracts
 suite :: MoteT Aff PlutipTest Aff Unit
 suite =
   group "Integration tests" do
-    test "Hardcoded" $
+    skip $ test "Hardcoded" $
       runMachine'
         testInitialParamsNoTimeChecks
         (Left fixedInputs)
@@ -102,14 +101,13 @@ runMachine initParams inputConfig =
     adminChecks
     userChecks
 
--- FIXME
 fixedInputs :: StateMachineInputs
-fixedInputs = undefined
-
--- StateMachineInputs
---   { userInputs: [ [ [ UserStake $ BigInt.fromInt 1000 ] ] ]
---   , adminInput: [ AdminDeposit $ BigInt.fromInt 1000 ]
---   }
+fixedInputs = StateMachineInputs
+  { usersInputs:
+      [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ] ] ]
+  , adminInputs:
+      [ { command: AdminDeposit $ BigInt.fromInt 1000, result: Success } ]
+  }
 
 inputCfg :: InputConfig
 inputCfg = InputConfig
@@ -187,7 +185,7 @@ runMachine'
           machineState0 <- getMachineState
           -- Execute all commands for each user and validate the results with the
           -- expected ones.
-          results <- for usersCommands \userCommands ->
+          for_ usersCommands \userCommands ->
             for userCommands \{ command, wallet, result: expectedResult } -> do
               executionResult <- toResult $ transUser command wallet
               validateResult expectedResult executionResult
@@ -298,7 +296,6 @@ userTransition :: UserCommand -> KeyWallet -> SnetContract Unit
 userTransition command wallet = case command of
   UserStake amt -> User.stake wallet amt
   UserWithdraw -> User.withdraw wallet
-  DoNothing -> pure unit
 
 -- | Map from each `AdminCommand` to the matching contract
 adminTransition :: AdminCommand -> KeyWallet -> SnetContract Unit

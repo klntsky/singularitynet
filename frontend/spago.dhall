@@ -13,8 +13,10 @@ You can edit this file as you like.
   , "bigints"
   , "cardano-transaction-lib"
   , "control"
+  , "console"
   , "datetime"
   , "exceptions"
+  , "effect"
   , "either"
   , "foldable-traversable"
   , "integers"
@@ -35,7 +37,6 @@ You can edit this file as you like.
   , "tuples"
   , "uint"
   , "unfoldable"
-  , "undefined"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "exe/**/*.purs", "test/**/*.purs" ]

@@ -14,15 +14,19 @@ module SNet.Test.Integration.Types
   , Fakegix
   , Array2
   , Array3
+  , prettyInputs
   ) where
 
 import Prelude
 
+import Data.Array ((..))
+import Data.Array as Array
 import Data.BigInt (BigInt)
+import Data.BigInt as BigInt
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
-import Data.Tuple.Nested (type (/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception as Exception
 import UnbondedStaking.Types (Entry)
 
@@ -42,8 +46,69 @@ newtype StateMachineInputs =
     }
 
 derive instance Generic StateMachineInputs _
+
 instance Show StateMachineInputs where
   show = genericShow
+
+-- | Pretty-prints the inputs of the state machine
+prettyInputs :: StateMachineInputs -> String
+prettyInputs (StateMachineInputs i) =
+  let
+    showCycle :: (Int /\ Array2 UserCommand' /\ AdminCommand') -> String
+    showCycle (cycle /\ usersCommands /\ adminCommand) = Array.fold
+      [ "===== CYCLE " <> show cycle <> " =====\n"
+      , "== USERS == \n"
+      , showUsers $ Array.zip (0 .. (Array.length usersCommands - 1))
+          usersCommands
+      , "== ADMIN == \n"
+      , showAdmin adminCommand
+      , "===== END =====\n"
+      ]
+
+    showUsers :: Array (Int /\ Array UserCommand') -> String
+    showUsers = Array.foldMap \(id /\ userCommands) ->
+      Array.foldMap
+        ( \{ command, result } ->
+            case command of
+              UserStake n ->
+                show id
+                  <> ": STAKES "
+                  <> show (BigInt.toInt n)
+                  <> " "
+                  <> showResult result
+                  <> "\n"
+              UserWithdraw ->
+                show id
+                  <> ": WITHDRAWS "
+                  <> " "
+                  <> showResult result
+                  <> "\n"
+        )
+        userCommands
+
+    showAdmin :: AdminCommand' -> String
+    showAdmin { command, result } = case command of
+      AdminDeposit n ->
+        "ADMIN: DEPOSITS "
+          <> show (BigInt.toInt n)
+          <> " "
+          <> showResult result
+          <> "\n"
+      AdminClose ->
+        "ADMIN: CLOSES "
+          <> showResult result
+          <> "\n"
+
+    showResult :: CommandResult -> String
+    showResult Success = "[SUCCESS]"
+    showResult (Failure _) = "[FAILURE]"
+
+    nCycles :: Int
+    nCycles = Array.length i.adminInputs
+  in
+    Array.foldMap showCycle
+      $ Array.zip (1 .. nCycles)
+      $ Array.zip i.usersInputs i.adminInputs
 
 -- | Datatype that represents how to generate the inputs for the state machine
 newtype InputConfig = InputConfig
@@ -58,11 +123,10 @@ derive instance Generic InputConfig _
 instance Show InputConfig where
   show = genericShow
 
--- | A user may either stake, withdraw or do nothing
+-- | A user may either stake or withdraw.
 data UserCommand
   = UserStake BigInt
   | UserWithdraw
-  | DoNothing
 
 derive instance Generic UserCommand _
 instance Show UserCommand where
