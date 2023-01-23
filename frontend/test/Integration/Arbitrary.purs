@@ -63,12 +63,12 @@ arbitraryUserCommand user minStake maxStake = do
           put $ s { stakers = Set.insert user stakers }
           pure Success
       | otherwise -> do
-          pure $ Failure Nothing
+          pure $ ExpectedFailure "Stake attempted when pool is closed"
     UserWithdraw
       | Set.member user stakers -> do
           put $ s { stakers = Set.delete user stakers }
           pure Success
-      | otherwise -> pure $ Failure Nothing
+      | otherwise -> pure $ ExpectedFailure "Withdraw attempted but the user is not in the pool"
 
   pure { command, result }
 
@@ -87,12 +87,12 @@ arbitraryAdminCommand minDeposit maxDeposit = do
   result <- case command of
     AdminDeposit _
       | not Set.isEmpty stakers && not closed -> pure Success
-      | otherwise -> pure $ Failure Nothing
+      | otherwise -> pure $ ExpectedFailure "Deposit attempted but there are no users in the pool"
     AdminClose
       | not closed -> do
           put $ s { closed = true }
           pure Success
-      | otherwise -> pure $ Failure Nothing
+      | otherwise -> pure $ ExpectedFailure "Close attempted but the pool is already closed"
   pure { command, result }
 
 -- | Generate the state machine's inputs (along with their result tags) from an

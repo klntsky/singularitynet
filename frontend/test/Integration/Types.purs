@@ -101,13 +101,14 @@ prettyInputs (StateMachineInputs i) =
 
     showResult :: CommandResult -> String
     showResult Success = "[SUCCESS]"
-    showResult (Failure _) = "[FAILURE]"
+    showResult (ExpectedFailure reason) = "[FAILURE: " <> reason <> " ]"
+    showResult (ExecutionFailure err) = "[FAILURE: " <> show err <> " ]"
 
     nCycles :: Int
     nCycles = Array.length i.adminInputs
   in
     Array.foldMap showCycle
-      $ Array.zip (1 .. nCycles)
+      $ Array.zip (0 .. (nCycles - 1))
       $ Array.zip i.usersInputs i.adminInputs
 
 -- | Datatype that represents how to generate the inputs for the state machine
@@ -152,7 +153,8 @@ type MachineState =
 -- | The result of executing a command.
 data CommandResult
   = Success
-  | Failure (Maybe Exception.Error)
+  | ExpectedFailure String
+  | ExecutionFailure (Maybe Exception.Error)
 
 derive instance Generic CommandResult _
 instance Show CommandResult where

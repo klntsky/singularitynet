@@ -3,6 +3,7 @@ module SNet.Test.Integration (main, runMachine') where
 import Contract.Prelude
 
 import Contract.Address (ownPaymentPubKeyHash)
+import Contract.Log (logInfo')
 import Contract.Monad (Contract, launchAff_, liftedM, throwContractError)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Test.Mote (interpretWithConfig)
@@ -10,41 +11,20 @@ import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe, try)
 import Control.Monad.Reader (ask, lift)
-import Data.Array (zip)
+import Data.Array (zip, (..))
 import Data.Array as Array
 import Data.BigInt as BigInt
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
 import Mote (MoteT, group, test, skip)
-import SNet.Test.Common
-  ( localPlutipCfg
-  , testConfig
-  , testInitialParamsNoTimeChecks
-  , withKeyWallet
-  , withWalletsAndPool
-  )
+import SNet.Test.Common (localPlutipCfg, testConfigLongTimeout, testInitialParamsNoTimeChecks, withKeyWallet, withWalletsAndPool)
 import SNet.Test.Integration.Admin as Admin
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
-import SNet.Test.Integration.Types
-  ( AdminCommand(..)
-  , Array3
-  , CommandResult(..)
-  , EnrichedUserCommand
-  , InputConfig(InputConfig)
-  , IntegrationFailure(..)
-  , MachineState
-  , StateMachineInputs(StateMachineInputs)
-  , UserCommand(..)
-  , UserCommand'
-  )
+import SNet.Test.Integration.Types (AdminCommand(..), Array3, CommandResult(..), EnrichedUserCommand, InputConfig(InputConfig), IntegrationFailure(..), MachineState, StateMachineInputs(StateMachineInputs), UserCommand(..), UserCommand', prettyInputs)
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types (SnetInitialParams, SnetContract)
-import UnbondedStaking.Utils
-  ( queryAssocListUnbonded
-  , queryStateUnbonded
-  , queryAssetsUnbonded
-  )
+import UnbondedStaking.Utils (queryAssocListUnbonded, queryStateUnbonded, queryAssetsUnbonded)
 import Utils (hashPkh)
 
 -- This module does integration testing on a state machine.
@@ -68,7 +48,7 @@ import Utils (hashPkh)
 -- `IntegrationError`, then the test succeeded.
 
 main :: Effect Unit
-main = launchAff_ $ interpretWithConfig testConfig $ testPlutipContracts
+main = launchAff_ $ interpretWithConfig testConfigLongTimeout $ testPlutipContracts
   localPlutipCfg
   suite
 
@@ -83,7 +63,7 @@ suite =
         userTransition
         adminChecks
         userChecks
-    test "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg
+    group "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg 10
 
 runMachine
   ::
@@ -91,20 +71,25 @@ runMachine
      Contract () SnetInitialParams
   -- | Inputs (randomly generated)
   -> InputConfig
-  -> PlutipTest
-runMachine initParams inputConfig =
-  runMachine'
-    initParams
-    (Right inputConfig)
-    adminTransition
-    userTransition
-    adminChecks
-    userChecks
+  -- | Repetitions
+  -> Int
+  -> MoteT Aff PlutipTest Aff Unit
+runMachine initParams inputConfig n =
+  for_ (1 .. n) $ \i ->
+    test ("Run #" <> show i) $ runMachine'
+      initParams
+      (Right inputConfig)
+      adminTransition
+      userTransition
+      adminChecks
+      userChecks
+  
 
 fixedInputs :: StateMachineInputs
 fixedInputs = StateMachineInputs
   { usersInputs:
-      [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ] ] ]
+      [ [ [ { command: UserWithdraw, result: ExpectedFailure "Withdraw fail 0" } ]
+        , [ { command: UserStake $ BigInt.fromInt 1222, result: Success } ] ] ]
   , adminInputs:
       [ { command: AdminDeposit $ BigInt.fromInt 1000, result: Success } ]
   }
@@ -113,9 +98,9 @@ inputCfg :: InputConfig
 inputCfg = InputConfig
   { stakeRange: 1000 /\ 2000
   , depositRange: 1000 /\ 2000
-  , nUsers: 1
-  , nCycles: 1
-  , maxUserActionsPerCycle: 1
+  , nUsers: 2
+  , nCycles: 2
+  , maxUserActionsPerCycle: 2
   }
 
 runMachine'
@@ -152,16 +137,21 @@ runMachine'
   condAdmin
   condUser = do
   let
-    nUsers = 1
+    -- We distribute to a hardcoded number of users, even though some of them
+    -- may not be used
+    -- FIXME: Improve `withWalletsAndPool` to handle more users
+    nUsers = 3
     distr =
       Array.replicate nUsers
         $ map BigInt.fromInt [ 10_000_000, 100_000_000 ]
         /\
           (BigInt.fromInt 1_000_000_000)
   withWalletsAndPool initialParams distr \wallets -> do
-    -- Get inputs
-    (StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
+    -- Get inputs and related information
+    inputs@(StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
       either pure genInputs eitherInputsConfig
+    let nCycles :: Int
+        nCycles = Array.length adminCommandsPerCycle
     -- Get the wallets of users and admin
     usersWallets <- liftMaybe (Exception.error "Could not get user wallets") $
       Array.tail wallets
@@ -175,21 +165,22 @@ runMachine'
         :: Array3 (EnrichedUserCommand (wallet :: KeyWallet, key :: ByteArray))
       usersCommandsPerCycle =
         map addWalletsAndKeys <$> map
-          (\userInputs -> zip usersWallets (zip usersKeys userInputs))
+          (\usersInputs' -> zip usersWallets (zip usersKeys usersInputs'))
           usersInputs
     -- For each cycle, execute users and admin's actions, validate results and
     -- evaluate post-conditions
-    for_ (zip usersCommandsPerCycle adminCommandsPerCycle)
-      \(usersCommands /\ adminCommand) ->
+    for_ (zip (0 .. (nCycles - 1)) $ zip usersCommandsPerCycle adminCommandsPerCycle)
+      \(cycle /\ usersCommands /\ adminCommand) ->
         do
+          logInfo' "Context (inputs)"
+          logInfo' $ prettyInputs inputs
           machineState0 <- getMachineState
           -- Execute all commands for each user and validate the results with the
           -- expected ones.
           for_ usersCommands \userCommands ->
             for userCommands \{ command, wallet, result: expectedResult } -> do
               executionResult <- toResult $ transUser command wallet
-              validateResult expectedResult executionResult
-          pure unit
+              validateResult command cycle expectedResult executionResult
           machineState1 <- getMachineState
           -- Evaluate all users' post-conditions and report them
           let
@@ -215,7 +206,7 @@ runMachine'
           -- Execute admin command and validate result
           let { command, result: expectedResult } = adminCommand
           executionResult <- toResult $ transAdmin command adminWallet
-          _ <- validateResult expectedResult executionResult
+          _ <- validateResult command cycle expectedResult executionResult
           machineState2 <- getMachineState
           -- Evaluate admin's post-conditions and report them
           let
@@ -233,23 +224,34 @@ runMachine'
 -- | Converts a `SnetContract Unit` into a `SnetContract CommandResult` by
 -- wrapping the contract with a `try` and capturing the error.
 toResult :: SnetContract Unit -> SnetContract CommandResult
-toResult = map (either (Failure <<< Just) $ const Success) <<< try
+toResult = map (either (ExecutionFailure <<< Just) $ const Success) <<< try
 
 -- | Compares the command execution's result with the expected result.
 -- If they match, it returns the executtion's result. Otherwise, it throws
 -- an integration error.
 validateResult
-  ::
-     -- | ^ Expected result
-     CommandResult
+  :: forall a . Show a =>
+  -- | ^ Command type
+  a
+  -- | ^ Cycle in which the command was executed
+  -> Int
+  -- | ^ Expected result
+  -> CommandResult
   ->
   -- | ^ Execution result
   CommandResult
   -> SnetContract CommandResult
-validateResult Success Success = pure Success
-validateResult (Failure _) e@(Failure _) = pure e
-validateResult r1 r2 = lift $ throwContractError $ ResultMismatch
-  "There was a mismatch between the expected and the obtained result"
+validateResult command _ Success Success = do
+    logInfo' $ "Succeeded in executing command " <> show command
+    pure Success
+validateResult command _ (ExecutionFailure _) e@(ExpectedFailure _) = do
+    logInfo' $ "Failed succesfully in executing command " <> show command
+    pure e
+validateResult command _ e@(ExpectedFailure _) (ExecutionFailure _) = do
+    logInfo' $ "Failed succesfully in executing command " <> show command
+    pure e
+validateResult command cycle r1 r2 = lift $ throwContractError $ ResultMismatch
+  ("There was a mismatch between the expected and the obtained result in command " <> show command <> ", cycle " <> show cycle)
   r1
   r2
 
@@ -323,4 +325,3 @@ adminChecks
   -> MachineState
   -> Maybe IntegrationFailure
 adminChecks _ _ _ _ = Nothing
-
