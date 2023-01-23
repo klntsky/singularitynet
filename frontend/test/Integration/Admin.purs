@@ -7,6 +7,7 @@ import Contract.Wallet (KeyWallet)
 import Control.Monad.Reader (ask, lift)
 import Data.BigInt (BigInt)
 import SNet.Test.Common (waitFor)
+import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types (Period(AdminPeriod), SnetContract)
 import Utils (nat)
@@ -20,8 +21,7 @@ deposit wallet amt = do
       amt
       unbondedPoolParams
       scriptVersion
-      -- No batching 
-      (nat 0)
+      zero
       []
     pure unit
 
@@ -30,10 +30,9 @@ close wallet = do
   waitFor AdminPeriod
   { unbondedPoolParams, scriptVersion } <- ask
   lift $ withKeyWallet wallet do
-    -- FIXME: Use result
-    _ <- depositUnbondedPoolContract zero
+    _ <- closeUnbondedPoolContract
       unbondedPoolParams
       scriptVersion
-      (nat 0)
+      zero
       []
     pure unit
