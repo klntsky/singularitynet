@@ -55,10 +55,10 @@ main = launchAff_ $ interpretWithConfig testConfigLongTimeout $ testPlutipContra
 suite :: MoteT Aff PlutipTest Aff Unit
 suite =
   group "Integration tests" do
-    skip $ test "Hardcoded" $
+    test "Two stakes in a row" $
       runMachine'
         testInitialParamsNoTimeChecks
-        (Left fixedInputs)
+        (Left twoStakesInARow)
         adminTransition
         userTransition
         adminChecks
@@ -85,13 +85,17 @@ runMachine initParams inputConfig n =
       userChecks
   
 
-fixedInputs :: StateMachineInputs
-fixedInputs = StateMachineInputs
+twoStakesInARow :: StateMachineInputs
+twoStakesInARow = StateMachineInputs
   { usersInputs:
-      [ [ [ { command: UserWithdraw, result: ExpectedFailure "Withdraw fail 0" } ]
-        , [ { command: UserStake $ BigInt.fromInt 1222, result: Success } ] ] ]
+      [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ]
+        , [ { command: UserStake $ BigInt.fromInt 1000, result: Success }
+          , { command: UserStake $ BigInt.fromInt 1000, result: Success }
+          ]
+        ]
+      ]
   , adminInputs:
-      [ { command: AdminDeposit $ BigInt.fromInt 1000, result: Success } ]
+      [ { command: AdminClose, result: Success } ]
   }
 
 inputCfg :: InputConfig
