@@ -21,6 +21,7 @@ import SNet.Test.Common (localPlutipCfg, testConfigLongTimeout, testInitialParam
 import SNet.Test.Integration.Admin as Admin
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
 import SNet.Test.Integration.Types (AdminCommand(..), Array3, CommandResult(..), EnrichedUserCommand, InputConfig(InputConfig), IntegrationFailure(..), MachineState, StateMachineInputs(StateMachineInputs), UserCommand(..), UserCommand', prettyInputs)
+import SNet.Test.Integration.User (stakeCheck, withdrawCheck)
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types (SnetInitialParams, SnetContract)
@@ -283,6 +284,7 @@ getMachineState = do
     { entries
     , totalFakegix: stakedAsset
     , poolOpen: maybe false _.open maybePoolState
+    , params: unbondedPoolParams
     }
 
 -- | Generate the inputs from their configuration
@@ -310,7 +312,6 @@ adminTransition command wallet = case command of
   AdminClose -> Admin.close wallet
 
 -- | Map from each `UserCommand` to the matching post-conditions
--- FIXME
 userChecks
   :: UserCommand
   -> CommandResult
@@ -318,7 +319,9 @@ userChecks
   -> MachineState
   -> MachineState
   -> Maybe IntegrationFailure
-userChecks _ _ _ _ _ = Nothing
+userChecks command result key s0 s1 = case command of
+    UserStake amt -> stakeCheck amt result key s0 s1
+    UserWithdraw -> withdrawCheck result key s0 s1
 
 -- | Map from each `AdminCommand` to the matching post-conditions
 -- FIXME

@@ -30,6 +30,7 @@ import Test.QuickCheck.Gen (Gen, chooseInt, oneOf)
 type Gen' s a = StateT s Gen a
 
 -- | A type representing a simplified version of the pool state.
+-- FIXME: Add staking bounds to allow accurate prediction of user stake failure
 type PoolState =
   {
     -- | Whether the pool is open or closed

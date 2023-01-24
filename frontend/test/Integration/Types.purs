@@ -28,7 +28,7 @@ import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception as Exception
-import UnbondedStaking.Types (Entry)
+import UnbondedStaking.Types (Entry, UnbondedPoolParams)
 
 type UserIdx = Int
 type Fakegix = BigInt
@@ -148,6 +148,7 @@ type MachineState =
   { totalFakegix :: Fakegix
   , poolOpen :: Boolean
   , entries :: Array Entry
+  , params :: UnbondedPoolParams
   }
 
 -- | The result of executing a command.
@@ -160,12 +161,14 @@ derive instance Generic CommandResult _
 instance Show CommandResult where
   show = genericShow
 
--- The errors that might be thrown by a post-condition after a state
--- transition has occurred.
+-- | There are two kinds of integration failures:
+--   * Result mismatches: these occur when an input from a user produces a
+--     success / failure when the opposite was expected.
+--   * Bad transition: these occur when some invariant is violated during an
+--     interaction. But it is assumed that the transition.
 data IntegrationFailure
   = ResultMismatch String CommandResult CommandResult
-  | ShouldNotChangeFunds String BigInt BigInt
-  | ShouldNotAddEntry String Entry
+  | BadTransition String
 
 derive instance Generic IntegrationFailure _
 instance Show IntegrationFailure where
