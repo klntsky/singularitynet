@@ -3,6 +3,7 @@ module SNet.Test.Integration.Arbitrary (arbitraryInputs) where
 import Prelude
 
 import Control.Monad.State (StateT, evalStateT, get, lift, put)
+import Contract.Numeric.Natural as Natural
 import Data.Array ((..))
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmpty
@@ -13,17 +14,9 @@ import Data.Set as Set
 import Data.Traversable (for, sequence)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
-import SNet.Test.Integration.Types
-  ( AdminCommand(..)
-  , AdminCommand'
-  , Array2
-  , CommandResult(..)
-  , InputConfig(..)
-  , StateMachineInputs(..)
-  , UserCommand(..)
-  , UserCommand'
-  )
+import SNet.Test.Integration.Types (AdminCommand(..), AdminCommand', Array2, CommandResult(..), InputConfig(..), StateMachineInputs(..), UserCommand(..), UserCommand')
 import Test.QuickCheck.Gen (Gen, chooseInt, oneOf)
+import UnbondedStaking.Types (UnbondedPoolParams(..))
 
 -- | A monad stack that allows us to thread some state between each randomly
 -- generated action. This gives us access to the pool state.
@@ -37,6 +30,8 @@ type PoolState =
     closed :: Boolean
   -- | The stakers in the pool referenced by index
   , stakers :: Set Int
+  -- | Pool parameters
+  , params :: UnbondedPoolParams
   }
 
 evalGen' :: forall s a. s -> Gen' s a -> Gen a
@@ -57,14 +52,16 @@ arbitraryUserCommand user minStake maxStake = do
         user.
      3. A user doing nothing automatically succeeds.
   -}
-  s@{ stakers, closed } <- get
+  s@{ stakers, closed, params: UnbondedPoolParams ubp } <- get
   result <- case command of
-    UserStake _
-      | not closed -> do
+    UserStake amt
+      | Natural.toBigInt ubp.minStake > amt || Natural.toBigInt ubp.maxStake < amt ->
+          pure $ ExpectedFailure $ "Stake amount out of bounds. Context: " <> show (ubp.minStake /\ ubp.maxStake /\ amt)
+      | closed -> do
+          pure $ ExpectedFailure "Stake attempted when pool is closed"
+      | otherwise -> do
           put $ s { stakers = Set.insert user stakers }
           pure Success
-      | otherwise -> do
-          pure $ ExpectedFailure "Stake attempted when pool is closed"
     UserWithdraw
       | Set.member user stakers -> do
           put $ s { stakers = Set.delete user stakers }
@@ -98,14 +95,14 @@ arbitraryAdminCommand minDeposit maxDeposit = do
 
 -- | Generate the state machine's inputs (along with their result tags) from an
 -- input specification
-arbitraryInputs :: InputConfig -> Gen StateMachineInputs
-arbitraryInputs cfg =
+arbitraryInputs :: UnbondedPoolParams -> InputConfig -> Gen StateMachineInputs
+arbitraryInputs ubp cfg =
   map mkStateMachineInputs
     $ evalGen' s0
     $ arbitraryInputs' cfg
   where
   s0 :: PoolState
-  s0 = { closed: false, stakers: Set.empty }
+  s0 = { closed: false, stakers: Set.empty, params: ubp }
 
   mkStateMachineInputs
     :: Array (Array2 UserCommand' /\ AdminCommand') -> StateMachineInputs

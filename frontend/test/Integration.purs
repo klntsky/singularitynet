@@ -24,7 +24,7 @@ import SNet.Test.Integration.Types (AdminCommand(..), Array3, CommandResult(..),
 import SNet.Test.Integration.User (stakeCheck, withdrawCheck)
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
-import UnbondedStaking.Types (SnetInitialParams, SnetContract)
+import UnbondedStaking.Types (SnetContract, SnetInitialParams, UnbondedPoolParams(..))
 import UnbondedStaking.Utils (queryAssocListUnbonded, queryStateUnbonded, queryAssetsUnbonded)
 import Utils (hashPkh)
 
@@ -153,8 +153,9 @@ runMachine'
           (BigInt.fromInt 1_000_000_000)
   withWalletsAndPool initialParams distr \wallets -> do
     -- Get inputs and related information
+    {unbondedPoolParams: ubp} <- ask
     inputs@(StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
-      either pure genInputs eitherInputsConfig
+      either pure (genInputs ubp) eitherInputsConfig
     let nCycles :: Int
         nCycles = Array.length adminCommandsPerCycle
     -- Get the wallets of users and admin
@@ -288,8 +289,8 @@ getMachineState = do
     }
 
 -- | Generate the inputs from their configuration
-genInputs :: InputConfig -> SnetContract StateMachineInputs
-genInputs = liftEffect <<< randomSampleOne <<< arbitraryInputs
+genInputs :: UnbondedPoolParams -> InputConfig -> SnetContract StateMachineInputs
+genInputs ubp = liftEffect <<< randomSampleOne <<< arbitraryInputs ubp
 
 -- | Add the user wallets and keys to the user's commands
 addWalletsAndKeys

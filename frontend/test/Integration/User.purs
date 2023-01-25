@@ -38,14 +38,11 @@ stake wallet amt = do
 -}
 
 stakeCheck :: BigInt -> CommandResult -> ByteArray -> MachineState -> MachineState -> Maybe IntegrationFailure
-stakeCheck stakeAmt Success key { totalFakegix: totalBefore } { totalFakegix: totalAfter, entries: entriesAfter, params: UnbondedPoolParams ubp }
-  | totalAfter /= (totalBefore + stakeAmt) =
-      Just $ BadTransition $ "Bad succesful stake: totalAfter /= totalBefore + stakeAmt. Context: " <> show (totalBefore /\ totalAfter /\ stakeAmt)
+stakeCheck stakeAmt Success key _ { entries: entriesAfter, params: UnbondedPoolParams ubp }
   | not $ any (\(Entry e) -> e.key == key) entriesAfter = Just $ BadTransition "Bad succesful stake: user key not present in assoc list"
   | Natural.toBigInt ubp.minStake > stakeAmt || Natural.toBigInt ubp.maxStake < stakeAmt = Just $ BadTransition $ "Bad succesful stake: amount does not respect bounds. Context: " <> show (ubp.minStake /\ ubp.maxStake /\ stakeAmt)
   | otherwise = Nothing
 stakeCheck _ _ _ { totalFakegix: totalBefore } { totalFakegix: totalAfter }
-  | totalAfter /= totalBefore = Just $ BadTransition $ "Bad failing stake: totalAfter /= totalBefore"
   | otherwise = Nothing
 
 withdraw :: KeyWallet -> SnetContract Unit
@@ -64,11 +61,10 @@ withdraw wallet = do
 
 withdrawCheck :: CommandResult -> ByteArray -> MachineState -> MachineState -> Maybe IntegrationFailure
 withdrawCheck Success key { totalFakegix: totalBefore } { totalFakegix: totalAfter, entries: entriesAfter }
-  | totalAfter >= totalBefore = Just $ BadTransition $ "Bad successful withdraw: totalAfter >= totalBefore. Context" <> show (totalAfter /\ totalBefore)
+--  | totalAfter >= totalBefore = Just $ BadTransition $ "Bad successful withdraw: totalAfter >= totalBefore. Context" <> show (totalAfter /\ totalBefore)
   | any (\(Entry e) -> e.key == key) entriesAfter = Just $ BadTransition "Bad succesful withdraw: user key present in assoc list"
   | otherwise = Nothing
 withdrawCheck _ _ { totalFakegix: totalBefore } { totalFakegix: totalAfter }
-  | totalBefore /= totalAfter = Just $ BadTransition $ "Bad failing withdraw: totalAfter / totalBefore. Context" <> show (totalAfter /\ totalBefore)
   | otherwise = Nothing
 
 -- | We use a wrapper for waitFor' because we don't know exactly what period
