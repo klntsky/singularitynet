@@ -17,15 +17,41 @@ import Data.BigInt as BigInt
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
 import Mote (MoteT, group, test, skip)
-import SNet.Test.Common (localPlutipCfg, testConfigLongTimeout, testInitialParamsNoTimeChecks, withKeyWallet, withWalletsAndPool)
+import SNet.Test.Common
+  ( localPlutipCfg
+  , testConfigLongTimeout
+  , testInitialParamsNoTimeChecks
+  , withKeyWallet
+  , withWalletsAndPool
+  )
 import SNet.Test.Integration.Admin as Admin
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
-import SNet.Test.Integration.Types (AdminCommand(..), Array3, CommandResult(..), EnrichedUserCommand, InputConfig(InputConfig), IntegrationFailure(..), MachineState, StateMachineInputs(StateMachineInputs), UserCommand(..), UserCommand', prettyInputs)
+import SNet.Test.Integration.Types
+  ( AdminCommand(..)
+  , Array3
+  , CommandResult(..)
+  , EnrichedUserCommand
+  , InputConfig(InputConfig)
+  , IntegrationFailure(..)
+  , MachineState
+  , StateMachineInputs(StateMachineInputs)
+  , UserCommand(..)
+  , UserCommand'
+  , prettyInputs
+  )
 import SNet.Test.Integration.User (stakeCheck, withdrawCheck)
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
-import UnbondedStaking.Types (SnetContract, SnetInitialParams, UnbondedPoolParams(..))
-import UnbondedStaking.Utils (queryAssocListUnbonded, queryStateUnbonded, queryAssetsUnbonded)
+import UnbondedStaking.Types
+  ( SnetContract
+  , SnetInitialParams
+  , UnbondedPoolParams
+  )
+import UnbondedStaking.Utils
+  ( queryAssocListUnbonded
+  , queryStateUnbonded
+  , queryAssetsUnbonded
+  )
 import Utils (hashPkh)
 
 -- This module does integration testing on a state machine.
@@ -49,9 +75,10 @@ import Utils (hashPkh)
 -- `IntegrationError`, then the test succeeded.
 
 main :: Effect Unit
-main = launchAff_ $ interpretWithConfig testConfigLongTimeout $ testPlutipContracts
-  localPlutipCfg
-  suite
+main = launchAff_ $ interpretWithConfig testConfigLongTimeout $
+  testPlutipContracts
+    localPlutipCfg
+    suite
 
 suite :: MoteT Aff PlutipTest Aff Unit
 suite =
@@ -84,7 +111,6 @@ runMachine initParams inputConfig n =
       userTransition
       adminChecks
       userChecks
-  
 
 twoStakesInARow :: StateMachineInputs
 twoStakesInARow = StateMachineInputs
@@ -153,11 +179,13 @@ runMachine'
           (BigInt.fromInt 1_000_000_000)
   withWalletsAndPool initialParams distr \wallets -> do
     -- Get inputs and related information
-    {unbondedPoolParams: ubp} <- ask
-    inputs@(StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
+    { unbondedPoolParams: ubp } <- ask
+    inputs@
+      (StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
       either pure (genInputs ubp) eitherInputsConfig
-    let nCycles :: Int
-        nCycles = Array.length adminCommandsPerCycle
+    let
+      nCycles :: Int
+      nCycles = Array.length adminCommandsPerCycle
     -- Get the wallets of users and admin
     usersWallets <- liftMaybe (Exception.error "Could not get user wallets") $
       Array.tail wallets
@@ -175,7 +203,10 @@ runMachine'
           usersInputs
     -- For each cycle, execute users and admin's actions, validate results and
     -- evaluate post-conditions
-    for_ (zip (0 .. (nCycles - 1)) $ zip usersCommandsPerCycle adminCommandsPerCycle)
+    for_
+      ( zip (0 .. (nCycles - 1)) $ zip usersCommandsPerCycle
+          adminCommandsPerCycle
+      )
       \(cycle /\ usersCommands /\ adminCommand) ->
         do
           logInfo' "Context (inputs)"
@@ -236,7 +267,9 @@ toResult = map (either (ExecutionFailure <<< Just) $ const Success) <<< try
 -- If they match, it returns the executtion's result. Otherwise, it throws
 -- an integration error.
 validateResult
-  :: forall a . Show a =>
+  :: forall a
+   . Show a
+  =>
   -- | ^ Command type
   a
   -- | ^ Cycle in which the command was executed
@@ -248,16 +281,20 @@ validateResult
   CommandResult
   -> SnetContract CommandResult
 validateResult command _ Success Success = do
-    logInfo' $ "Succeeded in executing command " <> show command
-    pure Success
+  logInfo' $ "Succeeded in executing command " <> show command
+  pure Success
 validateResult command _ (ExecutionFailure _) e@(ExpectedFailure _) = do
-    logInfo' $ "Failed succesfully in executing command " <> show command
-    pure e
+  logInfo' $ "Failed succesfully in executing command " <> show command
+  pure e
 validateResult command _ e@(ExpectedFailure _) (ExecutionFailure _) = do
-    logInfo' $ "Failed succesfully in executing command " <> show command
-    pure e
+  logInfo' $ "Failed succesfully in executing command " <> show command
+  pure e
 validateResult command cycle r1 r2 = lift $ throwContractError $ ResultMismatch
-  ("There was a mismatch between the expected and the obtained result in command " <> show command <> ", cycle " <> show cycle)
+  ( "There was a mismatch between the expected and the obtained result in command "
+      <> show command
+      <> ", cycle "
+      <> show cycle
+  )
   r1
   r2
 
@@ -289,7 +326,8 @@ getMachineState = do
     }
 
 -- | Generate the inputs from their configuration
-genInputs :: UnbondedPoolParams -> InputConfig -> SnetContract StateMachineInputs
+genInputs
+  :: UnbondedPoolParams -> InputConfig -> SnetContract StateMachineInputs
 genInputs ubp = liftEffect <<< randomSampleOne <<< arbitraryInputs ubp
 
 -- | Add the user wallets and keys to the user's commands
@@ -321,8 +359,8 @@ userChecks
   -> MachineState
   -> Maybe IntegrationFailure
 userChecks command result key s0 s1 = case command of
-    UserStake amt -> stakeCheck amt result key s0 s1
-    UserWithdraw -> withdrawCheck result key s0 s1
+  UserStake amt -> stakeCheck amt result key s0 s1
+  UserWithdraw -> withdrawCheck result key s0 s1
 
 -- | Map from each `AdminCommand` to the matching post-conditions
 -- FIXME

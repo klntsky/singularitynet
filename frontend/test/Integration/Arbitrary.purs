@@ -2,38 +2,33 @@ module SNet.Test.Integration.Arbitrary (arbitraryInputs) where
 
 import Prelude
 
-import Control.Monad.State (StateT, evalStateT, get, lift, put)
-import Contract.Numeric.Natural as Natural
+import Control.Monad.State (StateT, evalStateT, lift)
 import Data.Array ((..))
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmpty
 import Data.BigInt as BigInt
-import Data.Maybe (Maybe(Nothing))
-import Data.Set (Set)
-import Data.Set as Set
 import Data.Traversable (for, sequence)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
-import SNet.Test.Integration.Types (AdminCommand(..), AdminCommand', Array2, CommandResult(..), InputConfig(..), StateMachineInputs(..), UserCommand(..), UserCommand')
+import SNet.Test.Integration.Types
+  ( AdminCommand(..)
+  , AdminCommand'
+  , Array2
+  , InputConfig(..)
+  , StateMachineInputs(..)
+  , UserCommand(..)
+  , UserCommand'
+  )
+import SNet.Test.Integration.Model (PoolState)
+import SNet.Test.Integration.Model as Model
 import Test.QuickCheck.Gen (Gen, chooseInt, oneOf)
-import UnbondedStaking.Types (UnbondedPoolParams(..))
+import UnbondedStaking.Types (UnbondedPoolParams)
 
 -- | A monad stack that allows us to thread some state between each randomly
 -- generated action. This gives us access to the pool state.
 type Gen' s a = StateT s Gen a
 
--- | A type representing a simplified version of the pool state.
--- FIXME: Add staking bounds to allow accurate prediction of user stake failure
-type PoolState =
-  {
-    -- | Whether the pool is open or closed
-    closed :: Boolean
-  -- | The stakers in the pool referenced by index
-  , stakers :: Set Int
-  -- | Pool parameters
-  , params :: UnbondedPoolParams
-  }
-
+-- | Pass an initial state and obtain a random generator.
 evalGen' :: forall s a. s -> Gen' s a -> Gen a
 evalGen' s g = evalStateT g s
 
@@ -46,27 +41,9 @@ arbitraryUserCommand user minStake maxStake = do
         maxStake
     )
     [ pure UserWithdraw ]
-  {- 1. A user stake succeeds iff the pool is open (unless the amount is out of
-        bounds, but we cannot tell that now).
-     2. A user withdrawal succeeds iff there already is some stake from this
-        user.
-     3. A user doing nothing automatically succeeds.
-  -}
-  s@{ stakers, closed, params: UnbondedPoolParams ubp } <- get
   result <- case command of
-    UserStake amt
-      | Natural.toBigInt ubp.minStake > amt || Natural.toBigInt ubp.maxStake < amt ->
-          pure $ ExpectedFailure $ "Stake amount out of bounds. Context: " <> show (ubp.minStake /\ ubp.maxStake /\ amt)
-      | closed -> do
-          pure $ ExpectedFailure "Stake attempted when pool is closed"
-      | otherwise -> do
-          put $ s { stakers = Set.insert user stakers }
-          pure Success
-    UserWithdraw
-      | Set.member user stakers -> do
-          put $ s { stakers = Set.delete user stakers }
-          pure Success
-      | otherwise -> pure $ ExpectedFailure "Withdraw attempted but the user is not in the pool"
+    UserStake amt -> Model.userStake user amt
+    UserWithdraw -> Model.userWithdraw user
 
   pure { command, result }
 
@@ -77,20 +54,9 @@ arbitraryAdminCommand minDeposit maxDeposit = do
     [ pure <<< AdminDeposit <<< BigInt.fromInt $ 0
     , pure AdminClose
     ]
-  {- 1. An admin deposit succeeds iff the pool is open and the users have
-        staked.
-     2. An admin close succeeds iff the pool is open.
-  -}
-  s@{ stakers, closed } <- get
   result <- case command of
-    AdminDeposit _
-      | not Set.isEmpty stakers && not closed -> pure Success
-      | otherwise -> pure $ ExpectedFailure "Deposit attempted but there are no users in the pool"
-    AdminClose
-      | not closed -> do
-          put $ s { closed = true }
-          pure Success
-      | otherwise -> pure $ ExpectedFailure "Close attempted but the pool is already closed"
+    AdminDeposit newPromise -> Model.adminDeposit newPromise
+    AdminClose -> Model.adminClose
   pure { command, result }
 
 -- | Generate the state machine's inputs (along with their result tags) from an
@@ -102,7 +68,7 @@ arbitraryInputs ubp cfg =
     $ arbitraryInputs' cfg
   where
   s0 :: PoolState
-  s0 = { closed: false, stakers: Set.empty, params: ubp }
+  s0 = Model.initialState ubp
 
   mkStateMachineInputs
     :: Array (Array2 UserCommand' /\ AdminCommand') -> StateMachineInputs
