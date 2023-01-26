@@ -18,21 +18,60 @@ module SNet.Test.Common
 
 import Prelude
 
-import Contract.Address (PaymentPubKeyHash, StakePubKeyHash, ownPaymentPubKeyHash, ownStakePubKeyHash, scriptHashAddress)
-import Contract.Config (LogLevel(..), PrivateStakeKey, emptyHooks, privateKeyFromBytes)
+import Contract.Address
+  ( PaymentPubKeyHash
+  , StakePubKeyHash
+  , ownPaymentPubKeyHash
+  , ownStakePubKeyHash
+  , scriptHashAddress
+  )
+import Contract.Config
+  ( LogLevel(..)
+  , PrivateStakeKey
+  , emptyHooks
+  , privateKeyFromBytes
+  )
 import Contract.Log (logDebug')
 import Contract.Monad (Contract, liftedE, liftedM, throwContractError)
 import Contract.Numeric.Rational ((%))
 import Contract.Prelude (mconcat)
 import Contract.Prim.ByteArray (byteArrayFromAscii, hexToRawBytes)
-import Contract.ScriptLookups (ScriptLookups, mintingPolicy, mkUnbalancedTx, unspentOutputs)
+import Contract.ScriptLookups
+  ( ScriptLookups
+  , mintingPolicy
+  , mkUnbalancedTx
+  , unspentOutputs
+  )
 import Contract.Scripts (MintingPolicy, validatorHash)
-import Contract.Test.Plutip (InitialUTxOs, PlutipConfig, PlutipTest, withStakeKey, withWallets)
+import Contract.Test.Plutip
+  ( InitialUTxOs
+  , PlutipConfig
+  , PlutipTest
+  , withStakeKey
+  , withWallets
+  )
 import Contract.Test.Plutip as Plutip
-import Contract.Transaction (awaitTxConfirmed, balanceTx, signTransaction, submit)
-import Contract.TxConstraints (TxConstraints, mustMintValue, mustPayToPubKeyAddress)
+import Contract.Transaction
+  ( awaitTxConfirmed
+  , balanceTx
+  , signTransaction
+  , submit
+  )
+import Contract.TxConstraints
+  ( TxConstraints
+  , mustMintValue
+  , mustPayToPubKeyAddress
+  )
 import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
-import Contract.Value (CurrencySymbol, TokenName, Value, mkTokenName, scriptCurrencySymbol, singleton, valueOf)
+import Contract.Value
+  ( CurrencySymbol
+  , TokenName
+  , Value
+  , mkTokenName
+  , scriptCurrencySymbol
+  , singleton
+  , valueOf
+  )
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (liftMaybe)
 import Control.Monad.Reader (ask, lift, runReaderT)
@@ -43,7 +82,7 @@ import Data.Foldable (foldMap, sum)
 import Data.Maybe (Maybe(..), fromJust, maybe)
 import Data.Newtype (unwrap, wrap)
 import Data.Time.Duration (Seconds(..), fromDuration)
-import Data.Traversable (traverse)
+import Data.Traversable (traverse, traverse_)
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UInt as UInt
@@ -56,8 +95,18 @@ import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Test.Spec.Runner (Config)
 import Types (AssetClass(..), ScriptVersion(..))
 import UnbondedStaking.CreatePool (createUnbondedPoolContract)
-import UnbondedStaking.Types (InitialUnbondedParams(..), Period(..), SnetInitialParams, UnbondedPoolParams(..), SnetContract)
-import UnbondedStaking.Utils (getNextPeriodRange, getPeriodRange, queryStateUnbonded)
+import UnbondedStaking.Types
+  ( InitialUnbondedParams(..)
+  , Period(..)
+  , SnetInitialParams
+  , UnbondedPoolParams(..)
+  , SnetContract
+  )
+import UnbondedStaking.Utils
+  ( getNextPeriodRange
+  , getPeriodRange
+  , queryStateUnbonded
+  )
 import Utils (currentRoundedTime, currentTime, nat)
 
 fakegixTokenName :: Contract () TokenName
@@ -149,7 +198,8 @@ waitFor' period skipCurrent = do
   currTime <- lift $
     (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$>
       currentRoundedTime
-  isOpen <- maybe false _.open <$> lift (queryStateUnbonded unbondedPoolParams sv)
+  isOpen <- maybe false _.open <$> lift
+    (queryStateUnbonded unbondedPoolParams sv)
   when (period /= ClosedPeriod && not isOpen)
     $ lift
     $ throwContractError
@@ -231,7 +281,8 @@ withWalletsAndPool initParamsContract distr contract =
             (Array.tail wallets)
       -- Mint and distribute FAKEGIX
       Plutip.withKeyWallet adminW
-        $ mintAndDistributeFakegix (snd adminInitialUtxos)
+        $ traverse_ (mintAndDistributeFakegix $ snd adminInitialUtxos)
+        $ splitInN 2
         $ Array.zip userPkhs
         $ Array.zip userSpkhs
         $ snd <$> distr
@@ -260,6 +311,15 @@ withWalletsAndPool initParamsContract distr contract =
   dropMaybe :: forall a. Maybe (Array a) -> Array a
   dropMaybe (Just arr) = arr
   dropMaybe Nothing = []
+
+  splitInN :: forall a. Int -> Array a -> Array (Array a)
+  splitInN maxLen arr
+    | Array.length arr > maxLen =
+        let
+          { before, after } = Array.splitAt maxLen arr
+        in
+          Array.cons before (splitInN maxLen after)
+    | otherwise = [ arr ]
 
 -- Our own wrapper for `withKeyWallet` that takes `SnetContract` instead of
 -- `Contract`
