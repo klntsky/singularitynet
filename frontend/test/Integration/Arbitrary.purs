@@ -2,7 +2,7 @@ module SNet.Test.Integration.Arbitrary (arbitraryInputs) where
 
 import Prelude
 
-import Control.Monad.State (StateT, evalStateT, lift)
+import Control.Monad.State (StateT, evalStateT, get, lift)
 import Data.Array ((..))
 import Data.Array as Array
 import Data.Array.NonEmpty as NonEmpty
@@ -10,6 +10,7 @@ import Data.BigInt as BigInt
 import Data.Traversable (for, sequence)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
+import SNet.Test.Integration.Model as Model
 import SNet.Test.Integration.Types
   ( AdminCommand(..)
   , AdminCommand'
@@ -18,9 +19,8 @@ import SNet.Test.Integration.Types
   , StateMachineInputs(..)
   , UserCommand(..)
   , UserCommand'
+  , PoolState
   )
-import SNet.Test.Integration.Model (PoolState)
-import SNet.Test.Integration.Model as Model
 import Test.QuickCheck.Gen (Gen, chooseInt, oneOf)
 import UnbondedStaking.Types (UnbondedPoolParams)
 
@@ -59,8 +59,8 @@ arbitraryAdminCommand minDeposit maxDeposit = do
     AdminClose -> Model.adminClose
   pure { command, result }
 
--- | Generate the state machine's inputs (along with their result tags) from an
--- input specification
+-- | Generate the state machine's inputs and resulting states from an input
+-- specification.
 arbitraryInputs :: UnbondedPoolParams -> InputConfig -> Gen StateMachineInputs
 arbitraryInputs ubp cfg =
   map mkStateMachineInputs
@@ -71,25 +71,30 @@ arbitraryInputs ubp cfg =
   s0 = Model.initialState ubp
 
   mkStateMachineInputs
-    :: Array (Array2 UserCommand' /\ AdminCommand') -> StateMachineInputs
+    :: Array (Array2 UserCommand' /\ AdminCommand' /\ PoolState)
+    -> StateMachineInputs
   mkStateMachineInputs = Array.foldl addToInputs emptyInputs
-  addToInputs (StateMachineInputs i) (usersCommands /\ adminCommand) =
+  addToInputs
+    (StateMachineInputs i)
+    (usersCommands /\ adminCommand /\ poolState) =
     StateMachineInputs $ i
       { usersInputs = Array.snoc i.usersInputs usersCommands
       , adminInputs = Array.snoc i.adminInputs adminCommand
+      , poolStates = Array.snoc i.poolStates poolState
       }
 
   emptyInputs :: StateMachineInputs
   emptyInputs = StateMachineInputs
     { usersInputs: []
     , adminInputs: []
+    , poolStates: []
     }
 
 -- | Generate the admin and user's inputs in an interleaved manner, giving
 -- the generators access to the intermediate pool state.
 arbitraryInputs'
   :: InputConfig
-  -> Gen' PoolState (Array (Array2 UserCommand' /\ AdminCommand'))
+  -> Gen' PoolState (Array (Array2 UserCommand' /\ AdminCommand' /\ PoolState))
 arbitraryInputs' (InputConfig cfg) = vectorOf' cfg.nCycles do
   let userIds = 0 .. (cfg.nUsers - 1)
   usersInputs :: Array2 UserCommand' <- for userIds \id -> do
@@ -97,7 +102,8 @@ arbitraryInputs' (InputConfig cfg) = vectorOf' cfg.nCycles do
     vectorOf' nActions $
       uncurry (arbitraryUserCommand id) cfg.stakeRange
   adminInput :: AdminCommand' <- uncurry arbitraryAdminCommand cfg.depositRange
-  pure $ usersInputs /\ adminInput
+  poolState <- get
+  pure $ usersInputs /\ adminInput /\ poolState
   where
   vectorOf' :: forall s a. Int -> Gen' s a -> Gen' s (Array a)
   vectorOf' n g = sequence $ Array.replicate n g

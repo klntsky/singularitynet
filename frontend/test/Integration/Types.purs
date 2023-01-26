@@ -1,6 +1,7 @@
 module SNet.Test.Integration.Types
   ( StateMachineInputs(..)
-  , MachineState(..)
+  , PoolState
+  , PoolState'
   , IntegrationFailure(..)
   , InputConfig(..)
   , UserCommand(..)
@@ -19,11 +20,13 @@ module SNet.Test.Integration.Types
 
 import Prelude
 
+import Contract.Numeric.Rational (Rational)
 import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Generic.Rep (class Generic)
+import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -43,12 +46,45 @@ newtype StateMachineInputs =
       usersInputs :: Array3 UserCommand'
     -- M cycles
     , adminInputs :: Array AdminCommand'
+    -- M cycles
+    , poolStates :: Array PoolState
     }
 
 derive instance Generic StateMachineInputs _
 
 instance Show StateMachineInputs where
   show = genericShow
+
+-- | A type representing the pool state, as used by the model.
+type PoolState =
+  {
+    -- | Whether the pool is open or closed
+    closed :: Boolean
+  -- | A map from the stakers' indexes to their staked amount.
+  , stakers :: Map Int Rational
+  -- | A map of stakers that are candidates for the promised rewards. The value
+  -- of the map is the proportion of the rewards they can get.
+  , candidates :: Map Int Rational
+  -- | Amount of staked assets in the pool
+  , staked :: Rational
+  -- | Total amount of funds in the pool. Ideally, it should be the same as the
+  -- staked amount (all assets are automatically staked). However, due to
+  -- rounding, this is not the case.
+  , funds :: BigInt
+  -- | Amount of funds promised by the admin as rewards for the next cycle.
+  , promised :: BigInt
+  -- | Pool parameters
+  , params :: UnbondedPoolParams
+  }
+
+-- | A stripped down version of the pool state, obtained via querying the
+-- onchain data structures.
+type PoolState' =
+  { closed :: Boolean
+  , stakers :: Map Int Rational
+  , staked :: Rational
+  , funds :: BigInt
+  }
 
 -- | Pretty-prints the inputs of the state machine
 prettyInputs :: StateMachineInputs -> String
@@ -143,14 +179,6 @@ derive instance Generic AdminCommand _
 instance Show AdminCommand where
   show = genericShow
 
--- | The state of the machine after each cycle.
-type MachineState =
-  { totalFakegix :: Fakegix
-  , poolOpen :: Boolean
-  , entries :: Array Entry
-  , params :: UnbondedPoolParams
-  }
-
 -- | The result of executing a command.
 data CommandResult
   = Success
@@ -164,11 +192,11 @@ instance Show CommandResult where
 -- | There are two kinds of integration failures:
 --   * Result mismatches: these occur when an input from a user produces a
 --     success / failure when the opposite was expected.
---   * Bad transition: these occur when some invariant is violated during an
---     interaction. But it is assumed that the transition.
+--   * Bad transition: these occur when the state of the pool at the end of
+--     a cycle is not the expected.
 data IntegrationFailure
   = ResultMismatch String CommandResult CommandResult
-  | BadTransition String
+  | BadTransition String PoolState PoolState'
 
 derive instance Generic IntegrationFailure _
 instance Show IntegrationFailure where

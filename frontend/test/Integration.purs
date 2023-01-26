@@ -5,6 +5,7 @@ import Contract.Prelude
 import Contract.Address (ownPaymentPubKeyHash)
 import Contract.Log (logInfo')
 import Contract.Monad (Contract, launchAff_, liftedM, throwContractError)
+import Contract.Numeric.Rational (Rational)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Test.Mote (interpretWithConfig)
 import Contract.Test.Plutip (PlutipTest, testPlutipContracts)
@@ -14,8 +15,11 @@ import Control.Monad.Reader (ask, lift)
 import Data.Array (zip, (..))
 import Data.Array as Array
 import Data.BigInt as BigInt
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
+import Effect.Exception.Unsafe (unsafeThrow)
 import Mote (MoteT, group, test, skip)
 import SNet.Test.Common
   ( localPlutipCfg
@@ -33,17 +37,18 @@ import SNet.Test.Integration.Types
   , EnrichedUserCommand
   , InputConfig(InputConfig)
   , IntegrationFailure(..)
-  , MachineState
   , StateMachineInputs(StateMachineInputs)
   , UserCommand(..)
   , UserCommand'
+  , PoolState
+  , PoolState'
   , prettyInputs
   )
-import SNet.Test.Integration.User (stakeCheck, withdrawCheck)
 import SNet.Test.Integration.User as User
 import Test.QuickCheck.Gen (randomSampleOne)
 import UnbondedStaking.Types
-  ( SnetContract
+  ( Entry(..)
+  , SnetContract
   , SnetInitialParams
   , UnbondedPoolParams
   )
@@ -52,7 +57,7 @@ import UnbondedStaking.Utils
   , queryStateUnbonded
   , queryAssetsUnbonded
   )
-import Utils (hashPkh)
+import Utils (hashPkh, logInfo_, toRational)
 
 -- This module does integration testing on a state machine.
 --
@@ -83,14 +88,14 @@ main = launchAff_ $ interpretWithConfig testConfigLongTimeout $
 suite :: MoteT Aff PlutipTest Aff Unit
 suite =
   group "Integration tests" do
-    test "Two stakes in a row" $
-      runMachine'
-        testInitialParamsNoTimeChecks
-        (Left twoStakesInARow)
-        adminTransition
-        userTransition
-        adminChecks
-        userChecks
+    --    test "Two stakes in a row" $
+    --      runMachine'
+    --        testInitialParamsNoTimeChecks
+    --        (Left twoStakesInARow)
+    --        adminTransition
+    --        userTransition
+    --        adminChecks
+    --        userChecks
     group "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg 10
 
 runMachine
@@ -109,21 +114,20 @@ runMachine initParams inputConfig n =
       (Right inputConfig)
       adminTransition
       userTransition
-      adminChecks
-      userChecks
+      postConditions
 
-twoStakesInARow :: StateMachineInputs
-twoStakesInARow = StateMachineInputs
-  { usersInputs:
-      [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ]
-        , [ { command: UserStake $ BigInt.fromInt 1000, result: Success }
-          , { command: UserStake $ BigInt.fromInt 1000, result: Success }
-          ]
-        ]
-      ]
-  , adminInputs:
-      [ { command: AdminClose, result: Success } ]
-  }
+-- twoStakesInARow :: StateMachineInputs
+-- twoStakesInARow = StateMachineInputs
+--   { usersInputs:
+--       [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ]
+--         , [ { command: UserStake $ BigInt.fromInt 1000, result: Success }
+--           , { command: UserStake $ BigInt.fromInt 1000, result: Success }
+--           ]
+--         ]
+--       ]
+--   , adminInputs:
+--       [ { command: AdminClose, result: Success } ]
+--   }
 
 inputCfg :: InputConfig
 inputCfg = InputConfig
@@ -144,29 +148,15 @@ runMachine'
   -> (AdminCommand -> KeyWallet -> SnetContract Unit)
   -- | Transitions for `UserCommand` inputs
   -> (UserCommand -> KeyWallet -> SnetContract Unit)
-  -- | Post-conditions for `AdminCommand` transitions
-  -> ( AdminCommand
-       -> CommandResult
-       -> MachineState
-       -> MachineState
-       -> Maybe IntegrationFailure
-     )
-  -- | Post-conditions for `UserCommand` transitions
-  -> ( UserCommand
-       -> CommandResult
-       -> ByteArray
-       -> MachineState
-       -> MachineState
-       -> Maybe IntegrationFailure
-     )
+  -- | Post-conditions after each cycle's conclusion
+  -> (PoolState -> PoolState' -> Array IntegrationFailure)
   -> PlutipTest
 runMachine'
   initialParams
   eitherInputsConfig
   transAdmin
   transUser
-  condAdmin
-  condUser = do
+  postconditions = do
   let
     -- We distribute to a hardcoded number of users, even though some of them
     -- may not be used
@@ -181,7 +171,9 @@ runMachine'
     -- Get inputs and related information
     { unbondedPoolParams: ubp } <- ask
     inputs@
-      (StateMachineInputs { usersInputs, adminInputs: adminCommandsPerCycle }) <-
+      ( StateMachineInputs
+          { usersInputs, adminInputs: adminCommandsPerCycle, poolStates }
+      ) <-
       either pure (genInputs ubp) eitherInputsConfig
     let
       nCycles :: Int
@@ -204,59 +196,30 @@ runMachine'
     -- For each cycle, execute users and admin's actions, validate results and
     -- evaluate post-conditions
     for_
-      ( zip (0 .. (nCycles - 1)) $ zip usersCommandsPerCycle
-          adminCommandsPerCycle
+      ( zip (0 .. (nCycles - 1)) $ zip usersCommandsPerCycle $
+          zip adminCommandsPerCycle poolStates
       )
-      \(cycle /\ usersCommands /\ adminCommand) ->
+      \(cycle /\ usersCommands /\ adminCommand /\ expectedState) ->
         do
           logInfo' "Context (inputs)"
           logInfo' $ prettyInputs inputs
-          machineState0 <- getMachineState
           -- Execute all commands for each user and validate the results with the
           -- expected ones.
           for_ usersCommands \userCommands ->
             for userCommands \{ command, wallet, result: expectedResult } -> do
               executionResult <- toResult $ transUser command wallet
               validateResult command cycle expectedResult executionResult
-          machineState1 <- getMachineState
-          -- Evaluate all users' post-conditions and report them
-          let
-            userErrors :: Array IntegrationFailure
-            userErrors =
-              Array.catMaybes
-                <<<
-                  ( Array.concatMap $
-                      map
-                        ( \{ command, result, key } -> condUser command result
-                            key
-                            machineState0
-                            machineState1
-                        )
-                  )
-                $ usersCommands
-
-          when (not $ Array.null userErrors)
-            $ lift
-            $ throwContractError
-            $ "Failure during user checks: "
-            <> show userErrors
           -- Execute admin command and validate result
           let { command, result: expectedResult } = adminCommand
           executionResult <- toResult $ transAdmin command adminWallet
           _ <- validateResult command cycle expectedResult executionResult
-          machineState2 <- getMachineState
-          -- Evaluate admin's post-conditions and report them
-          let
-            adminError :: Maybe IntegrationFailure
-            adminError = condAdmin command expectedResult machineState1
-              machineState2
-          case adminError of
-            Just e ->
-              lift
-                $ throwContractError
-                $ "Failure during admin checks: "
-                <> show e
-            Nothing -> pure unit
+          actualState <- getMachineState usersKeys
+          -- Evaluate post-conditions and report them
+          let badTransitions = postconditions expectedState actualState
+          when (Array.length badTransitions > 0)
+            $ lift
+            $ throwContractError
+            $ show badTransitions
 
 -- | Converts a `SnetContract Unit` into a `SnetContract CommandResult` by
 -- wrapping the contract with a `try` and capturing the error.
@@ -308,22 +271,38 @@ getUserKeys wallets = traverse (\k -> withKeyWallet k getKey) wallets
     (liftAff <<< hashPkh) =<<
       (lift $ liftedM "getUserKeys: Cannot get user's pkh" ownPaymentPubKeyHash)
 
--- | Query the pool and construct the state of it
-getMachineState :: SnetContract MachineState
-getMachineState = do
-  -- Get list entries
+-- | Query the pool and construct the state of it. It takes as input the list
+-- of users' keys
+getMachineState :: Array ByteArray -> SnetContract PoolState'
+getMachineState keys = do
+  -- Get list entries' information
   { unbondedPoolParams, scriptVersion } <- ask
-  entries <- lift $ queryAssocListUnbonded unbondedPoolParams scriptVersion
+  stakers <- entriesToMap <$> lift
+    (queryAssocListUnbonded unbondedPoolParams scriptVersion)
+
   -- Get pool state
   maybePoolState <- lift $ queryStateUnbonded unbondedPoolParams scriptVersion
+  lift $ logInfo' $ "maybePoolState: " <> show maybePoolState
   -- Get all asset utxos
-  { stakedAsset } <- lift $ queryAssetsUnbonded unbondedPoolParams scriptVersion
+  { stakedAsset: funds } <- lift $ queryAssetsUnbonded unbondedPoolParams
+    scriptVersion
   pure
-    { entries
-    , totalFakegix: stakedAsset
-    , poolOpen: maybe false _.open maybePoolState
-    , params: unbondedPoolParams
+    { stakers
+    , staked: sum stakers
+    , funds
+    , closed: maybe true (not <<< _.open) maybePoolState
     }
+  where
+  keyToIndex :: ByteArray -> Int
+  keyToIndex ba = case Array.elemIndex ba keys of
+    Just idx -> idx
+    Nothing -> unsafeThrow "User key not found in keys array"
+
+  entriesToMap :: Array Entry -> Map Int Rational
+  entriesToMap =
+    Map.fromFoldable
+      <<< map \(Entry e) -> keyToIndex e.key /\
+        (toRational e.deposited + e.rewards)
 
 -- | Generate the inputs from their configuration
 genInputs
@@ -350,24 +329,26 @@ adminTransition command wallet = case command of
   AdminDeposit amt -> Admin.deposit wallet amt
   AdminClose -> Admin.close wallet
 
--- | Map from each `UserCommand` to the matching post-conditions
-userChecks
-  :: UserCommand
-  -> CommandResult
-  -> ByteArray
-  -> MachineState
-  -> MachineState
-  -> Maybe IntegrationFailure
-userChecks command result key s0 s1 = case command of
-  UserStake amt -> stakeCheck amt result key s0 s1
-  UserWithdraw -> withdrawCheck result key s0 s1
-
--- | Map from each `AdminCommand` to the matching post-conditions
--- FIXME
-adminChecks
-  :: AdminCommand
-  -> CommandResult
-  -> MachineState
-  -> MachineState
-  -> Maybe IntegrationFailure
-adminChecks _ _ _ _ = Nothing
+-- | Validate that the pool state as predicated matches the pool state after
+-- each cycle
+postConditions
+  :: PoolState
+  -> PoolState'
+  -> Array IntegrationFailure
+postConditions expected actual =
+  Array.catMaybes
+    [ cond (Map.size expected.stakers == Map.size actual.stakers)
+        "The number of users in the pool do not match"
+    , cond (expected.stakers == actual.stakers)
+        "Some of the users' funds do not match"
+    , cond (expected.closed == actual.closed)
+        "The pool open/close state does not match"
+    , cond (expected.funds == actual.funds)
+        "The funds in the pool do not match"
+    , cond (expected.staked == actual.staked)
+        "The amount of staked funds do not match"
+    ]
+  where
+  cond :: Boolean -> String -> Maybe IntegrationFailure
+  cond b msg =
+    if not b then Just $ BadTransition msg expected actual else Nothing

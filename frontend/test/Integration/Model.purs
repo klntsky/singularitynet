@@ -1,6 +1,5 @@
 module SNet.Test.Integration.Model
-  ( PoolState
-  , adminDeposit
+  ( adminDeposit
   , adminClose
   , initialState
   , userStake
@@ -17,18 +16,17 @@ import Data.BigInt (BigInt)
 import Data.Foldable (sum)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Tuple.Nested ((/\))
-import SNet.Test.Integration.Types (CommandResult(..))
+import SNet.Test.Integration.Types (CommandResult(..), PoolState)
 import UnbondedStaking.Types (UnbondedPoolParams(..))
 import Utils (roundDown, roundUp, toRational)
 
 {- |
 
-This module contains a type representing the full state as well as state
-transition functions of the SingularityNet protocol. These are employed in
-the module `Snet.Test.Integration.Arbitrary` to generate the expected
-outcomes of each user interaction.
+This module contains transition functions for the SingularityNet protocol.
+These are employed in the module `Snet.Test.Integration.Arbitrary` to generate
+the expected outcomes of each user interaction.
 
 Some notes on when an interaction fails or succeeds:
 
@@ -42,28 +40,6 @@ Some notes on when an interaction fails or succeeds:
 4. An admin close succeeds iff the pool is open.
 
 -}
-
--- | A type representing the pool state.
-type PoolState =
-  {
-    -- | Whether the pool is open or closed
-    closed :: Boolean
-  -- | A map from the stakers' indexes to their staked amount.
-  , stakers :: Map Int Rational
-  -- | A map of stakers that are candidates for the promised rewards. The value
-  -- of the map is the proportion of the rewards they can get.
-  , candidates :: Map Int Rational
-  -- | Amount of staked assets in the pool
-  , staked :: Rational
-  -- | Total amount of funds in the pool. Ideally, it should be the same as the
-  -- staked amount (all assets are automatically staked). However, due to
-  -- rounding, this is not the case.
-  , funds :: BigInt
-  -- | Amount of funds promised by the admin as rewards for the next cycle.
-  , promised :: BigInt
-  -- | Pool parameters
-  , params :: UnbondedPoolParams
-  }
 
 -- | Provides the initial state of a pool defined by its `UnbondedPoolParams`.
 initialState :: UnbondedPoolParams -> PoolState
@@ -91,9 +67,13 @@ userStake user amt = do
       | s.closed -> do
           pure $ ExpectedFailure "Stake attempted when pool is closed"
       | otherwise -> do
+          let amt' = toRational amt
           put $ s
-            { stakers = Map.insert user (toRational amt) s.stakers
-            , staked = s.staked + toRational amt
+            { stakers =
+                Map.alter
+                  (maybe (Just amt') (\v -> Just $ amt' + v))
+                  user
+                  s.stakers
             , funds = s.funds + amt
             }
           pure Success
@@ -110,7 +90,6 @@ userWithdraw user = do
         withdrawnAmt = roundDown stakerFunds
       put $ s
         { stakers = Map.delete user s.stakers
-        , staked = s.staked - toRational withdrawnAmt
         , funds = s.funds - withdrawnAmt
         }
       pure Success
@@ -157,7 +136,26 @@ adminClose = do
   case unit of
     _
       | not s.closed -> do
-          put $ s { closed = true }
+          -- We update the rewards one final time
+          let
+            { stakers: stakers'
+            , candidates: candidates'
+            , staked: staked'
+            , adminDeposited
+            } =
+              updatePool
+                s.stakers
+                s.candidates
+                s.promised
+          -- We close the pool and promise no rewards
+          put $ s
+            { stakers = stakers'
+            , candidates = candidates'
+            , funds = s.funds + adminDeposited
+            , staked = staked'
+            , promised = (zero :: BigInt)
+            , closed = true
+            }
           pure Success
       | otherwise -> pure $ ExpectedFailure
           "Close attempted but the pool is already closed"
