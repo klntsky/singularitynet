@@ -172,7 +172,11 @@ fromSdkIncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt } =
 
 fromSdkIncompleteClose :: SdkIncompleteClose -> IncompleteClose
 fromSdkIncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited } =
-  IncompleteClose { failedKeys: map wrap fk, stateUtxoConsumed, totalDeposited: sdkRatioToBigInt totalDeposited }
+  IncompleteClose
+    { failedKeys: map wrap fk
+    , stateUtxoConsumed
+    , totalDeposited: sdkRatioToBigInt totalDeposited
+    }
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
@@ -259,7 +263,10 @@ toSdkIncompleteDeposit
 toSdkIncompleteClose :: IncompleteClose -> SdkIncompleteClose
 toSdkIncompleteClose
   (IncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited }) =
-  { failedKeys: map unwrap fk, stateUtxoConsumed, totalDeposited: bigIntToSdkRatio totalDeposited }
+  { failedKeys: map unwrap fk
+  , stateUtxoConsumed
+  , totalDeposited: bigIntToSdkRatio totalDeposited
+  }
 
 fromSdkNat :: String -> String -> BigInt -> Either Error Natural
 fromSdkNat context name bint = note (error msg) $ fromBigInt bint
@@ -734,18 +741,18 @@ callGetNodeTime cfg = fromAff
 
 -- We export constructors and consumers of `Maybe` for the JS code
 
-callJust :: forall a. a -> Effect (Promise (Maybe a))
-callJust = Promise.fromAff <<< pure <<< Just
+callJust :: forall a. a -> Maybe a
+callJust = Just
 
-callNothing :: forall a. Effect (Promise (Maybe a))
-callNothing = Promise.fromAff $ pure $ Nothing
+callNothing :: forall a. Maybe a
+callNothing = Nothing
 
 -- We need this escape hatch to allow the JS code to consume a `Maybe a`
 -- however it wants
 foreign import data AnyType :: Type
 
 callConsumeMaybe
-  :: forall a. (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> Effect (Promise AnyType)
-callConsumeMaybe just nothing = fromAff <<< pure <<< case _ of
+  :: forall a. (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> AnyType
+callConsumeMaybe just nothing = case _ of
   Nothing -> nothing unit
   Just x -> just x

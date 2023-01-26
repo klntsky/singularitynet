@@ -64,40 +64,40 @@ exports.UnbondedPool = class UnbondedPool {
   async deposit(amount, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteDepositMaybe = await contracts.callNothing()();
+    const incompleteDepositMaybe = contracts.callNothing();
     const result = await contracts.callDepositUnbondedPool(_config)(amount)(this.args)(batchSize)(
       incompleteDepositMaybe
     )();
-    return contracts.callConsumeMaybe(x => x)(x => null)(result)();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
   }
 
-  async completeDeposit(incompleteDeposit, batchSize) {
+  async handleIncompleteDeposit(incompleteDeposit, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteDepositMaybe = await contracts.callJust(incompleteDeposit)();
+    const incompleteDepositMaybe = contracts.callJust(incompleteDeposit);
     const result = await contracts.callDepositUnbondedPool(_config)(BigInteger(0))(this.args)(batchSize)(
       incompleteDepositMaybe
     )();
-    return contracts.callConsumeMaybe(x => x)(x => null)(result)();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
   }
 
   async close(batchSiz) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteCloseMaybe = await frontend.callNothing()();
+    const incompleteCloseMaybe = frontend.callNothing();
     return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
       incompleteCloseMaybe
     )();
   }
 
-  async completeClose(incompleteClose, batchSize) {
+  async handleIncompleteClose(incompleteClose, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteCloseMaybe = await contracts.callJust(incompleteClose)();
+    const incompleteCloseMaybe = contracts.callJust(incompleteClose);
     const result = await contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
       incompleteCloseMaybe
     )();
-    return contracts.callConsumeMaybe(x => x)(x => null)(result)();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
   }
 
   async userStake(amount) {

@@ -98,6 +98,6 @@ export const main = async () => {
     initialIncomplete
     );
   console.log(incompleteDeposit)
-  const r2 = await unbondedPool.completeDeposit(incompleteDeposit, depositBatchSize);
+  const r2 = await unbondedPool.handleIncompleteDeposit(incompleteDeposit, depositBatchSize);
   console.log(JSON.stringify(r2))
 }
