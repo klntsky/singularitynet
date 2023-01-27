@@ -5,7 +5,7 @@ import Prelude
 import Contract.Monad (Contract, throwContractError)
 import Contract.Test.Plutip (PlutipTest)
 import Control.Monad.Reader (ask, lift)
-import Data.Array as Array
+import Data.Maybe (Maybe(..), isNothing)
 import SNet.Test.Common
   ( getAdminWallet
   , waitFor
@@ -22,11 +22,11 @@ test initParams = withWalletsAndPool initParams [] \wallets -> do
   withKeyWallet adminWallet do
     waitFor AdminPeriod
     { unbondedPoolParams, scriptVersion } <- ask
-    failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams
+    failedCloses <- lift $ closeUnbondedPoolContract unbondedPoolParams
       scriptVersion
       (nat 0)
-      []
+      Nothing
     -- Make sure that return value is empty list
-    when (not $ Array.null failedIndices)
+    when (not $ isNothing failedCloses)
       $ lift
       $ throwContractError "Some entries failed to be updated"

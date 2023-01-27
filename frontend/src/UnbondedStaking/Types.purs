@@ -9,6 +9,8 @@ module UnbondedStaking.Types
   , UnbondedPoolParams(..)
   , UnbondedStakingAction(..)
   , UnbondedStakingDatum(..)
+  , IncompleteDeposit(..)
+  , IncompleteClose(..)
   ) where
 
 import Contract.Prelude
@@ -327,3 +329,30 @@ instance ToData Entry where
 
 instance Show Entry where
   show = genericShow
+
+-- | This datatype represents a failed admin deposit. It contains necessary
+-- information to identify which entries are outdated and update them just
+-- as if they had been updated together with the rest.
+data IncompleteDeposit = IncompleteDeposit
+  { failedKeys :: Array ByteArray
+  , totalDeposited :: BigInt
+  , nextDepositAmt :: BigInt
+  }
+
+derive instance Generic IncompleteDeposit _
+
+instance Show IncompleteDeposit where
+  show = genericShow
+
+-- | Serves same purpose as `IncompleteDeposit`, but for the close action.
+data IncompleteClose = IncompleteClose
+  { failedKeys :: Array ByteArray
+  , totalDeposited :: BigInt
+  , stateUtxoConsumed :: Boolean
+  }
+
+derive instance Generic IncompleteClose _
+
+instance Show IncompleteClose where
+  show = genericShow
+
