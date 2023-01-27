@@ -1,5 +1,6 @@
 module SNet.Test.Integration.Types
   ( StateMachineInputs(..)
+  , StateMachineOnlyInputs
   , PoolState
   , PoolState'
   , IntegrationFailure(..)
@@ -36,7 +37,7 @@ import UnbondedStaking.Types (Entry, UnbondedPoolParams)
 type UserIdx = Int
 type Fakegix = BigInt
 
--- | Datatype representing the inputs of the state machine.
+-- | Datatype representing the inputs of the state machine and the intermediate states.
 -- There is at least one input per user/per cycle. A user may perform multiple
 -- actions, while the admin is expected to only perform one per cycle.
 newtype StateMachineInputs =
@@ -54,6 +55,12 @@ derive instance Generic StateMachineInputs _
 
 instance Show StateMachineInputs where
   show = genericShow
+
+-- | Datatype representing the inputs of the state machine. 
+type StateMachineOnlyInputs =
+  { usersInputs :: Array3 UserCommand'
+  , adminInputs :: Array AdminCommand'
+  }
 
 -- | A type representing the pool state, as used by the model.
 type PoolState =

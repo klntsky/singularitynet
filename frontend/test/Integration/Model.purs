@@ -4,21 +4,37 @@ module SNet.Test.Integration.Model
   , initialState
   , userStake
   , userWithdraw
+  , addPoolStates
   ) where
 
 import Prelude
 
 import Contract.Numeric.Natural as Natural
 import Contract.Numeric.Rational (Rational)
-import Control.Monad.State (get, put)
+import Control.Monad.State (State, evalState, get, put)
 import Control.Monad.State.Class (class MonadState)
+import Data.Array ((..))
+import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Foldable (sum)
+import Data.Lazy (defer, force)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
+import Data.Traversable (for, for_)
 import Data.Tuple.Nested ((/\))
-import SNet.Test.Integration.Types (CommandResult(..), PoolState)
+import Effect.Exception.Unsafe (unsafeThrow)
+import SNet.Test.Integration.Types
+  ( AdminCommand(..)
+  , AdminCommand'
+  , Array3
+  , CommandResult(..)
+  , PoolState
+  , StateMachineInputs(..)
+  , StateMachineOnlyInputs
+  , UserCommand(..)
+  , UserCommand'
+  )
 import UnbondedStaking.Types (UnbondedPoolParams(..))
 import Utils (roundDown, roundUp, toRational)
 
@@ -193,3 +209,34 @@ updatePool stakers candidates promised =
     adminDeposited = roundUp $ sum rewards
   in
     { stakers: stakers', candidates: candidates', staked, adminDeposited }
+
+-- | Used for constructing specific integration tests where the commands and
+-- their results are known but we want the model to generate the pool states.
+addPoolStates
+  :: UnbondedPoolParams
+  -> StateMachineOnlyInputs
+  -> StateMachineInputs
+addPoolStates ubp { usersInputs: usersInputsPerCycle, adminInputs } = flip
+  evalState
+  s0
+  do
+    let
+      userIds = 0 .. 1000
+    poolStates <- for
+      (Array.zip usersInputsPerCycle adminInputs)
+      \(usersInputs /\ adminInput) -> do
+        -- Execute all users' actions
+        for_ (Array.zip userIds usersInputs) \(user /\ userInputs) -> do
+          for_ userInputs $ \input -> case input.command of
+            UserStake amt -> userStake user amt
+            UserWithdraw -> userWithdraw user
+        -- Execute admin action
+        _ <- case adminInput.command of
+          AdminDeposit amt -> adminDeposit amt
+          AdminClose -> adminClose
+        -- Return pool state
+        get
+    pure $ StateMachineInputs
+      { usersInputs: usersInputsPerCycle, adminInputs, poolStates }
+  where
+  s0 = initialState ubp

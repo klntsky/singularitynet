@@ -30,6 +30,7 @@ import SNet.Test.Common
   )
 import SNet.Test.Integration.Admin as Admin
 import SNet.Test.Integration.Arbitrary (arbitraryInputs)
+import SNet.Test.Integration.Model (addPoolStates)
 import SNet.Test.Integration.Types
   ( AdminCommand(..)
   , Array3
@@ -37,11 +38,12 @@ import SNet.Test.Integration.Types
   , EnrichedUserCommand
   , InputConfig(InputConfig)
   , IntegrationFailure(..)
+  , PoolState
+  , PoolState'
   , StateMachineInputs(StateMachineInputs)
   , UserCommand(..)
   , UserCommand'
-  , PoolState
-  , PoolState'
+  , StateMachineOnlyInputs
   , prettyInputs
   )
 import SNet.Test.Integration.User as User
@@ -88,15 +90,34 @@ main = launchAff_ $ interpretWithConfig testConfigLongTimeout $
 suite :: MoteT Aff PlutipTest Aff Unit
 suite =
   group "Integration tests" do
-    --    test "Two stakes in a row" $
-    --      runMachine'
-    --        testInitialParamsNoTimeChecks
-    --        (Left twoStakesInARow)
-    --        adminTransition
-    --        userTransition
-    --        adminChecks
-    --        userChecks
+    test "Two stakes in a row" $
+      runMachineWith testInitialParamsNoTimeChecks twoStakesInARow
     group "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg 10
+
+twoStakesInARow :: StateMachineOnlyInputs
+twoStakesInARow =
+  { usersInputs:
+      [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ]
+        , [ { command: UserStake $ BigInt.fromInt 1100, result: Success }
+          , { command: UserStake $ BigInt.fromInt 1200, result: Success }
+          ]
+        ]
+      ]
+  , adminInputs:
+      [ { command: AdminClose, result: Success } ]
+  }
+
+runMachineWith
+  :: Contract () SnetInitialParams
+  -> StateMachineOnlyInputs
+  -> PlutipTest
+runMachineWith initParams inputs =
+  runMachine'
+    initParams
+    (Left inputs)
+    adminTransition
+    userTransition
+    postConditions
 
 runMachine
   ::
@@ -116,19 +137,6 @@ runMachine initParams inputConfig n =
       userTransition
       postConditions
 
--- twoStakesInARow :: StateMachineInputs
--- twoStakesInARow = StateMachineInputs
---   { usersInputs:
---       [ [ [ { command: UserStake $ BigInt.fromInt 1000, result: Success } ]
---         , [ { command: UserStake $ BigInt.fromInt 1000, result: Success }
---           , { command: UserStake $ BigInt.fromInt 1000, result: Success }
---           ]
---         ]
---       ]
---   , adminInputs:
---       [ { command: AdminClose, result: Success } ]
---   }
-
 inputCfg :: InputConfig
 inputCfg = InputConfig
   { stakeRange: 1000 /\ 2000
@@ -143,7 +151,7 @@ runMachine'
      -- | Initial state of the machine
      Contract () SnetInitialParams
   -- | Either the inputs or the inputs config to generate them randomly
-  -> Either StateMachineInputs InputConfig
+  -> Either StateMachineOnlyInputs InputConfig
   -- | Transitions for `AdminCommand` inputs
   -> (AdminCommand -> KeyWallet -> SnetContract Unit)
   -- | Transitions for `UserCommand` inputs
@@ -160,7 +168,6 @@ runMachine'
   let
     -- We distribute to a hardcoded number of users, even though some of them
     -- may not be used
-    -- FIXME: Improve `withWalletsAndPool` to handle more users
     nUsers = 3
     distr =
       Array.replicate nUsers
@@ -173,8 +180,7 @@ runMachine'
     inputs@
       ( StateMachineInputs
           { usersInputs, adminInputs: adminCommandsPerCycle, poolStates }
-      ) <-
-      either pure (genInputs ubp) eitherInputsConfig
+      ) <- genInputs ubp eitherInputsConfig
     let
       nCycles :: Int
       nCycles = Array.length adminCommandsPerCycle
@@ -304,10 +310,17 @@ getMachineState keys = do
       <<< map \(Entry e) -> keyToIndex e.key /\
         (toRational e.deposited + e.rewards)
 
--- | Generate the inputs from their configuration
+-- | Either generate the inputs from their configuration or add the missing
+-- pool states
 genInputs
-  :: UnbondedPoolParams -> InputConfig -> SnetContract StateMachineInputs
-genInputs ubp = liftEffect <<< randomSampleOne <<< arbitraryInputs ubp
+  :: UnbondedPoolParams
+  -> Either StateMachineOnlyInputs InputConfig
+  -> SnetContract StateMachineInputs
+genInputs ubp (Left inputs) = pure $ addPoolStates ubp inputs
+genInputs ubp (Right cfg) =
+  liftEffect
+    $ randomSampleOne
+    $ arbitraryInputs ubp cfg
 
 -- | Add the user wallets and keys to the user's commands
 addWalletsAndKeys
