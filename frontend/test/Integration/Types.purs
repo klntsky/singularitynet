@@ -72,7 +72,8 @@ type PoolState =
   -- | A map of stakers that are candidates for the promised rewards. The value
   -- of the map is the proportion of the rewards they can get.
   , candidates :: Map Int Rational
-  -- | Amount of staked assets in the pool
+  -- | Amount of staked assets in the pool. This amount is increased only by the
+  -- admin when depositing and decreased by the users when withdrawing.
   , staked :: Rational
   -- | Total amount of funds in the pool. Ideally, it should be the same as the
   -- staked amount (all assets are automatically staked). However, due to

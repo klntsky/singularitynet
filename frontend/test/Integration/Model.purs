@@ -17,7 +17,6 @@ import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.Foldable (sum)
-import Data.Lazy (defer, force)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
@@ -107,6 +106,7 @@ userWithdraw user = do
       put $ s
         { stakers = Map.delete user s.stakers
         , funds = s.funds - withdrawnAmt
+        , staked = s.staked - stakerFunds
         }
       pure Success
     Nothing -> pure $ ExpectedFailure
