@@ -8,7 +8,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo')
+import Contract.Log (logAesonInfo, logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -481,6 +481,7 @@ userStakeUnbondedPoolContract
                 constr = mconcat
                   [ mustPayToScript valHash firstEntryDatum firstTxValue
                   , mustSpendScriptOutput firstInput valRedeemer
+                  , mustPayToScript valHash assetDatum stakeValue
                   ]
                 -- We add validator at the end. If we are minting i.e. when
                 -- mintingAction is "Just", we include those in
@@ -529,7 +530,6 @@ userStakeUnbondedPoolContract
                 constr = mconcat
                   [ mustMintValueWithRedeemer mintRedeemer entryValue
                   , mustPayToScript valHash entryDatum entryValue
-                  , mustPayToScript valHash assetDatum stakeValue
                   ]
                 lu = mconcat
                   [ ScriptLookups.mintingPolicy listPolicy
