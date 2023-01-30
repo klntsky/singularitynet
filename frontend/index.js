@@ -64,7 +64,7 @@ exports.UnbondedPool = class UnbondedPool {
   async deposit(amount, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteDepositMaybe = contracts.callNothing();
+    const incompleteDepositMaybe = contracts.callNothing;
     const result = await contracts.callDepositUnbondedPool(_config)(amount)(this.args)(batchSize)(
       incompleteDepositMaybe
     )();
@@ -81,10 +81,10 @@ exports.UnbondedPool = class UnbondedPool {
     return contracts.callConsumeMaybe(x => x)(x => null)(result);
   }
 
-  async close(batchSiz) {
+  async close(batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    const incompleteCloseMaybe = frontend.callNothing();
+    const incompleteCloseMaybe = contracts.callNothing;
     return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
       incompleteCloseMaybe
     )();
