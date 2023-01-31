@@ -90,6 +90,7 @@ userStake user amt = do
                   user
                   s.stakers
             , funds = s.funds + amt
+            , staked = s.staked + amt'
             }
           pure Success
 
