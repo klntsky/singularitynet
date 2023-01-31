@@ -81,8 +81,7 @@ unitTests initParams =
           test ("Stake and withdraw after " <> show n <> " cycles")
             $ StakeWaitAndWithdraw.test n initParams
       )
-      -- TODO: Fix script validation error.
-      skip $ test "Withdraw from a closed pool" $ WithdrawFromClosed.test
+      test "Withdraw from a closed pool" $ WithdrawFromClosed.test
         initParams
 
 suite :: Boolean -> Effect Unit
