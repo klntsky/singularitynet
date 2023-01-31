@@ -11,7 +11,7 @@ import Contract.Address
   , ownStakePubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo')
+import Contract.Log (logAesonInfo, logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -47,7 +47,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (UtxoMap, utxosAt)
+import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (catMaybes)
@@ -125,14 +125,10 @@ userWithdrawUnbondedPoolContract
     logInfo_ "userWithdrawUnbondedPoolContract: User's StakePubKeyHash"
       userStakingPubKeyHash
 
-    -- Get the (Nami) wallet address
-    userAddr <-
-      liftedM "userWithdrawUnbondedPoolContract: Cannot get wallet Address"
-        getWalletAddress
-    logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
-
     -- Get utxos at the wallet address
-    userUtxos <- utxosAt userAddr
+    userUtxos <-
+      liftedM "userWithdrawUnbondedPoolContract: Cannot get wallet's utxos" $
+        getWalletUtxos
     logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
 
     ---- FETCH POOL DATA ----

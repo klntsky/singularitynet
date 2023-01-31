@@ -42,7 +42,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Contract.Value (mkTokenName, singleton)
 import Control.Applicative (unless)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
@@ -113,12 +113,10 @@ depositUnbondedPoolContract
   unless (userPkh == admin) $ throwContractError
     "depositUnbondedPoolContract: Admin is not current user"
   logInfo_ "depositUnbondedPoolContract: Admin PaymentPubKeyHash" userPkh
-  -- Get the (Nami) wallet address
-  adminAddr <-
-    liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
-      getWalletAddress
   -- Get utxos at the wallet address
-  adminUtxos <- utxosAt adminAddr
+  adminUtxos <-
+    liftedM "depositUnbondedPoolContract: Could not get wallet's utxos" $
+      getWalletUtxos
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "depositUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
