@@ -4,7 +4,6 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )

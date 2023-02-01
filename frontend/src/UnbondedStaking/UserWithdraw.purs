@@ -6,12 +6,11 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , ownStakePubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logAesonInfo, logInfo')
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
