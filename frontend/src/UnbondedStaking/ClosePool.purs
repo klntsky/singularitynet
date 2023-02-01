@@ -4,7 +4,6 @@ import Contract.Prelude
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
@@ -35,7 +34,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Control.Alt ((<|>))
 import Control.Monad.Maybe.Trans (MaybeT(..), lift, runMaybeT)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
@@ -105,10 +104,6 @@ closeUnbondedPoolContract
   unless (userPkh == admin) $ throwContractError
     "closeUnbondedPoolContract: Admin is not current user"
   logInfo_ "closeUnbondedPoolContract: Admin PaymentPubKeyHash" userPkh
-  -- Get the (Nami) wallet address
-  adminAddr <-
-    liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
-      getWalletAddress
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "closeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
@@ -214,7 +209,8 @@ closeUnbondedPoolContract
   -- Submit transaction that closes state utxo separately (if necessary)
   stateUtxoConsumed <- case poolStateUtxo of
     Just (poolTxInput /\ _ /\ poolDatum) -> do
-      adminUtxos <- utxosAt adminAddr
+      adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
+        getWalletUtxos
       Array.null <$> submitTransaction
         ( mustIncludeDatum poolDatum <> mustSpendScriptOutput poolTxInput
             redeemer
@@ -234,7 +230,8 @@ closeUnbondedPoolContract
       ( Array.zip entriesInputs
           (Array.zip entriesDatums updatedEntriesDatums)
       )
-  adminUtxos <- utxosAt adminAddr
+  adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
+    getWalletUtxos
   failedCloses <-
     if batchSize == zero then
       submitTransaction

@@ -4,7 +4,6 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
@@ -36,7 +35,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Control.Applicative (unless)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
@@ -98,13 +97,10 @@ userStakeUnbondedPoolContract
     ownPaymentPubKeyHash
   logInfo_ "userStakeUnbondedPoolContract: User's PaymentPubKeyHash" userPkh
 
-  -- Get the (Nami) wallet address
-  userAddr <-
-    liftedM "userStakeUnbondedPoolContract: Cannot get wallet Address"
-      getWalletAddress
-
   -- Get utxos at the wallet address
-  userUtxos <- utxosAt userAddr
+  userUtxos <-
+    liftedM "userStakeUnbondedPoolContract: Cannot get wallet's utxos" $
+      getWalletUtxos
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
