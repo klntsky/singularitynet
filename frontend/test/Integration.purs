@@ -20,7 +20,7 @@ import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Effect.Exception as Exception
 import Effect.Exception.Unsafe (unsafeThrow)
-import Mote (MoteT, group, test, skip)
+import Mote (MoteT, group, test)
 import SNet.Test.Common
   ( localPlutipCfg
   , testConfigLongTimeout
@@ -59,7 +59,7 @@ import UnbondedStaking.Utils
   , queryStateUnbonded
   , queryAssetsUnbonded
   )
-import Utils (hashPkh, logInfo_, toRational)
+import Utils (hashPkh, toRational)
 
 -- This module does integration testing on a state machine.
 --
