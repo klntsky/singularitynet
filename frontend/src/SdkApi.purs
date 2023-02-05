@@ -94,7 +94,10 @@ import Types
   , InitialBondedParams
   , ScriptVersion(..)
   )
-import UnbondedStaking.UserWithdraw (adminWithdrawUnbondedPoolContract)
+import UnbondedStaking.UserWithdraw
+  ( userWithdrawUnbondedPoolContract
+  , adminWithdrawUnbondedPoolContract
+  )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
@@ -109,7 +112,6 @@ import UnbondedStaking.Types
   , UnbondedPoolParams(UnbondedPoolParams)
   )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
-import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
 import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
