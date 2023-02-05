@@ -13,6 +13,7 @@ export declare class Pool<T> {
   handleIncompleteClose(incompleteClose: IncompleteClose, batchSize: BigInteger): Promise<IncompleteClose | null>;
   userStake(amount: BigInteger): Promise<any>;
   userWithdraw(): Promise<any>;
+  adminWithdraw(addr: string): Promise<any>;
   getAssocList(): Promise<EntryList>;
 }
 

@@ -25,6 +25,7 @@ module SdkApi
   , callUserStakeUnbondedPool
   , callUserWithdrawBondedPool
   , callUserWithdrawUnbondedPool
+  , callAdminWithdrawUnbondedPool
   , callJust
   , callNothing
   , callConsumeMaybe
@@ -35,7 +36,7 @@ module SdkApi
 import Contract.Prelude
 
 import ClosePool (closeBondedPoolContract)
-import Contract.Address (PaymentPubKeyHash)
+import Contract.Address (PaymentPubKeyHash, Bech32String)
 import Contract.Config
   ( ConfigParams
   , WalletSpec
@@ -93,6 +94,7 @@ import Types
   , InitialBondedParams
   , ScriptVersion(..)
   )
+import UnbondedStaking.UserWithdraw (adminWithdrawUnbondedPoolContract)
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
@@ -612,6 +614,20 @@ callUserWithdrawUnbondedPool
 callUserWithdrawUnbondedPool =
   callWithUnbondedPoolArgs
     (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
+
+callAdminWithdrawUnbondedPool
+  :: ConfigParams ()
+  -> UnbondedPoolArgs
+  -> Bech32String
+  -> Effect
+       ( Promise
+           { txId :: String }
+       )
+callAdminWithdrawUnbondedPool cfg poolArgs addr =
+  callWithUnbondedPoolArgs
+    (\ubp -> adminWithdrawUnbondedPoolContract ubp Production addr)
+    cfg
+    poolArgs
 
 callWithUnbondedPoolArgs
   :: ( UnbondedPoolParams
