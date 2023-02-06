@@ -3,7 +3,9 @@ module UnbondedStaking.UserStake (userStakeUnbondedPoolContract) where
 import Contract.Prelude hiding (length)
 
 import Contract.Address
-  ( getNetworkId
+  ( addressToBech32
+  , getNetworkId
+  , getWalletAddress
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
@@ -101,6 +103,11 @@ userStakeUnbondedPoolContract
   userUtxos <-
     liftedM "userStakeUnbondedPoolContract: Cannot get wallet's utxos" $
       getWalletUtxos
+  userBech32 <-
+    addressToBech32 =<<
+      liftedM "userStakeUnbondedPoolContract: Could not get wallet address"
+        getWalletAddress
+  logInfo_ "userStakeUnbondedPoolContract: User's address" userBech32
 
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "userStakeUnbondedPoolContract: Cannot create validator"
