@@ -21,7 +21,7 @@ deposit wallet amt = do
       unbondedPoolParams
       scriptVersion
       zero
-      []
+      Nothing
     pure unit
 
 close :: KeyWallet -> SnetContract Unit
@@ -33,5 +33,5 @@ close wallet = do
       unbondedPoolParams
       scriptVersion
       zero
-      []
+      Nothing
     pure unit
