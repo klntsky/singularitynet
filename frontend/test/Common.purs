@@ -79,10 +79,10 @@ import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
 import Data.Foldable (foldMap, sum)
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (Maybe(..), fromJust, maybe)
 import Data.Newtype (unwrap, wrap)
 import Data.Time.Duration (Seconds(..), fromDuration)
-import Data.Traversable (traverse)
+import Data.Traversable (traverse, traverse_)
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UInt as UInt
@@ -182,7 +182,7 @@ waitFor :: Period -> SnetContract Unit
 waitFor period = waitFor' period false
 
 -- Wait for a given period to start. It can either wait for the period in the
--- current cycle of the next one.
+-- current cycle or the next one.
 waitFor' :: Period -> Boolean -> SnetContract Unit
 waitFor' period skipCurrent = do
   { unbondedPoolParams, scriptVersion: sv } <- ask
@@ -198,7 +198,8 @@ waitFor' period skipCurrent = do
   currTime <- lift $
     (\t -> if skipCurrent then t + cycleLength else t) <<< unwrap <$>
       currentRoundedTime
-  { open: isOpen } <- lift $ queryStateUnbonded unbondedPoolParams sv
+  isOpen <- maybe false _.open <$> lift
+    (queryStateUnbonded unbondedPoolParams sv)
   when (period /= ClosedPeriod && not isOpen)
     $ lift
     $ throwContractError
@@ -249,7 +250,11 @@ waitUntil limit = do
 waitUntilClosed :: SnetContract Unit
 waitUntilClosed = do
   { unbondedPoolParams: ubp, scriptVersion: sv } <- ask
-  isOpen <- lift $ _.open <$> queryStateUnbonded ubp sv
+  maybeState <- lift $ queryStateUnbonded ubp sv
+  let
+    isOpen = case maybeState of
+      Nothing -> false
+      Just { open: b } -> b
   if isOpen then pure unit
   else (liftAff $ delay $ wrap 1_000.0) *> waitUntilClosed
 
@@ -276,7 +281,8 @@ withWalletsAndPool initParamsContract distr contract =
             (Array.tail wallets)
       -- Mint and distribute FAKEGIX
       Plutip.withKeyWallet adminW
-        $ mintAndDistributeFakegix (snd adminInitialUtxos)
+        $ traverse_ (mintAndDistributeFakegix $ snd adminInitialUtxos)
+        $ splitInN 2
         $ Array.zip userPkhs
         $ Array.zip userSpkhs
         $ snd <$> distr
@@ -305,6 +311,15 @@ withWalletsAndPool initParamsContract distr contract =
   dropMaybe :: forall a. Maybe (Array a) -> Array a
   dropMaybe (Just arr) = arr
   dropMaybe Nothing = []
+
+  splitInN :: forall a. Int -> Array a -> Array (Array a)
+  splitInN maxLen arr
+    | Array.length arr > maxLen =
+        let
+          { before, after } = Array.splitAt maxLen arr
+        in
+          Array.cons before (splitInN maxLen after)
+    | otherwise = [ arr ]
 
 -- Our own wrapper for `withKeyWallet` that takes `SnetContract` instead of
 -- `Contract`
