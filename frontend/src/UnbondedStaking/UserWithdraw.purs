@@ -13,6 +13,7 @@ import Contract.Address
   , addressFromBech32
   , getNetworkId
   , getWalletAddress
+  , ownPaymentPubKeyHash
   , scriptHashAddress
   )
 import Contract.Credential (Credential(..), StakingCredential(..))
@@ -37,13 +38,7 @@ import Contract.PlutusData
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
-import Contract.Scripts
-  ( MintingPolicy
-  , Validator
-  , ValidatorHash
-  , validatorHash
-  )
-import Contract.Time (always)
+import Contract.Scripts (MintingPolicy, Validator, ValidatorHash, validatorHash)
 import Contract.Transaction
   ( TransactionInput
   , TransactionOutput
@@ -86,7 +81,11 @@ import UnbondedStaking.Types
   , UnbondedStakingAction(..)
   , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   )
-import UnbondedStaking.Utils (getClosingTime, getUserOrBondingTime)
+import UnbondedStaking.Utils
+  ( getAdminTime
+  , getClosingTime
+  , getUserOrBondingTime
+  )
 import Utils
   ( findRemoveOtherElem
   , getAssetsToConsume
@@ -172,14 +171,17 @@ userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
       logInfo' "userWithdrawUnbondedPoolContract: Getting user range..."
       { range } <- case unit of
         _
-          | not iAmUser -> pure { range: always, currTime: zero }
+          | not iAmUser -> getAdminTime params scriptVersion
           | userEntry.open -> getUserOrBondingTime params scriptVersion
           | otherwise -> getClosingTime params scriptVersion
       -- Build base constraints and lookups
       utxos <-
-        liftedM "userWithdrawUnbondedPoolContractW: could not get wallet utxos"
+        liftedM "userWithdrawUnbondedPoolContract: could not get wallet utxos"
           $ getWalletUtxos
       -- Get own payment pub key hash
+      ownPkh <- liftedM
+        "userWithdrawUnbondedPoolContract: could not get own PKH"
+        ownPaymentPubKeyHash
       let
         assetDatum = Datum $ toData AssetDatum
         mustPayChange = mustPayToScript d.poolValidatorHash assetDatum
@@ -192,7 +194,7 @@ userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
         baseConstraints = mconcat
           [ if d.withdrawChangeAmt > zero then mustPayChange
             else mempty
-          , if d.userSubmitted then mustBeSignedBy d.userPkh else mempty
+          , mustBeSignedBy ownPkh
           , mustPayToUser
           , mustValidateIn range
           ]
