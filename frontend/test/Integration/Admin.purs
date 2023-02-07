@@ -10,7 +10,6 @@ import SNet.Test.Common (waitFor)
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types (Period(AdminPeriod), SnetContract)
-import Utils (nat)
 
 deposit :: KeyWallet -> BigInt -> SnetContract Unit
 deposit wallet amt = do
@@ -22,7 +21,7 @@ deposit wallet amt = do
       unbondedPoolParams
       scriptVersion
       zero
-      []
+      Nothing
     pure unit
 
 close :: KeyWallet -> SnetContract Unit
@@ -34,5 +33,5 @@ close wallet = do
       unbondedPoolParams
       scriptVersion
       zero
-      []
+      Nothing
     pure unit

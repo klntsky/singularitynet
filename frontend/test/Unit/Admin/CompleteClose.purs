@@ -1,4 +1,4 @@
-module SNet.Test.Unit.Admin.DepositNUser (test) where
+module SNet.Test.Unit.Admin.CompleteClose (test) where
 
 import Prelude
 
@@ -10,7 +10,8 @@ import Data.Array ((..))
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
-import Data.Maybe (Maybe(Nothing), isNothing)
+import Data.Maybe (Maybe(..), isNothing)
+import Data.Newtype (unwrap)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
@@ -22,15 +23,22 @@ import SNet.Test.Common
   , withKeyWallet
   , withWalletsAndPool
   )
+import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
-import UnbondedStaking.Types (Period(..), SnetInitialParams)
+import UnbondedStaking.Types
+  ( Entry(..)
+  , IncompleteClose(IncompleteClose)
+  , Period(..)
+  , SnetInitialParams
+  )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
+import UnbondedStaking.Utils (queryAssocListUnbonded)
 import Utils (nat)
 
 -- | The admin deposits to a pool with `n` user entries. We take into account
 -- any rounding error, since this is a multi-user scenario.
-test :: Contract () SnetInitialParams -> Int -> Int -> PlutipTest
-test initParams userCount batchSize = withWalletsAndPool initParams
+test :: Contract () SnetInitialParams -> Int -> PlutipTest
+test initParams userCount = withWalletsAndPool initParams
   usersInitialUtxos
   \wallets -> do
     adminWallet <- getAdminWallet wallets
@@ -60,7 +68,7 @@ test initParams userCount batchSize = withWalletsAndPool initParams
       failedDeposits <- lift $ depositUnbondedPoolContract depositAmt
         unbondedPoolParams
         scriptVersion
-        (nat batchSize)
+        (nat zero)
         Nothing
       when (not $ isNothing failedDeposits)
         $ lift
@@ -71,17 +79,48 @@ test initParams userCount batchSize = withWalletsAndPool initParams
         $ lift
         $ throwContractError
             "The admin deposited FAKEGIX when they should not have"
-    withKeyWallet adminWallet do
+    withKeyWallet adminWallet $ do
       waitForNext AdminPeriod
       initialFakegix <- getWalletFakegix
-      failedDeposits <- lift $ depositUnbondedPoolContract zero
+      -- We query the assoc list and create two `IncompleteClose` values
+      entries <- lift $ queryAssocListUnbonded unbondedPoolParams scriptVersion
+      let
+        keys = map (unwrap >>> _.key) entries
+        incompleteClose1@(IncompleteClose i1) = IncompleteClose
+          { failedKeys: Array.take 3 keys
+          , totalDeposited: Array.foldl
+              ( \acc (Entry { deposited, newDeposit }) -> acc + deposited +
+                  newDeposit
+              )
+              zero
+              entries
+          , stateUtxoConsumed: true
+          }
+        incompleteClose2 =
+          IncompleteClose $ i1
+            { failedKeys = Array.drop 3 keys
+            }
+      -- Close first three users
+      failedDeposits1 <- lift $ closeUnbondedPoolContract
         unbondedPoolParams
         scriptVersion
-        (nat 0)
-        Nothing
-      when (not $ isNothing failedDeposits)
+        (nat zero)
+        (Just incompleteClose1)
+      when (not $ isNothing failedDeposits1)
         $ lift
-        $ throwContractError "Some entries failed to be updated"
+        $ throwContractError
+        $ "Some entries failed to be updated " <> show failedDeposits1
+      -- Close last two users
+      failedDeposits2 <- lift $ closeUnbondedPoolContract
+        unbondedPoolParams
+        scriptVersion
+        (nat zero)
+        (Just incompleteClose2)
+      when (not $ isNothing failedDeposits2)
+        $ lift
+        $ throwContractError
+        $ "Some entries failed to be updated " <> show failedDeposits2
+      -- Validate spent FAKEGIX amount
       finalFakegix <- getWalletFakegix
       let realAdminDeposit = initialFakegix - finalFakegix
       when

@@ -261,13 +261,10 @@ userWithdrawBondedPoolContract
             mintRedeemer = Redeemer $ toData $ ListRemove $ BurnHead poolTxInput
               entryInput
           -- New state lookup
-          stateDatumLookup <-
-            liftContractM
-              "userWithdrawBondedPoolContract: Could not create state datum \
-              \lookup"
-              $ ScriptLookups.datum newState
-
           let
+            stateDatumLookup :: ScriptLookups.ScriptLookups PlutusData
+            stateDatumLookup = ScriptLookups.datum newState
+
             constraints :: TxConstraints Unit Unit
             constraints =
               mconcat
@@ -361,11 +358,7 @@ userWithdrawBondedPoolContract
                   { next = burnEntry.next
                   }
               }
-          prevEntryDatumLookup <-
-            liftContractM
-              "userWithdrawBondedPoolContract: Could not create updated prev \
-              \ entry datum lookup"
-              $ ScriptLookups.datum prevEntryUpdated
+          let prevEntryDatumLookup = ScriptLookups.datum prevEntryUpdated
 
           -- Build validator redeemer
           let

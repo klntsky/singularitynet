@@ -6,7 +6,6 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , ownStakePubKeyHash
   , scriptHashAddress
@@ -47,7 +46,7 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (UtxoMap, utxosAt)
+import Contract.Utxos (UtxoMap, getWalletUtxos, utxosAt)
 import Contract.Value (Value, mkTokenName, singleton)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array (catMaybes)
@@ -125,14 +124,10 @@ userWithdrawUnbondedPoolContract
     logInfo_ "userWithdrawUnbondedPoolContract: User's StakePubKeyHash"
       userStakingPubKeyHash
 
-    -- Get the (Nami) wallet address
-    userAddr <-
-      liftedM "userWithdrawUnbondedPoolContract: Cannot get wallet Address"
-        getWalletAddress
-    logInfo_ "userWithdrawUnbondedPoolContract: User's wallet address" userAddr
-
     -- Get utxos at the wallet address
-    userUtxos <- utxosAt userAddr
+    userUtxos <-
+      liftedM "userWithdrawUnbondedPoolContract: Cannot get wallet's utxos" $
+        getWalletUtxos
     logInfo_ "userWithdrawUnbondedPoolContract: User's UTxOs" userUtxos
 
     ---- FETCH POOL DATA ----
@@ -343,12 +338,8 @@ userWithdrawUnbondedPoolContract
                     poolTxInput
                     entryInput
                 -- New state lookup
-                stateDatumLookup <-
-                  liftContractM
-                    "userWithdrawUnbondedPoolContract: Could not create state datum \
-                    \lookup"
-                    $ ScriptLookups.datum newState
                 let
+                  stateDatumLookup = ScriptLookups.datum newState
                   stateTokenValue = singleton nftCs tokenName one
 
                   constraints :: TxConstraints Unit Unit
@@ -402,14 +393,10 @@ userWithdrawUnbondedPoolContract
                         { next = burnEntry.next
                         }
                     }
-                prevEntryDatumLookup <-
-                  liftContractM
-                    "userWithdrawUnbondedPoolContract: Could not create updated prev \
-                    \ entry datum lookup"
-                    $ ScriptLookups.datum prevEntryUpdated
 
                 -- Build validator redeemer
                 let
+                  prevEntryDatumLookup = ScriptLookups.datum prevEntryUpdated
                   valRedeemer = Redeemer <<< toData $
                     WithdrawAct
                       { stakeHolder: userPkh

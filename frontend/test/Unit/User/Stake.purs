@@ -5,7 +5,6 @@ import Prelude
 import Contract.Monad (Contract, throwContractError)
 import Contract.Numeric.Natural as Natural
 import Contract.Test.Plutip (PlutipTest, InitialUTxOs)
-import Contract.Wallet (KeyWallet)
 import Control.Monad.Reader (ask, lift)
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
@@ -17,7 +16,7 @@ import SNet.Test.Common
   , withKeyWallet
   , withWalletsAndPool
   )
-import UnbondedStaking.Types (Period(..), SnetInitialParams, SnetContract)
+import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import Utils (nat)
 

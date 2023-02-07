@@ -27,7 +27,7 @@ import Contract.TxConstraints
   , mustMintValue
   , mustSpendPubKeyOutput
   )
-import Contract.Utxos (utxosAt)
+import Contract.Utxos (getWalletUtxos, utxosAt)
 import Contract.Value
   ( CurrencySymbol
   , Value
@@ -82,7 +82,9 @@ createUnbondedPoolContract iup scriptVersion =
     logInfo_ "createUnbondedPoolContract: User Address"
       =<< addressToBech32 adminAddr
     -- Get utxos at the wallet address
-    adminUtxos <- utxosAt adminAddr
+    adminUtxos <-
+      liftedM "createUnbondedPoolContract: Could not get wallet utxos"
+        $ getWalletUtxos
     logInfo_ "Admin utxos:" $ show adminUtxos
     txOutRef <-
       liftContractM "createUnbondedPoolContract: Could not get head UTXO"

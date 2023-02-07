@@ -6,9 +6,9 @@ import Contract.Monad (Contract, throwContractError)
 import Contract.Numeric.Natural as Natural
 import Contract.Test.Plutip (PlutipTest, InitialUTxOs)
 import Control.Monad.Reader (ask, lift)
-import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
+import Data.Maybe (Maybe(..), isNothing)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
   ( getAdminWallet
@@ -56,12 +56,12 @@ test initParams = withWalletsAndPool initParams [ bobInitialUtxos ] \wallets ->
     waitFor AdminPeriod
     withKeyWallet adminWallet do
       initialFakegix <- getWalletFakegix
-      failedIndices <- lift $ depositUnbondedPoolContract depositAmt
+      failedDeposits <- lift $ depositUnbondedPoolContract depositAmt
         unbondedPoolParams
         scriptVersion
         (nat 0)
-        []
-      when (not $ Array.null failedIndices)
+        Nothing
+      when (not $ isNothing failedDeposits)
         $ lift
         $ throwContractError "Some entries failed to be updated"
       finalFakegix <- getWalletFakegix
@@ -73,12 +73,12 @@ test initParams = withWalletsAndPool initParams [ bobInitialUtxos ] \wallets ->
     waitForNext AdminPeriod
     withKeyWallet adminWallet do
       initialFakegix <- getWalletFakegix
-      failedIndices <- lift $ depositUnbondedPoolContract zero
+      failedDeposits <- lift $ depositUnbondedPoolContract zero
         unbondedPoolParams
         scriptVersion
         (nat 0)
-        []
-      when (not $ Array.null failedIndices)
+        Nothing
+      when (not $ isNothing failedDeposits)
         $ lift
         $ throwContractError "Some entries failed to be updated"
       finalFakegix <- getWalletFakegix

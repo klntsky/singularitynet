@@ -18,6 +18,7 @@ import Contract.Prelude
 import Contract.Address (Address, PaymentPubKeyHash)
 import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
+import Contract.Numeric.BigNum as BigNum
 import Contract.PlutusData
   ( class FromData
   , class HasPlutusSchema
@@ -128,7 +129,7 @@ instance Show InitialBondedParams where
 -- We copy the order of the fields from the Haskell implementation
 instance ToData BondedPoolParams where
   toData (BondedPoolParams params) =
-    Constr zero
+    Constr (BigNum.fromInt 0)
       [ toData params.iterations
       , toData params.start
       , toData params.end

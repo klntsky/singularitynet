@@ -1,6 +1,6 @@
 "use strict";
 
-const { EntryList } = require("./index.js");
+const BigInteger = require("big-integer");
 
 const frontend = import("./output.js");
 
@@ -18,7 +18,7 @@ exports.BondedPool = class BondedPool {
     this._config = _config;
   }
 
-  async deposit(amount, idxArray) {
+  async deposit(amount, batchSize, idxArray) {
     const contracts = await frontend;
     const _config = await this._config;
     return contracts.callDepositBondedPool(_config)(this.args)(amount)(
@@ -61,20 +61,43 @@ exports.UnbondedPool = class UnbondedPool {
     this._config = _config;
   }
 
-  async deposit(amount, batchSize, idxArray) {
+  async deposit(amount, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    return contracts.callDepositUnbondedPool(_config)(amount)(this.args)(batchSize)(
-      idxArray
+    const incompleteDepositMaybe = contracts.callNothing;
+    const result = await contracts.callDepositUnbondedPool(_config)(amount)(this.args)(batchSize)(
+      incompleteDepositMaybe
+    )();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
+  }
+
+  async handleIncompleteDeposit(incompleteDeposit, batchSize) {
+    const contracts = await frontend;
+    const _config = await this._config;
+    const incompleteDepositMaybe = contracts.callJust(incompleteDeposit);
+    const result = await contracts.callDepositUnbondedPool(_config)(BigInteger(0))(this.args)(batchSize)(
+      incompleteDepositMaybe
+    )();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
+  }
+
+  async close(batchSize) {
+    const contracts = await frontend;
+    const _config = await this._config;
+    const incompleteCloseMaybe = contracts.callNothing;
+    return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
+      incompleteCloseMaybe
     )();
   }
 
-  async close(batchSize, idxArray) {
+  async handleIncompleteClose(incompleteClose, batchSize) {
     const contracts = await frontend;
     const _config = await this._config;
-    return contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
-      idxArray
+    const incompleteCloseMaybe = contracts.callJust(incompleteClose);
+    const result = await contracts.callCloseUnbondedPool(_config)(this.args)(batchSize)(
+      incompleteCloseMaybe
     )();
+    return contracts.callConsumeMaybe(x => x)(x => null)(result);
   }
 
   async userStake(amount) {

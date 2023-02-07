@@ -9,6 +9,7 @@ You can edit this file as you like.
   , "argonaut-codecs"
   , "argonaut-core"
   , "arrays"
+  , "arraybuffer-types"
   , "bifunctors"
   , "bigints"
   , "cardano-transaction-lib"

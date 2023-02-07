@@ -32,7 +32,7 @@ import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception as Exception
-import UnbondedStaking.Types (Entry, UnbondedPoolParams)
+import UnbondedStaking.Types (UnbondedPoolParams)
 
 type UserIdx = Int
 type Fakegix = BigInt

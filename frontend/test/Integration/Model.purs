@@ -11,7 +11,7 @@ import Prelude
 
 import Contract.Numeric.Natural as Natural
 import Contract.Numeric.Rational (Rational)
-import Control.Monad.State (State, evalState, get, put)
+import Control.Monad.State (evalState, get, put)
 import Control.Monad.State.Class (class MonadState)
 import Data.Array ((..))
 import Data.Array as Array
@@ -22,17 +22,13 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Traversable (for, for_)
 import Data.Tuple.Nested ((/\))
-import Effect.Exception.Unsafe (unsafeThrow)
 import SNet.Test.Integration.Types
   ( AdminCommand(..)
-  , AdminCommand'
-  , Array3
   , CommandResult(..)
   , PoolState
   , StateMachineInputs(..)
   , StateMachineOnlyInputs
   , UserCommand(..)
-  , UserCommand'
   )
 import UnbondedStaking.Types (UnbondedPoolParams(..))
 import Utils (roundDown, roundUp, toRational)

@@ -4,8 +4,11 @@ module SdkApi
   , InitialUnbondedArgs
   , SdkAssetClass
   , SdkConfig
-  , SdkInterest
+  , SdkRatio
   , SdkServerConfig
+  , SdkIncompleteDeposit
+  , SdkIncompleteClose
+  , AnyType
   , buildContractConfig
   , callCloseBondedPool
   , callCloseUnbondedPool
@@ -22,6 +25,9 @@ module SdkApi
   , callUserStakeUnbondedPool
   , callUserWithdrawBondedPool
   , callUserWithdrawUnbondedPool
+  , callJust
+  , callNothing
+  , callConsumeMaybe
   , fromSdkLogLevel
   , toUnbondedPoolArgs
   ) where
@@ -69,6 +75,7 @@ import Ctl.Internal.Serialization.Hash
   ( ed25519KeyHashFromBytes
   , ed25519KeyHashToBytes
   )
+import Data.ArrayBuffer.Types (Uint8Array)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -93,13 +100,15 @@ import UnbondedStaking.CreatePool
   )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
-  ( UnbondedPoolParams(UnbondedPoolParams)
+  ( Entry(..)
+  , IncompleteClose(..)
+  , IncompleteDeposit(..)
   , InitialUnbondedParams
-  , Entry(..)
+  , UnbondedPoolParams(UnbondedPoolParams)
   )
-import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
+import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (currentRoundedTime, hashPkh)
@@ -121,7 +130,7 @@ type SdkServerConfig =
   , secure :: Boolean
   }
 
-type SdkInterest = { numerator :: BigInt, denominator :: BigInt }
+type SdkRatio = { numerator :: BigInt, denominator :: BigInt }
 
 type SdkAssetClass = { currencySymbol :: String, tokenName :: String }
 
@@ -152,6 +161,22 @@ fromSdkServerConfig serviceName conf@{ host, secure } = do
 fromSdkPath :: String -> Maybe String
 fromSdkPath "" = Nothing
 fromSdkPath s = Just s
+
+fromSdkIncompleteDeposit :: SdkIncompleteDeposit -> IncompleteDeposit
+fromSdkIncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt } =
+  IncompleteDeposit
+    { failedKeys: map wrap fk
+    , totalDeposited: sdkRatioToBigInt totalDeposited
+    , nextDepositAmt
+    }
+
+fromSdkIncompleteClose :: SdkIncompleteClose -> IncompleteClose
+fromSdkIncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited } =
+  IncompleteClose
+    { failedKeys: map wrap fk
+    , stateUtxoConsumed
+    , totalDeposited: sdkRatioToBigInt totalDeposited
+    }
 
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
@@ -212,14 +237,36 @@ toSdkAssetClass (AssetClass ac) =
     <<< byteArrayToIntArray
     <<< getTokenName
 
-toSdkInterest :: Rational -> SdkInterest
-toSdkInterest i = { numerator: numerator i, denominator: denominator i }
+toSdkRatio :: Rational -> SdkRatio
+toSdkRatio i = { numerator: numerator i, denominator: denominator i }
+
+sdkRatioToBigInt :: SdkRatio -> BigInt
+sdkRatioToBigInt { numerator, denominator } = numerator `div` denominator
+
+bigIntToSdkRatio :: BigInt -> SdkRatio
+bigIntToSdkRatio i = { numerator: i, denominator: one }
 
 toSdkAdmin :: PaymentPubKeyHash -> String
 toSdkAdmin = rawBytesToHex <<< ed25519KeyHashToBytes <<< unwrap <<< unwrap
 
 toSdkCurrencySymbol :: CurrencySymbol -> String
 toSdkCurrencySymbol = byteArrayToHex <<< getCurrencySymbol
+
+toSdkIncompleteDeposit :: IncompleteDeposit -> SdkIncompleteDeposit
+toSdkIncompleteDeposit
+  (IncompleteDeposit { failedKeys: fk, totalDeposited, nextDepositAmt }) =
+  { failedKeys: map unwrap fk
+  , totalDeposited: bigIntToSdkRatio totalDeposited
+  , nextDepositAmt
+  }
+
+toSdkIncompleteClose :: IncompleteClose -> SdkIncompleteClose
+toSdkIncompleteClose
+  (IncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited }) =
+  { failedKeys: map unwrap fk
+  , stateUtxoConsumed
+  , totalDeposited: bigIntToSdkRatio totalDeposited
+  }
 
 fromSdkNat :: String -> String -> BigInt -> Either Error Natural
 fromSdkNat context name bint = note (error msg) $ fromBigInt bint
@@ -243,8 +290,8 @@ fromSdkCurrencySymbol context currencySymbol =
   note (errorWithMsg context "`CurrencySymbol`") $ mkCurrencySymbol =<<
     hexToByteArray currencySymbol
 
-fromSdkInterest :: String -> SdkInterest -> Either Error Rational
-fromSdkInterest context { numerator, denominator } = do
+fromSdkRatio :: String -> SdkRatio -> Either Error Rational
+fromSdkRatio context { numerator, denominator } = do
   interestNum <- fromSdkNat context "interest numerator" numerator
   interestDen <- fromSdkNat context "interest denominator" denominator
   note (error msg) $ toRational <$> fromNaturals interestNum interestDen
@@ -256,7 +303,7 @@ fromSdkAdmin :: String -> String -> Either Error PaymentPubKeyHash
 fromSdkAdmin context admin = note (error msg)
   $ wrap
   <<< wrap
-  <$> (ed25519KeyHashFromBytes =<< hexToRawBytes admin)
+  <$> (ed25519KeyHashFromBytes <<< unwrap =<< hexToRawBytes admin)
   where
   msg :: String
   msg = context <> ": invalid admin"
@@ -281,7 +328,7 @@ type BondedPoolArgs =
   , end :: BigInt -- like POSIXTime
   , userLength :: BigInt -- like POSIXTime
   , bondingLength :: BigInt -- like POSIXTime
-  , interest :: SdkInterest
+  , interest :: SdkRatio
   , minStake :: BigInt -- Natural
   , maxStake :: BigInt -- Natural
   , bondedAssetClass :: SdkAssetClass
@@ -296,7 +343,7 @@ type InitialBondedArgs =
   , end :: BigInt -- like POSIXTime
   , userLength :: BigInt -- like POSIXTime
   , bondingLength :: BigInt -- like POSIXTime
-  , interest :: SdkInterest
+  , interest :: SdkRatio
   , minStake :: BigInt -- Natural
   , maxStake :: BigInt -- Natural
   , bondedAssetClass :: SdkAssetClass
@@ -375,7 +422,7 @@ fromInitialBondedArgs
   :: InitialBondedArgs -> Either Error InitialBondedParams
 fromInitialBondedArgs iba = do
   iterations <- fromSdkNat' "iteration" iba.iterations
-  interest <- fromSdkInterest context iba.interest
+  interest <- fromSdkRatio context iba.interest
   minStake <- fromSdkNat' "minStake" iba.minStake
   maxStake <- fromSdkNat' "maxStake" iba.maxStake
   bondedAssetClass <- fromSdkAssetClass context iba.bondedAssetClass
@@ -404,7 +451,7 @@ toBondedPoolArgs (BondedPoolParams bpp) =
   , end: bpp.end
   , userLength: bpp.userLength
   , bondingLength: bpp.bondingLength
-  , interest: toSdkInterest bpp.interest
+  , interest: toSdkRatio bpp.interest
   , minStake: toBigInt bpp.minStake
   , maxStake: toBigInt bpp.maxStake
   , bondedAssetClass: toSdkAssetClass bpp.bondedAssetClass
@@ -416,7 +463,7 @@ toBondedPoolArgs (BondedPoolParams bpp) =
 fromBondedPoolArgs :: BondedPoolArgs -> Either Error BondedPoolParams
 fromBondedPoolArgs bpa = do
   iterations <- fromSdkNat' "iterations" bpa.iterations
-  interest <- fromSdkInterest context bpa.interest
+  interest <- fromSdkRatio context bpa.interest
   minStake <- fromSdkNat' "minStake" bpa.minStake
   maxStake <- fromSdkNat' "maxStake" bpa.maxStake
   admin <- fromSdkAdmin context bpa.admin
@@ -453,7 +500,7 @@ type UnbondedPoolArgs =
   , bondingLength :: BigInt -- like POSIXTime
   , interestLength :: BigInt -- like POSIXTime
   , increments :: BigInt -- Natural
-  , interest :: SdkInterest
+  , interest :: SdkRatio
   , minStake :: BigInt -- Natural
   , maxStake :: BigInt -- Natural
   , admin :: String -- PaymentPubKeyHash
@@ -469,10 +516,22 @@ type InitialUnbondedArgs =
   , interestLength :: BigInt -- like POSIXTime
   , bondingLength :: BigInt -- like POSIXTime
   , increments :: BigInt -- Natural
-  , interest :: SdkInterest
+  , interest :: SdkRatio
   , minStake :: BigInt -- Natural
   , maxStake :: BigInt -- Natural
   , unbondedAssetClass :: SdkAssetClass
+  }
+
+type SdkIncompleteDeposit =
+  { failedKeys :: Array Uint8Array
+  , totalDeposited :: SdkRatio
+  , nextDepositAmt :: BigInt
+  }
+
+type SdkIncompleteClose =
+  { failedKeys :: Array Uint8Array
+  , totalDeposited :: SdkRatio
+  , stateUtxoConsumed :: Boolean
   }
 
 callCreateUnbondedPool
@@ -503,26 +562,31 @@ callDepositUnbondedPool
   -> BigInt
   -> UnbondedPoolArgs
   -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callDepositUnbondedPool cfg amt upa bi arr = Promise.fromAff $ runContract cfg
+  -> Maybe SdkIncompleteDeposit
+  -> Effect (Promise (Maybe SdkIncompleteDeposit))
+callDepositUnbondedPool cfg amt upa bi id' = Promise.fromAff $ runContract cfg
   do
     upp <- liftEither $ fromUnbondedPoolArgs upa
     nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
       $ fromBigInt bi
-    depositUnbondedPoolContract amt upp Production nat arr
+    let id = fromSdkIncompleteDeposit <$> id'
+    map toSdkIncompleteDeposit <$> depositUnbondedPoolContract amt upp
+      Production
+      nat
+      id
 
 callCloseUnbondedPool
   :: ConfigParams ()
   -> UnbondedPoolArgs
   -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callCloseUnbondedPool cfg upa bi arr = Promise.fromAff $ runContract cfg do
+  -> Maybe SdkIncompleteClose
+  -> Effect (Promise (Maybe SdkIncompleteClose))
+callCloseUnbondedPool cfg upa bi ic' = Promise.fromAff $ runContract cfg do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callCloseUnbondedPool: Invalid natural number")
     $ fromBigInt bi
-  closeUnbondedPoolContract upp Production nat arr
+  let ic = fromSdkIncompleteClose <$> ic'
+  map toSdkIncompleteClose <$> closeUnbondedPoolContract upp Production nat ic
 
 callUserStakeUnbondedPool
   :: ConfigParams ()
@@ -601,7 +665,7 @@ toUnbondedPoolArgs (UnbondedPoolParams upp) =
   , bondingLength: upp.bondingLength
   , interestLength: upp.interestLength
   , increments: toBigInt upp.increments
-  , interest: toSdkInterest upp.interest
+  , interest: toSdkRatio upp.interest
   , minStake: toBigInt upp.minStake
   , maxStake: toBigInt upp.maxStake
   , admin: toSdkAdmin upp.admin
@@ -612,7 +676,7 @@ toUnbondedPoolArgs (UnbondedPoolParams upp) =
 
 fromUnbondedPoolArgs :: UnbondedPoolArgs -> Either Error UnbondedPoolParams
 fromUnbondedPoolArgs upa = do
-  interest <- fromSdkInterest context upa.interest
+  interest <- fromSdkRatio context upa.interest
   minStake <- fromSdkNat' "minStake" upa.minStake
   maxStake <- fromSdkNat' "maxStake" upa.maxStake
   increments <- fromSdkNat' "increments" upa.increments
@@ -645,7 +709,7 @@ fromUnbondedPoolArgs upa = do
 fromInitialUnbondedArgs
   :: InitialUnbondedArgs -> Either Error InitialUnbondedParams
 fromInitialUnbondedArgs iba = do
-  interest <- fromSdkInterest context iba.interest
+  interest <- fromSdkRatio context iba.interest
   increments <- fromSdkNat' "increments" iba.increments
   minStake <- fromSdkNat' "minStake" iba.minStake
   maxStake <- fromSdkNat' "maxStake" iba.maxStake
@@ -674,3 +738,21 @@ callGetNodeTime cfg = fromAff
   $ runContract cfg { walletSpec = Nothing }
   $ unwrap
   <$> currentRoundedTime
+
+-- We export constructors and consumers of `Maybe` for the JS code
+
+callJust :: forall a. a -> Maybe a
+callJust = Just
+
+callNothing :: forall a. Maybe a
+callNothing = Nothing
+
+-- We need this escape hatch to allow the JS code to consume a `Maybe a`
+-- however it wants
+foreign import data AnyType :: Type
+
+callConsumeMaybe
+  :: forall a. (a -> AnyType) -> (Unit -> AnyType) -> Maybe a -> AnyType
+callConsumeMaybe just nothing = case _ of
+  Nothing -> nothing unit
+  Just x -> just x

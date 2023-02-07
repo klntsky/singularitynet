@@ -8,6 +8,7 @@ module UnbondedStaking.Utils
   , getPeriodRange
   , getNextPeriodRange
   , mkUnbondedPoolParams
+  , getListDatums
   , queryAssocListUnbonded
   , queryStateUnbonded
   , queryAssetsUnbonded
@@ -26,7 +27,7 @@ import Contract.Monad
   , throwContractError
   )
 import Contract.Numeric.Rational (Rational, (%))
-import Contract.PlutusData (Datum(Datum), getDatumByHash, fromData)
+import Contract.PlutusData (Datum, getDatumByHash, fromData)
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.Scripts (validatorHash)
 import Contract.Time
@@ -38,7 +39,6 @@ import Contract.Time
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.Utxos (utxosAt)
 import Contract.Value (CurrencySymbol, Value, adaSymbol, adaToken)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
@@ -351,7 +351,7 @@ queryAssetsUnbonded unbondedPoolParams@(UnbondedPoolParams ubp) scriptVersion =
     let
       { currencySymbol: assetSymbol, tokenName: assetToken } =
         unwrap $ ubp.unbondedAssetClass
-    validator <- liftedE' "queryStateUnbonded: Cannot create validator"
+    validator <- liftedE' "queryAssetsUnbonded: Cannot create validator"
       $ mkUnbondedPoolValidator unbondedPoolParams scriptVersion
     let
       valHash = validatorHash validator

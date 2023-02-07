@@ -27,7 +27,7 @@ As previously discussed, we will upgrade CTL for you once we have compatibility 
     - [Installation](#installation-2)
     - [Configuration](#configuration-2)
     - [Links](#links-2)
-  - [`ctl-server`](#ctl-server)
+  - [`kupo`](#kupo)
     - [Version](#version-3)
     - [Installation](#installation-3)
     - [Configuration](#configuration-3)

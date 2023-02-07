@@ -191,15 +191,10 @@ userStakeBondedPoolContract
               }
           }
 
-      bondedStateDatumLookup <-
-        liftContractM
-          "userStakeBondedPoolContract: Could not create state datum lookup"
-          $ ScriptLookups.datum bondedStateDatum
-      entryDatumLookup <-
-        liftContractM
-          "userStakeBondedPoolContract: Could not create entry datum lookup"
-          $ ScriptLookups.datum entryDatum
       let
+        bondedStateDatumLookup = ScriptLookups.datum bondedStateDatum
+        entryDatumLookup = ScriptLookups.datum entryDatum
+
         constraints :: TxConstraints Unit Unit
         constraints =
           mconcat
@@ -266,15 +261,10 @@ userStakeBondedPoolContract
                   }
               }
 
-          bondedStateDatumLookup <-
-            liftContractM
-              "userStakeBondedPoolContract: Could not create state datum lookup"
-              $ ScriptLookups.datum bondedStateDatum
-          entryDatumLookup <-
-            liftContractM
-              "userStakeBondedPoolContract: Could not create entry datum lookup"
-              $ ScriptLookups.datum entryDatum
           let
+            bondedStateDatumLookup = ScriptLookups.datum bondedStateDatum
+            entryDatumLookup = ScriptLookups.datum entryDatum
+
             constraints :: TxConstraints Unit Unit
             constraints =
               mconcat
@@ -352,11 +342,9 @@ userStakeBondedPoolContract
               "userStakeBondedPoolContract: Datum not \
               \Entry constructor"
 
-          entryDatumLookup <-
-            liftContractM
-              "userStakeBondedPoolContract: Could not create state datum lookup"
-              $ ScriptLookups.datum entryDatum
           let
+            entryDatumLookup = ScriptLookups.datum entryDatum
+
             constraints :: TxConstraints Unit Unit
             constraints =
               mconcat
@@ -436,12 +424,8 @@ userStakeBondedPoolContract
                         , deposited = updateDeposited
                         }
                     }
-              firstEntryDatumLookup <-
-                liftContractM
-                  "userStakeBondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum firstEntryDatum
               let
+                firstEntryDatumLookup = ScriptLookups.datum firstEntryDatum
                 constr = mconcat
                   [ mustPayToScript valHash firstEntryDatum entryValue
                   , mustSpendScriptOutput firstInput valRedeemer
@@ -482,12 +466,8 @@ userStakeBondedPoolContract
                       }
                   }
 
-              entryDatumLookup <-
-                liftContractM
-                  "userStakeBondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum entryDatum
               let
+                entryDatumLookup = ScriptLookups.datum entryDatum
                 constr = mconcat
                   [ mustMintValueWithRedeemer mintRedeemer entryValue
                   , mustPayToScript valHash entryDatum entryValue
@@ -525,12 +505,8 @@ userStakeBondedPoolContract
                   "userStakeBondedPoolContract: Datum not \
                   \Entry constructor"
 
-              lastEntryDatumLookup <-
-                liftContractM
-                  "userStakeBondedPoolContract: Could not create state datum \
-                  \lookup"
-                  $ ScriptLookups.datum lastEntryDatum
               let
+                lastEntryDatumLookup = ScriptLookups.datum lastEntryDatum
                 constr = mconcat
                   [ mustPayToScript valHash lastEntryDatum entryValue
                   , mustSpendScriptOutput si valRedeemer

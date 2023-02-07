@@ -7,9 +7,9 @@ import Contract.Monad (Contract, throwContractError)
 import Contract.Numeric.Natural as Natural
 import Contract.Test.Plutip (PlutipTest, InitialUTxOs)
 import Control.Monad.Reader (ask, lift)
-import Data.Array as Array
 import Data.BigInt (BigInt)
 import Data.BigInt as BigInt
+import Data.Maybe (Maybe(Nothing), isNothing)
 import Data.Tuple.Nested (type (/\), (/\))
 import SNet.Test.Common
   ( getAdminWallet
@@ -56,9 +56,9 @@ test initParams = withWalletsAndPool initParams [ bobInitialUtxos ]
         failedIndices <- lift $ closeUnbondedPoolContract unbondedPoolParams
           scriptVersion
           (nat 0)
-          []
+          Nothing
         -- Make sure that return value is empty list
-        when (not $ Array.null failedIndices)
+        when (not $ isNothing failedIndices)
           $ lift
           $ throwContractError "Some entries failed to be updated"
       -- We do not wait for anything here, since the pool is already closed.

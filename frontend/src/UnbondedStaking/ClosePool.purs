@@ -4,11 +4,10 @@ import Contract.Prelude
 
 import Contract.Address
   ( getNetworkId
-  , getWalletAddress
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo')
+import Contract.Log (logInfo', logWarn')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -17,18 +16,16 @@ import Contract.Monad
   , throwContractError
   )
 import Contract.Numeric.Natural (Natural)
-import Contract.Numeric.Rational ((%))
 import Contract.PlutusData
-  ( Datum(Datum)
-  , PlutusData
+  ( PlutusData
   , Redeemer(Redeemer)
-  , fromData
   , getDatumByHash
   , toData
   )
 import Contract.Prim.ByteArray (ByteArray)
+import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups as ScriptLookups
-import Contract.Scripts (ValidatorHash, validatorHash)
+import Contract.Scripts (validatorHash)
 import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.TxConstraints
   ( TxConstraints
@@ -37,11 +34,15 @@ import Contract.TxConstraints
   , mustSpendScriptOutput
   , mustValidateIn
   )
-import Contract.Utxos (utxosAt)
-import Contract.Value (mkTokenName, singleton)
+import Contract.Utxos (getWalletUtxos, utxosAt)
+import Control.Alt ((<|>))
+import Control.Monad.Maybe.Trans (MaybeT(..), lift, runMaybeT)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
-import Data.Array (elemIndex, (:), (!!))
-import Data.Map (toUnfoldable)
+import Data.Array ((:))
+import Data.Array as Array
+import Data.Array.NonEmpty as NonEmpty
+import Data.BigInt (BigInt)
+import Partial.Unsafe (unsafePartial)
 import Scripts.PoolValidator (mkUnbondedPoolValidator)
 import Settings
   ( unbondedStakingTokenName
@@ -49,21 +50,23 @@ import Settings
   , submissionAttempts
   )
 import Types (ScriptVersion)
+import UnbondedStaking.DepositPool
+  ( updateEntriesList
+  , updateEntryTx
+  , updateOutdatedEntriesList
+  )
 import UnbondedStaking.Types
   ( Entry(Entry)
+  , IncompleteClose(..)
   , UnbondedPoolParams(UnbondedPoolParams)
   , UnbondedStakingAction(CloseAct)
-  , UnbondedStakingDatum(AssetDatum, EntryDatum, StateDatum)
   )
-import UnbondedStaking.Utils (calculateRewards, getAdminTime)
+import UnbondedStaking.Utils (getAdminTime, getListDatums)
 import Utils
   ( getUtxoDatumHash
   , getUtxoWithNFT
   , logInfo_
   , mkOnchainAssocList
-  , mkRatUnsafe
-  , mustPayToScript
-  , roundUp
   , splitByLength
   , submitBatchesSequentially
   , submitTransaction
@@ -71,17 +74,17 @@ import Utils
   )
 
 -- | Closes the unbonded pool and distributes final rewards to users
--- | If the `batchSize` is zero, then funds will be deposited to all users.
--- | Otherwise the transactions will be made in batches
--- | If the `depositList` is empty, then reward deposits will be made to all
+-- | If the `batchSize` is zero, then funds will be deposited in one TX.
+-- | Otherwise the transactions will be made in batches.
+-- | If the `incompleteClose` is empty, then reward deposits will be made to all
 -- | users. Otherwise only the users within in the list will have rewards
 -- | deposited.
 closeUnbondedPoolContract
   :: UnbondedPoolParams
   -> ScriptVersion
   -> Natural
-  -> Array Int
-  -> Contract () (Array Int)
+  -> Maybe IncompleteClose
+  -> Contract () (Maybe IncompleteClose)
 closeUnbondedPoolContract
   params@
     ( UnbondedPoolParams
@@ -92,7 +95,7 @@ closeUnbondedPoolContract
     )
   scriptVersion
   batchSize
-  depositList = do
+  incompleteClose' = do
   -- Fetch information related to the pool
   -- Get network ID and check admin's PKH
   networkId <- getNetworkId
@@ -101,12 +104,6 @@ closeUnbondedPoolContract
   unless (userPkh == admin) $ throwContractError
     "closeUnbondedPoolContract: Admin is not current user"
   logInfo_ "closeUnbondedPoolContract: Admin PaymentPubKeyHash" userPkh
-  -- Get the (Nami) wallet address
-  adminAddr <-
-    liftedM "depositUnbondedPoolContract: Cannot get wallet Address"
-      getWalletAddress
-  -- Get utxos at the wallet address
-  adminUtxos <- utxosAt adminAddr
   -- Get the unbonded pool validator and hash
   validator <- liftedE' "closeUnbondedPoolContract: Cannot create validator"
     $ mkUnbondedPoolValidator params scriptVersion
@@ -115,231 +112,185 @@ closeUnbondedPoolContract
   let poolAddr = scriptHashAddress valHash Nothing
   logInfo_ "closeUnbondedPoolContract: Pool address"
     $ fromPlutusAddress networkId poolAddr
-  -- Get the unbonded pool's utxo
+  -- Get the unbonded pool's utxo (if not consumed alredy)
   unbondedPoolUtxos <- utxosAt poolAddr
   logInfo_ "closeUnbondedPoolContract: Pool UTXOs" unbondedPoolUtxos
   tokenName <- liftContractM
     "closeUnbondedPoolContract: Cannot create TokenName"
     unbondedStakingTokenName
-  poolTxInput /\ poolTxOutput <-
-    liftContractM "closeUnbondedPoolContract: Cannot get state utxo"
-      $ getUtxoWithNFT unbondedPoolUtxos nftCs tokenName
-  logInfo_ "closeUnbondedPoolContract: Pool's UTXO" poolTxInput
-  poolDatumHash <-
-    liftContractM
-      "closeUnbondedPoolContract: Could not get Pool UTXO's Datum Hash"
-      $ getUtxoDatumHash poolTxOutput
-  logInfo_ "closeUnbondedPoolContract: Pool's UTXO DatumHash" poolDatumHash
-  poolDatum <- liftedM "closeUnbondedPoolContract: Cannot get datum"
-    $ getDatumByHash poolDatumHash
-  unbondedStakingDatum :: UnbondedStakingDatum <-
-    liftContractM
-      "closeUnbondedPoolContract: Cannot extract NFT State datum"
-      $ fromData (unwrap poolDatum)
+  poolStateUtxo <- runMaybeT do
+    poolTxInput /\ poolTxOutput <- MaybeT $ pure $ getUtxoWithNFT
+      unbondedPoolUtxos
+      nftCs
+      tokenName
+    lift $ logInfo_ "closeUnbondedPoolContract: Pool's UTXO" poolTxInput
+    poolDatumHash <- MaybeT $ pure $ getUtxoDatumHash poolTxOutput
+    lift $ logInfo_ "closeUnbondedPoolContract: Pool's UTXO DatumHash"
+      poolDatumHash
+    poolDatum <- MaybeT $ getDatumByHash poolDatumHash
+    pure $ poolTxInput /\ poolTxOutput /\ poolDatum
+  logInfo_ "closeUnbondedPoolContract: Pool state UTxO" poolStateUtxo
   -- Get the bonding range to use
   logInfo' "closeUnbondedPoolContract: Getting admin range..."
   { currTime, range } <- getAdminTime params scriptVersion
   logInfo_ "closeUnbondedPoolContract: Current time: " $ show currTime
   logInfo_ "closeUnbondedPoolContract: TX Range" range
-  -- Update the association list
-  case unbondedStakingDatum of
-    -- Non-empty user list
-    StateDatum { maybeEntryName: Just _, open: true } -> do
-      logInfo'
-        "closeUnbondedPoolContract: STAKE TYPE - StateDatum is \
-        \StateDatum { maybeEntryName: Just ..., open: true }"
-      let
-        assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
-      -- Concatenate constraints/lookups
-      let
-        redeemer = Redeemer $ toData CloseAct
+  ------ Update the association list
+  logInfo'
+    "closeUnbondedPoolContract: STAKE TYPE - StateDatum is \
+    \StateDatum { maybeEntryName: Just ..., open: true }"
+  let
+    assocList = mkOnchainAssocList assocListCs unbondedPoolUtxos
+  -- Obtain the entries' inputs and datums and generate the updated versions
+  -- of the datums.
+  -- If an `IncompleteClose` value is provided, only the given
+  -- subset of the entries is updated.
+  (entriesInputs /\ entriesDatums /\ updatedEntriesDatums) <-
+    case incompleteClose' of
+      Nothing -> do
+        -- Use all entries
+        let
+          entriesInputs :: Array TransactionInput
+          entriesInputs = map (fst <<< snd) assocList
+        entriesDatums :: Array Entry <- getListDatums assocList
+        -- Assign rewards and close
+        let
+          updatedEntriesDatums :: Array Entry
+          updatedEntriesDatums = updateAndCloseEntriesList entriesDatums
+        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
+      Just (IncompleteClose incompClose) -> do
+        -- Use only the entries with the given keys
+        let
+          assocList'
+            :: Array
+                 ( ByteArray /\ TransactionInput /\
+                     TransactionOutputWithRefScript
+                 )
+          assocList' = Array.filter
+            (\(ba /\ _) -> Array.elem ba incompClose.failedKeys)
+            assocList
+          entriesInputs = map (fst <<< snd) assocList'
+        -- Print warning if some of the failed keys were not found in the pool
+        let
+          keysNotFound :: Array ByteArray
+          keysNotFound =
+            Array.difference
+              (fst <$> assocList)
+              incompClose.failedKeys
+        when (Array.length keysNotFound /= 0)
+          $ logWarn'
+          $ show (Array.length keysNotFound)
+          <> " of the outdated entries were not found in the pool: "
+          <> show keysNotFound
+        entriesDatums <- getListDatums assocList'
+        -- Assign rewards and close the outdated entries
+        let
+          updatedEntriesDatums =
+            updateAndCloseOutdatedEntriesList
+              incompClose.totalDeposited
+              entriesDatums
+        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
+  -- Make constraints and lookups and close pool state and entries.
+  let
+    redeemer = Redeemer $ toData CloseAct
 
-        stateDatumConstraintsLookups
-          :: Tuple (TxConstraints Unit Unit)
-               (ScriptLookups.ScriptLookups PlutusData)
-        stateDatumConstraintsLookups =
-          ( mustIncludeDatum poolDatum
-              <> mustSpendScriptOutput poolTxInput redeemer
+    constraints :: TxConstraints Unit Unit
+    constraints =
+      mustBeSignedBy admin
+        <> mustValidateIn range
+
+    lookups :: ScriptLookups.ScriptLookups PlutusData
+    lookups =
+      ScriptLookups.validator validator
+        <> ScriptLookups.unspentOutputs unbondedPoolUtxos
+  -- We deliberately omit the admin utxos, since batching includes
+  -- them automatically before every batch.
+
+  -- Submit transaction that closes state utxo separately (if necessary)
+  stateUtxoConsumed <- case poolStateUtxo of
+    Just (poolTxInput /\ _ /\ poolDatum) -> do
+      adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
+        getWalletUtxos
+      Array.null <$> submitTransaction
+        ( mustIncludeDatum poolDatum <> mustSpendScriptOutput poolTxInput
+            redeemer
+        )
+        (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+        confirmationTimeout
+        submissionAttempts
+        []
+    Nothing -> pure true
+  if stateUtxoConsumed then logInfo'
+    "closeUnbondedPoolContract: Succesfully closed pool's state utxo"
+  else logInfo' "closeUnbondedPoolContract: Failed to close pool's state utxo"
+  -- Submit transaction that closes entries with possible batching
+  entryUpdates
+    :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
+    traverse (updateEntryTx params valHash)
+      ( Array.zip entriesInputs
+          (Array.zip entriesDatums updatedEntriesDatums)
+      )
+  adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
+    getWalletUtxos
+  failedCloses <-
+    if batchSize == zero then
+      submitTransaction
+        constraints
+        (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+        confirmationTimeout
+        submissionAttempts
+        entryUpdates
+    else do
+      let
+        entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
+          entryUpdates
+      submitBatchesSequentially
+        constraints
+        lookups
+        confirmationTimeout
+        submissionAttempts
+        entryUpdateBatches
+  logInfo_
+    "closeUnbondedPoolContract: Finished closing /\
+    \pool entries. Entries with failed closes"
+    failedCloses
+  -- We obtain the failed entries and return them as part of a
+  -- `IncompleteClose` (if there are any)
+  let
+    maybeFailedEntries = do
+      indices <- NonEmpty.fromArray =<< traverse
+        (flip Array.elemIndex entryUpdates)
+        failedCloses
+      let
+        entries = foldl
+          ( \acc i -> unsafePartial $ Array.unsafeIndex updatedEntriesDatums i
+              : acc
           )
-            /\ mempty
+          mempty
+          indices
+      firstEntry <- Array.head entries
+      Just $ IncompleteClose
+        { failedKeys: map (unwrap >>> _.key) entries
+        , totalDeposited: unwrap >>> _.totalDeposited $ firstEntry
+        , stateUtxoConsumed
+        }
+  -- We return an `IncompleteClose` value if the pool failed to be consumed
+  let
+    maybeFailedState =
+      if stateUtxoConsumed then Nothing
+      else Just $ IncompleteClose
+        { failedKeys: []
+        , totalDeposited: zero
+        , stateUtxoConsumed
+        }
+  pure $ maybeFailedEntries <|> maybeFailedState
 
-        constraints :: TxConstraints Unit Unit
-        constraints =
-          mustBeSignedBy admin
-            <> mustIncludeDatum poolDatum
-            <> mustValidateIn range
+updateAndCloseEntriesList :: Array Entry -> Array Entry
+updateAndCloseEntriesList = map closeEntry <<< updateEntriesList zero
 
-        lookups :: ScriptLookups.ScriptLookups PlutusData
-        lookups =
-          ScriptLookups.validator validator
-            <> ScriptLookups.unspentOutputs unbondedPoolUtxos
-      -- We deliberately omit the admin utxos, since batching includes
-      -- them automatically before every batch.
+updateAndCloseOutdatedEntriesList :: BigInt -> Array Entry -> Array Entry
+updateAndCloseOutdatedEntriesList totalDeposited =
+  map closeEntry <<< updateOutdatedEntriesList zero totalDeposited
 
-      -- Get list of users to deposit rewards to
-      entryUpdates <-
-        if null depositList then do
-          updateList' <- traverse (mkEntryUpdateList params valHash) assocList
-          pure $ stateDatumConstraintsLookups : updateList'
-        else do
-          constraintsLookupsList <-
-            traverse (mkEntryUpdateList params valHash) assocList
-          updateList' <-
-            liftContractM
-              "closeUnbondedPoolContract: Failed to create updateList'" $
-              traverse ((!!) constraintsLookupsList) depositList
-          pure $ stateDatumConstraintsLookups : updateList'
-      -- Submit transaction with possible batching
-      failedDeposits <-
-        if batchSize == zero then
-          submitTransaction
-            constraints
-            (lookups <> ScriptLookups.unspentOutputs adminUtxos)
-            confirmationTimeout
-            submissionAttempts
-            entryUpdates
-        else do
-          let
-            entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
-              entryUpdates
-          submitBatchesSequentially
-            constraints
-            lookups
-            confirmationTimeout
-            submissionAttempts
-            entryUpdateBatches
-      logInfo_
-        "closeUnbondedPoolContract: Closed pool and finished updating /\
-        \pool entries. Entries with failed updates"
-        failedDeposits
-      failedDepositsIndicies <-
-        liftContractM
-          "closeUnbondedPoolContract: Failed to create /\
-          \failedDepositsIndicies list" $
-          traverse (flip elemIndex entryUpdates) failedDeposits
-      pure failedDepositsIndicies
-    -- Closing pool with no users
-    StateDatum { maybeEntryName: Nothing, open: true } -> do
-      logInfo'
-        "closeUnbondedPoolContract: STAKE TYPE - StateDatum is \
-        \StateDatum { maybeEntryName: Nothing, open: true }"
-      -- Build constraints/lookups
-      let
-        redeemer = Redeemer $ toData CloseAct
-
-        constraints :: TxConstraints Unit Unit
-        constraints =
-          -- Spend all UTXOs to return to Admin along with state/assets
-          foldMap
-            (flip mustSpendScriptOutput redeemer <<< fst)
-            (toUnfoldable unbondedPoolUtxos :: Array _)
-            <> mustBeSignedBy admin
-            <> mustIncludeDatum poolDatum
-            <> mustValidateIn range
-
-        lookups :: ScriptLookups.ScriptLookups PlutusData
-        lookups = mconcat
-          [ ScriptLookups.validator validator
-          , ScriptLookups.unspentOutputs unbondedPoolUtxos
-          ]
-      failedDeposits <-
-        submitTransaction
-          constraints
-          lookups
-          confirmationTimeout
-          submissionAttempts
-          []
-      logInfo_
-        "closeUnbondedPoolContract: Pool closed. Failed updates"
-        failedDeposits
-      pure
-        if null failedDeposits then
-          []
-        else
-          -- After the pool is closed, batching is done by utxo's rather than
-          -- user entries. This means the indexing is not needed anymore, and
-          -- the caller can just call the ClosePool contract again to spend
-          -- the remaining utxos in the pool
-          [ zero ]
-    -- Other error cases:
-    StateDatum { maybeEntryName: _, open: false } ->
-      throwContractError
-        "closeUnbondedPoolContract: Pool is already closed"
-    _ ->
-      throwContractError "closeUnbondedPoolContract: Datum incorrect type"
-
--- | Creates a constraint and lookups list for updating each user entry
-mkEntryUpdateList
-  :: UnbondedPoolParams
-  -> ValidatorHash
-  -> (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
-  -> Contract ()
-       ( Tuple (TxConstraints Unit Unit)
-           (ScriptLookups.ScriptLookups PlutusData)
-       )
-mkEntryUpdateList
-  ( UnbondedPoolParams
-      { unbondedAssetClass
-      , assocListCs
-      }
-  )
-  valHash
-  (_ /\ txIn /\ txOut) = do
-  -- Get the Entry datum of the old assoc. list element
-  dHash <-
-    liftContractM
-      "mkEntryUpdateList: Could not get Entry Datum Hash"
-      $ getUtxoDatumHash txOut
-  logInfo_ "mkEntryUpdateList: datum hash" dHash
-  listDatum <-
-    liftedM
-      "mkEntryUpdateList: Cannot get Entry's datum" $ getDatumByHash dHash
-  unbondedListDatum :: UnbondedStakingDatum <-
-    liftContractM
-      "mkEntryUpdateList: Cannot extract NFT State datum"
-      $ fromData (unwrap listDatum)
-  -- The get the entry datum
-  case unbondedListDatum of
-    EntryDatum { entry } -> do
-      let
-        e = unwrap entry
-        calculatedRewards = calculateRewards entry
-      -- Get the token name for the user by hashing
-      assocListTn <-
-        liftContractM
-          "mkEntryUpdateList: Could not create token name for user"
-          $ mkTokenName e.key
-      -- Update the entry datum
-      let
-        updatedRewards = roundUp calculatedRewards
-        -- Datum and redeemer creation
-        entryDatum = Datum $ toData $ EntryDatum
-          { entry: Entry $ e
-              { rewards = mkRatUnsafe (updatedRewards % one)
-              , open = false
-              }
-          }
-        valRedeemer = Redeemer $ toData CloseAct
-        -- Build asset datum and value types
-        assetDatum = Datum $ toData AssetDatum
-        assetParams = unwrap unbondedAssetClass
-        assetCs = assetParams.currencySymbol
-        assetTn = assetParams.tokenName
-        depositValue = singleton assetCs assetTn updatedRewards
-        entryValue = singleton assocListCs assocListTn one
-
-        -- Build constraints and lookups
-        constraints :: TxConstraints Unit Unit
-        constraints =
-          mconcat
-            [ mustPayToScript valHash assetDatum depositValue
-            , mustPayToScript valHash entryDatum entryValue
-            , mustSpendScriptOutput txIn valRedeemer
-            ]
-      entryDatumLookup <-
-        liftContractM
-          "mkEntryUpdateList: Could not create state datum lookup"
-          $ ScriptLookups.datum entryDatum
-      pure (constraints /\ entryDatumLookup)
-    _ -> throwContractError
-      "mkEntryUpdateList: Datum not Entry constructor"
+closeEntry :: Entry -> Entry
+closeEntry (Entry e) = Entry $ e { open = false }

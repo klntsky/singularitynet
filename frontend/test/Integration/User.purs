@@ -3,22 +3,15 @@ module SNet.Test.Integration.User (stake, withdraw) where
 import Contract.Prelude
 
 import Contract.Numeric.Natural as Natural
-import Contract.Prim.ByteArray (ByteArray)
 import Contract.Test.Plutip (withKeyWallet)
 import Contract.Wallet (KeyWallet)
 import Control.Monad.Error.Class (try)
 import Control.Monad.Reader (ask, lift)
 import Data.BigInt (BigInt)
 import SNet.Test.Common (waitFor)
-import SNet.Test.Integration.Types
-  ( CommandResult(..)
-  , IntegrationFailure(..)
-  )
 import UnbondedStaking.Types
-  ( Entry(..)
-  , Period(..)
+  ( Period(..)
   , SnetContract
-  , UnbondedPoolParams(..)
   )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.UserWithdraw (userWithdrawUnbondedPoolContract)
