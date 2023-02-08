@@ -60,22 +60,15 @@ export const main = async () => {
   const unbondedPoolArgs: UnbondedPoolArgs = unbondedPool.args;
   console.log(JSON.stringify(unbondedPool))
 
-  // We try to recreate the pool just from its address and initial bonded args.
-  // This is just for testing the pool query functionality.
-  //
-  // Note that more than one pool may be found at a given address, since it's
-  // possible to create many pools with the same `InitialBondedArgs`. But this
-  // is unlikely if the `start` parameter is different for every pool.
-  const unbondedPoolsArray: Array<UnbondedPool> = await singularitynet.getUnbondedPools(
+  // We try to recreate the pool from the admin's PKH, the state CS and the initial bonded args.
+  // This is just for testing pool reconstruction.
+  const unbondedPoolCopy = await singularitynet.getUnbondedPool(
     mlabsSdkConfig,
-    unbondedPool.address,
+    unbondedPool.admin,
+    unbondedPool.nftCs,
     initialUnbondedArgs
   );
-
-  // We get the first pool of the list (which should be the only one)
-  // and we use it instead of the first object. This should not make a
-  // difference, the objects are identical.
-  const unbondedPoolCopy = unbondedPoolsArray[0];
+  // We use the copy, it shouldn't make a difference
   unbondedPool = unbondedPoolCopy;
 
   // User 1 stakes
