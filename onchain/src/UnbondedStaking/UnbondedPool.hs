@@ -65,7 +65,6 @@ import PTypes (
   PTxInfoFields,
   PTxInfoHRec,
   adminUpdatePeriod,
-  bondingPeriod,
   depositWithdrawPeriod,
   passetClass,
  )
@@ -82,7 +81,6 @@ import UnbondedStaking.PTypes (
   PUnbondedPoolParamsHRec,
   PUnbondedStakingAction (
     PAdminAct,
-    PCloseAct,
     PStakeAct,
     PWithdrawAct
   ),
@@ -186,12 +184,6 @@ punbondedPoolValidator = phoistAcyclic $
             dat
             withdrawActParamsF
             period
-        PCloseAct _ -> unTermCont $ do
-          pguardC
-            "punbondedPoolValidator: wrong period for PCloseAct \
-            \redeemer"
-            $ period #== adminUpdatePeriod
-          pure $ adminLogic txInfoF paramsF
 
 -- Untyped version to be serialised. This version is responsible for verifying
 -- that the parameters (pool params, datum and redeemer) have the proper types.
