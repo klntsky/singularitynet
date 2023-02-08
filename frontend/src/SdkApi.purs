@@ -18,7 +18,7 @@ module SdkApi
   , callDepositUnbondedPool
   , callGetBondedPools
   , callGetNodeTime
-  , callGetUnbondedPools
+  , callGetUnbondedPool
   , callHashPkh
   , callQueryAssocListUnbondedPool
   , callUserStakeBondedPool
@@ -102,7 +102,7 @@ import UnbondedStaking.UserWithdraw
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
-  , getUnbondedPoolsContract
+  , getUnbondedPoolContract
   )
 import UnbondedStaking.DepositPool (depositUnbondedPoolContract)
 import UnbondedStaking.Types
@@ -552,16 +552,19 @@ callCreateUnbondedPool env iba = Promise.fromAff do
       Production
   pure $ { args: toUnbondedPoolArgs upp, address, txId }
 
-callGetUnbondedPools
+callGetUnbondedPool
   :: ContractEnv ()
   -> String
+  -> String
   -> InitialUnbondedArgs
-  -> Effect (Promise (Array UnbondedPoolArgs))
-callGetUnbondedPools env addrStr iba = Promise.fromAff do
+  -> Effect (Promise UnbondedPoolArgs)
+callGetUnbondedPool env adminPkhStr stateCsStr iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialUnbondedArgs iba
-  ubpps <- runContractInEnv env $ getUnbondedPoolsContract addrStr ibp
+  adminPkh <- liftEither $ fromSdkAdmin "callGetUnbondedPool" adminPkhStr
+  stateCs <- liftEither $ fromSdkCurrencySymbol "callGetUnbondedPool" stateCsStr
+  ubpps <- runContractInEnv env $ getUnbondedPoolContract adminPkh stateCs ibp
     Production
-  pure $ map toUnbondedPoolArgs ubpps
+  pure $ toUnbondedPoolArgs ubpps
 
 callDepositUnbondedPool
   :: ContractEnv ()
