@@ -184,16 +184,11 @@ exports.createUnbondedPool = async (sdkConfig, initialArgs) => {
   return new exports.UnbondedPool(sdkConfig, info.args, info.address, contractEnv);
 };
 
-exports.getUnbondedPools = async (sdkConfig, address, initialArgs) => {
+exports.getUnbondedPool = async (sdkConfig, adminPkh, stateCs, initialArgs) => {
   const contracts = await frontend;
   const config = await contracts.buildContractConfig(sdkConfig)();
   const contractEnv = await contracts.callMkContractEnv(config)();
-  const poolsUnbondedParams = await contracts.callGetUnbondedPools(contractEnv)(address)(initialArgs)();
-  let pools = [];
-  for (const unbondedParams of poolsUnbondedParams) {
-      pools.push(new exports.UnbondedPool(sdkConfig, unbondedParams, address, contractEnv));
-  }
-  return pools;
+  return poolUnbondedParams = await contracts.callGetUnbondedPool(config)(adminPkh)(stateCs)(initialArgs)();
 };
 
 exports.getNodeTime = async (sdkConfig) => {
