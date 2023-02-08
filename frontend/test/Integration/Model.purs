@@ -86,6 +86,7 @@ userStake user amt = do
                   user
                   s.stakers
             , funds = s.funds + amt
+            , staked = s.staked + amt'
             }
           pure Success
 
@@ -201,8 +202,8 @@ updatePool stakers candidates promised =
     updateCandidate :: Rational -> Rational
     updateCandidate funds = funds / staked
 
-    -- The admin deposits the rounded up sum of all the user's rewards
-    adminDeposited = roundUp $ sum rewards
+    -- The admin deposits the sum of all the rounded-up users' rewards
+    adminDeposited = sum $ roundUp <$> rewards
   in
     { stakers: stakers', candidates: candidates', staked, adminDeposited }
 

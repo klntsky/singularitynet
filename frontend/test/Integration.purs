@@ -92,8 +92,11 @@ suite =
   group "Integration tests" do
     test "Two stakes in a row" $
       runMachineWith testInitialParamsNoTimeChecks twoStakesInARow
+    test "Rounding" $
+      runMachineWith testInitialParamsNoTimeChecks rounding
     group "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg 10
 
+-- | A test for validating stake updates
 twoStakesInARow :: StateMachineOnlyInputs
 twoStakesInARow =
   { usersInputs:
@@ -105,6 +108,24 @@ twoStakesInARow =
       ]
   , adminInputs:
       [ { command: AdminClose, result: Success } ]
+  }
+
+-- | A test for validating rounding behaviour
+rounding :: StateMachineOnlyInputs
+rounding =
+  { usersInputs:
+      [ [ [ { command: UserStake $ BigInt.fromInt 1088, result: Success } ]
+        , [ { command: UserStake $ BigInt.fromInt 1486, result: Success } ]
+        ]
+      , [ [ { command: UserStake $ BigInt.fromInt 1274, result: Success } ]
+        , [ { command: UserStake $ BigInt.fromInt 1208, result: Success } ]
+        ]
+
+      ]
+  , adminInputs:
+      [ { command: AdminDeposit $ BigInt.fromInt 1138, result: Success }
+      , { command: AdminDeposit $ BigInt.fromInt 1435, result: Success }
+      ]
   }
 
 runMachineWith

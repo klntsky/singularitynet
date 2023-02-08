@@ -43,7 +43,7 @@ export const countdownTo = async (tf: number) => {
   let now = await singularitynet.getNodeTime(mlabsSdkConfig);
   while (now <= tf) {
     console.log(`Countdown: ${showSecondsDiff(tf, now)}s`);
-    await sleep(20000);
+    await sleep(20_000);
     now = await singularitynet.getNodeTime(mlabsSdkConfig);
   }
   console.log(`Countdown over`);
