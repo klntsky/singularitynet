@@ -223,8 +223,8 @@ callWithArgs
   -> ContractEnv ()
   -> a
   -> Effect (Promise c)
-callWithArgs f contract cfg args = Promise.fromAff
-  $ runContractInEnv cfg
+callWithArgs f contract env args = Promise.fromAff
+  $ runContractInEnv env
   <<< contract
   =<< liftEither (f args)
 
@@ -359,9 +359,9 @@ callCreateBondedPool
   -> InitialBondedArgs
   -> Effect
        (Promise { args :: BondedPoolArgs, address :: String, txId :: String })
-callCreateBondedPool cfg iba = Promise.fromAff do
+callCreateBondedPool env iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialBondedArgs iba
-  { bondedPoolParams: bpp, address, txId } <- runContractInEnv cfg $
+  { bondedPoolParams: bpp, address, txId } <- runContractInEnv env $
     createBondedPoolContract ibp Production
   pure $ { args: toBondedPoolArgs bpp, address, txId }
 
@@ -370,9 +370,9 @@ callGetBondedPools
   -> String
   -> InitialBondedArgs
   -> Effect (Promise (Array BondedPoolArgs))
-callGetBondedPools cfg addrStr iba = Promise.fromAff do
+callGetBondedPools env addrStr iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialBondedArgs iba
-  bpps <- runContractInEnv cfg $ getBondedPoolsContract addrStr ibp Production
+  bpps <- runContractInEnv env $ getBondedPoolsContract addrStr ibp Production
   pure $ map toBondedPoolArgs bpps
 
 callDepositBondedPool
@@ -381,7 +381,7 @@ callDepositBondedPool
   -> BigInt
   -> Array Int
   -> Effect (Promise (Array Int))
-callDepositBondedPool cfg bpa bi arr = Promise.fromAff $ runContractInEnv cfg do
+callDepositBondedPool env bpa bi arr = Promise.fromAff $ runContractInEnv env do
   upp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callDepositBondedPool: Invalid natural number")
     $ fromBigInt bi
@@ -393,7 +393,7 @@ callCloseBondedPool
   -> BigInt
   -> Array Int
   -> Effect (Promise (Array Int))
-callCloseBondedPool cfg bpa bi arr = Promise.fromAff $ runContractInEnv cfg do
+callCloseBondedPool env bpa bi arr = Promise.fromAff $ runContractInEnv env do
   upp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callCloseBondedPool: Invalid natural number")
     $ fromBigInt bi
@@ -404,7 +404,7 @@ callUserStakeBondedPool
   -> BondedPoolArgs
   -> BigInt
   -> Effect (Promise { txId :: String })
-callUserStakeBondedPool cfg bpa bi = Promise.fromAff $ runContractInEnv cfg do
+callUserStakeBondedPool env bpa bi = Promise.fromAff $ runContractInEnv env do
   bpp <- liftEither $ fromBondedPoolArgs bpa
   nat <- liftM (error "callUserStakeBondedPool: Invalid natural number")
     $ fromBigInt bi
@@ -420,8 +420,8 @@ callWithBondedPoolArgs
   -> ContractEnv ()
   -> BondedPoolArgs
   -> Effect (Promise { txId :: String })
-callWithBondedPoolArgs contract cfg = callWithArgs fromBondedPoolArgs contract
-  cfg
+callWithBondedPoolArgs contract env = callWithArgs fromBondedPoolArgs contract
+  env
 
 fromInitialBondedArgs
   :: InitialBondedArgs -> Either Error InitialBondedParams
@@ -544,9 +544,9 @@ callCreateUnbondedPool
   -> InitialUnbondedArgs
   -> Effect
        (Promise { args :: UnbondedPoolArgs, address :: String, txId :: String })
-callCreateUnbondedPool cfg iba = Promise.fromAff do
+callCreateUnbondedPool env iba = Promise.fromAff do
   iup <- liftEither $ fromInitialUnbondedArgs iba
-  { unbondedPoolParams: upp, address, txId } <- runContractInEnv cfg $
+  { unbondedPoolParams: upp, address, txId } <- runContractInEnv env $
     createUnbondedPoolContract
       iup
       Production
@@ -557,9 +557,9 @@ callGetUnbondedPools
   -> String
   -> InitialUnbondedArgs
   -> Effect (Promise (Array UnbondedPoolArgs))
-callGetUnbondedPools cfg addrStr iba = Promise.fromAff do
+callGetUnbondedPools env addrStr iba = Promise.fromAff do
   ibp <- liftEither $ fromInitialUnbondedArgs iba
-  ubpps <- runContractInEnv cfg $ getUnbondedPoolsContract addrStr ibp
+  ubpps <- runContractInEnv env $ getUnbondedPoolsContract addrStr ibp
     Production
   pure $ map toUnbondedPoolArgs ubpps
 
@@ -570,8 +570,8 @@ callDepositUnbondedPool
   -> BigInt
   -> Maybe SdkIncompleteDeposit
   -> Effect (Promise (Maybe SdkIncompleteDeposit))
-callDepositUnbondedPool cfg amt upa bi id' = Promise.fromAff $ runContractInEnv
-  cfg
+callDepositUnbondedPool env amt upa bi id' = Promise.fromAff $ runContractInEnv
+  env
   do
     upp <- liftEither $ fromUnbondedPoolArgs upa
     nat <- liftM (error "callDepositUnbondedPool: Invalid natural number")
@@ -588,7 +588,7 @@ callCloseUnbondedPool
   -> BigInt
   -> Maybe SdkIncompleteClose
   -> Effect (Promise (Maybe SdkIncompleteClose))
-callCloseUnbondedPool cfg upa bi ic' = Promise.fromAff $ runContractInEnv cfg do
+callCloseUnbondedPool env upa bi ic' = Promise.fromAff $ runContractInEnv env do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callCloseUnbondedPool: Invalid natural number")
     $ fromBigInt bi
@@ -603,7 +603,7 @@ callUserStakeUnbondedPool
        ( Promise
            { txId :: String }
        )
-callUserStakeUnbondedPool cfg upa bi = Promise.fromAff $ runContractInEnv cfg do
+callUserStakeUnbondedPool env upa bi = Promise.fromAff $ runContractInEnv env do
   upp <- liftEither $ fromUnbondedPoolArgs upa
   nat <- liftM (error "callUserStakeUnbondedPool: Invalid natural number")
     $ fromBigInt bi
@@ -621,17 +621,17 @@ callUserWithdrawUnbondedPool =
     (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
 
 callAdminWithdrawUnbondedPool
-  :: ConfigParams ()
+  :: ContractEnv ()
   -> UnbondedPoolArgs
   -> Bech32String
   -> Effect
        ( Promise
            { txId :: String }
        )
-callAdminWithdrawUnbondedPool cfg poolArgs addr =
+callAdminWithdrawUnbondedPool env poolArgs addr =
   callWithUnbondedPoolArgs
     (\ubp -> adminWithdrawUnbondedPoolContract ubp Production addr)
-    cfg
+    env
     poolArgs
 
 callWithUnbondedPoolArgs
@@ -645,9 +645,9 @@ callWithUnbondedPoolArgs
        ( Promise
            { txId :: String }
        )
-callWithUnbondedPoolArgs contract cfg = callWithArgs fromUnbondedPoolArgs
+callWithUnbondedPoolArgs contract env = callWithArgs fromUnbondedPoolArgs
   contract
-  cfg
+  env
 
 type UserEntry =
   { key :: ByteArray
@@ -665,7 +665,7 @@ callQueryAssocListUnbondedPool
   :: ContractEnv ()
   -> UnbondedPoolArgs
   -> Effect (Promise (Array UserEntry))
-callQueryAssocListUnbondedPool cfg upa = Promise.fromAff $ runContractInEnv cfg
+callQueryAssocListUnbondedPool env upa = Promise.fromAff $ runContractInEnv env
   do
     upp <- liftEither $ fromUnbondedPoolArgs upa
     entries <- queryAssocListUnbonded upp Production
@@ -756,8 +756,8 @@ fromInitialUnbondedArgs iba = do
   context = "fromInitialUnbondedArgs"
 
 callGetNodeTime :: ContractEnv () -> Effect (Promise BigInt)
-callGetNodeTime cfg = fromAff
-  $ runContractInEnv cfg
+callGetNodeTime env = fromAff
+  $ runContractInEnv env
   $ unwrap
   <$> currentRoundedTime
 
