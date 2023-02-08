@@ -24,12 +24,10 @@ source-repository head
 common common-lang
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
-    -Wno-partial-type-signatures -Wmissing-export-lists
+    -Wno-partial-type-signatures -Wmissing-export-lists 
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists
-
-  ---Werror
+    -fprint-explicit-kinds -fwarn-missing-import-lists -Werror
 
   mixins:
     base hiding (Prelude),
@@ -114,6 +112,7 @@ library
     UnbondedStaking.PTypes
     UnbondedStaking.Types
     UnbondedStaking.UnbondedPool
+    UnbondedStaking.UnbondedPoolDebug
     Utils
 
   build-depends:
