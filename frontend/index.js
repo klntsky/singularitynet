@@ -45,6 +45,7 @@ exports.BondedPool = class BondedPool {
     const _config = await this._config;
     return contracts.callUserWithdrawBondedPool(_config)(this.args)();
   }
+
 };
 
 exports.UnbondedPool = class UnbondedPool {
@@ -98,6 +99,12 @@ exports.UnbondedPool = class UnbondedPool {
   async userWithdraw() {
     const contracts = await frontend;
     return contracts.callUserWithdrawUnbondedPool(this._contractEnv)(this.args)();
+  }
+
+  async adminWithdraw(addr) {
+    const contracts = await frontend;
+    const _config = await this._config;
+    return contracts.callAdminWithdrawUnbondedPool(_config)(this.args)(addr)();
   }
 
   async getAssocList() {
