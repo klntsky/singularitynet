@@ -129,7 +129,7 @@ closeUnbondedPoolContract
       poolDatumHash
     poolDatum <- MaybeT $ getDatumByHash poolDatumHash
     pure $ poolTxInput /\ poolTxOutput /\ poolDatum
-  logInfo_ "closeUnbondedPoolContract: Pool state UTxO" poolStateUtxo
+  logInfo' $ "closeUnbondedPoolContract: Pool state UTxO" <> show poolStateUtxo
   -- Get the bonding range to use
   logInfo' "closeUnbondedPoolContract: Getting admin range..."
   { currTime, range } <- getAdminTime params scriptVersion
@@ -208,21 +208,22 @@ closeUnbondedPoolContract
 
   -- Submit transaction that closes state utxo separately (if necessary)
   stateUtxoConsumed <- case poolStateUtxo of
-    Just (poolTxInput /\ _ /\ poolDatum) -> do
+    Just (poolTxInput /\ _ /\ _) -> do
       adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
         getWalletUtxos
       Array.null <$> submitTransaction
-        ( mustIncludeDatum poolDatum <> mustSpendScriptOutput poolTxInput
-            redeemer
-        )
-        (lookups <> ScriptLookups.unspentOutputs adminUtxos)
+        constraints
+        lookups
         confirmationTimeout
         submissionAttempts
-        []
-    Nothing -> pure true
+        [ mustSpendScriptOutput poolTxInput redeemer /\
+            ScriptLookups.unspentOutputs adminUtxos
+        ]
+    Nothing -> pure false
   if stateUtxoConsumed then logInfo'
     "closeUnbondedPoolContract: Succesfully closed pool's state utxo"
-  else logInfo' "closeUnbondedPoolContract: Failed to close pool's state utxo"
+  else logInfo'
+    "closeUnbondedPool: Could not close pool state utxo"
   -- Submit transaction that closes entries with possible batching
   entryUpdates
     :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
