@@ -168,15 +168,7 @@ instance PUnsafeLiftDecl PUnbondedStakingDatum where
 
 -- | `UnbondedStakingAction` synonym
 data PUnbondedStakingAction (s :: S)
-  = PAdminAct
-      ( Term
-          s
-          ( PDataRecord
-              '[ "totalRewards" ':= PNatural
-               , "totalDeposited" ':= PNatural
-               ]
-          )
-      )
+  = PAdminAct (Term s (PDataRecord '[]))
   | PStakeAct
       ( Term
           s
@@ -196,7 +188,6 @@ data PUnbondedStakingAction (s :: S)
                ]
           )
       )
-  | PCloseAct (Term s (PDataRecord '[]))
   deriving stock (GHC.Generic)
   deriving anyclass (Generic, PIsDataRepr)
   deriving

@@ -20,7 +20,7 @@ import Contract.Monad
   , liftedM
   , throwContractError
   )
-import Contract.Numeric.Natural (Natural, fromBigInt')
+import Contract.Numeric.Natural (Natural)
 import Contract.Numeric.Rational (Rational)
 import Contract.PlutusData
   ( PlutusData
@@ -372,10 +372,7 @@ updateEntryTx
     assetValue = singleton assetCs assetTn $ roundUp rewardsDifference
     entryValue = singleton ubp.assocListCs assocListTn one
     entryDatum = Datum $ toData $ EntryDatum { entry: Entry e' }
-    valRedeemer = Redeemer $ toData $ AdminAct
-      { totalRewards: fromBigInt' $ e'.totalRewards
-      , totalDeposited: fromBigInt' $ e'.totalDeposited
-      }
+    valRedeemer = Redeemer $ toData AdminAct
 
     -- Build constraints and lookups
     constraints :: TxConstraints Unit Unit

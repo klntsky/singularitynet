@@ -59,7 +59,7 @@ import UnbondedStaking.Types
   ( Entry(Entry)
   , IncompleteClose(..)
   , UnbondedPoolParams(UnbondedPoolParams)
-  , UnbondedStakingAction(CloseAct)
+  , UnbondedStakingAction(AdminAct)
   )
 import UnbondedStaking.Utils (getAdminTime, getListDatums)
 import Utils
@@ -192,7 +192,7 @@ closeUnbondedPoolContract
         pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
   -- Make constraints and lookups and close pool state and entries.
   let
-    redeemer = Redeemer $ toData CloseAct
+    redeemer = Redeemer $ toData AdminAct
 
     constraints :: TxConstraints Unit Unit
     constraints =
