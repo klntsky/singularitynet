@@ -64,9 +64,7 @@ export const main = async () => {
   // This is just for testing pool reconstruction.
   const unbondedPoolCopy = await singularitynet.getUnbondedPool(
     mlabsSdkConfig,
-    unbondedPool.admin,
-    unbondedPool.nftCs,
-    initialUnbondedArgs
+    unbondedPoolArgs
   );
   // We use the copy, it shouldn't make a difference
   unbondedPool = unbondedPoolCopy;
