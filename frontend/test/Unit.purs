@@ -34,6 +34,7 @@ import SNet.Test.Unit.Admin.Deposit1User as Deposit1User
 import SNet.Test.Unit.Admin.DepositEmpty as DepositEmpty
 import SNet.Test.Unit.Admin.DepositNUser as DepositNUser
 import SNet.Test.Unit.Admin.Open as Open
+import SNet.Test.Unit.Admin.AdminWithdraw as AdminWithdraw
 import Test.Unit.User.Stake as Stake
 import Test.Unit.User.StakeAndWithdraw as StakeAndWithdraw
 import Test.Unit.User.StakeWaitAndWithdraw as StakeWaitAndWithdraw
@@ -49,6 +50,7 @@ unitTests initParams =
       test "Deposit to empty pool" $ DepositEmpty.test initParams
       test "Deposit to pool with 1 user's stake" $ Deposit1User.test
         initParams
+      test "Withdraw funds for 1 user" $ AdminWithdraw.test initParams
       ( let
           n = 10
           b = 5
