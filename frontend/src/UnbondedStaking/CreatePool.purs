@@ -153,10 +153,7 @@ createUnbondedPoolContract iup scriptVersion =
     -- Return the pool info for subsequent transactions
     pure { signedTx, unbondedPoolParams, address }
 
--- Get all the pools at the given address and with the right state token.
--- Although more than one could be returned, in all likelihood the user
--- intended (and managed) to create only one. This is because most pools
--- will have unique start times.
+-- To know the pool we need to know the initialUnbondedParams, the admin pkh and the CS of the state token
 getUnbondedPoolContract
   :: PaymentPubKeyHash
   -> CurrencySymbol
@@ -172,26 +169,3 @@ getUnbondedPoolContract adminPkh stateCs ibp scriptVersion = do
         scriptCurrencySymbol listPolicy
 
   pure $ mkUnbondedPoolParams adminPkh stateCs listCs ibp
-
---   addListTokenCs
---     :: CurrencySymbol -> Contract () (CurrencySymbol /\ CurrencySymbol)
---   addListTokenCs stateNftCs = do
---     listPolicy <- liftedE (mkListNFTPolicy Unbonded scriptVersion stateNftCs)
---     listNftCs <-
---       liftMaybe
---         (Exception.error "Could not obtain currency symbol from list policy")
---         $
---           scriptCurrencySymbol listPolicy
---     pure $ stateNftCs /\ listNftCs
--- symbols <- traverse addListTokenCs
---   $ Array.mapMaybe (getStateTokenCs <<< getValue)
---   $ Array.fromFoldable poolUtxos
--- when (Array.length symbols > 1) $
---   logWarn'
---     "(getUnbondedPoolsContract) More than one pool with the given address"
--- -- For each symbol, we create the bonded params and we returh all of them
--- adminPkh <- liftedM "(getUnbondedPoolsContract) Cannot get admin's pkh"
---   ownPaymentPubKeyHash
--- pure $ map
---   (\(stateCs /\ listCs) -> mkUnbondedPoolParams adminPkh stateCs listCs ibp)
---   symbols
