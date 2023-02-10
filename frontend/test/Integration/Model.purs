@@ -102,6 +102,7 @@ userWithdraw user = do
         withdrawnAmt = roundDown stakerFunds
       put $ s
         { stakers = Map.delete user s.stakers
+        , candidates = Map.delete user s.candidates
         , funds = s.funds - withdrawnAmt
         , staked = s.staked - stakerFunds
         }
@@ -131,7 +132,7 @@ adminDeposit newPromise = do
               updatePool
                 s.stakers
                 s.candidates
-                s.promised
+                newPromise
           put $ s
             { stakers = stakers'
             , candidates = candidates'
@@ -183,24 +184,19 @@ updatePool
      , staked :: Rational
      , adminDeposited :: BigInt
      }
-updatePool stakers candidates promised =
+updatePool stakers candidates newPromise =
   let
     -- Candidates get an amount proportional to their participation
-    rewards = Map.mapMaybeWithKey (\k _ -> calcRewards k) stakers
+    rewards = Map.mapMaybeWithKey (\k _ -> Map.lookup k candidates) stakers
     stakers' = Map.unionWith (+) stakers rewards
 
-    calcRewards :: Int -> Maybe Rational
-    calcRewards user = case Map.lookup user candidates of
-      Just participation -> Just $ participation * toRational promised
-      Nothing -> Nothing
-
-    -- We define the candidates for the next deposit and save their proportion
-    -- of the rewards.
+    -- We define the candidates for the next deposit and save their future
+    -- rewards.
     staked = sum stakers'
     candidates' = Map.mapMaybe (\v -> Just $ updateCandidate v) stakers'
 
     updateCandidate :: Rational -> Rational
-    updateCandidate funds = funds / staked
+    updateCandidate funds = funds / staked * toRational newPromise
 
     -- The admin deposits the sum of all the rounded-up users' rewards
     adminDeposited = sum $ roundUp <$> rewards

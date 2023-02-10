@@ -70,7 +70,7 @@ type PoolState =
   -- | A map from the stakers' indexes to their staked amount.
   , stakers :: Map Int Rational
   -- | A map of stakers that are candidates for the promised rewards. The value
-  -- of the map is the proportion of the rewards they can get.
+  -- of the map is the amount of rewards they can get.
   , candidates :: Map Int Rational
   -- | Amount of staked assets in the pool. This amount is increased only by the
   -- admin when depositing and decreased by the users when withdrawing.
