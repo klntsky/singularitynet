@@ -96,7 +96,6 @@ import Utils
   , mkAssetUtxosConstraints
   , mkOnchainAssocList
   , mustPayToScript
-  , nat
   , repeatUntilConfirmed
   )
 
@@ -391,8 +390,7 @@ mkClosedEntryConstraints d = do
     mintRedeemer =
       if d.userSubmitted then Redeemer $ toData $ ListRemove $ BurnSingle
         d.entryInput
-      else Redeemer $ toData $ AdminAct
-        { totalRewards: nat zero, totalDeposited: nat zero }
+      else Redeemer $ toData AdminAct
 
     constraints :: TxConstraints Unit Unit
     constraints =
@@ -467,8 +465,7 @@ firstEntryConstraints d poolTxInput = do
           { stakeHolder: d.userPkh
           , burningAction: BurnHead poolTxInput d.entryInput
           }
-      else Redeemer $ toData $ AdminAct
-        { totalDeposited: nat zero, totalRewards: nat zero }
+      else Redeemer $ toData AdminAct
     -- Build minting policy redeemer
     mintRedeemer = Redeemer $ toData $ ListRemove $ BurnHead
       poolTxInput
@@ -531,8 +528,7 @@ otherEntryConstraints d = do
           { stakeHolder: d.userPkh
           , burningAction: BurnOther firstInput secondInput
           }
-      else Redeemer $ toData $ AdminAct
-        { totalDeposited: nat zero, totalRewards: nat zero }
+      else Redeemer $ toData AdminAct
 
     mintRedeemer = Redeemer $ toData $ ListRemove $ BurnOther
       firstInput
