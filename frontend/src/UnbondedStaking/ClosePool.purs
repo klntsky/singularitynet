@@ -30,7 +30,6 @@ import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
-  , mustIncludeDatum
   , mustSpendScriptOutput
   , mustValidateIn
   )
@@ -144,8 +143,11 @@ closeUnbondedPoolContract
   -- Obtain the entries' inputs and datums and generate the updated versions
   -- of the datums.
   -- If an `IncompleteClose` value is provided, only the given
-  -- subset of the entries is updated.
-  (entriesInputs /\ entriesDatums /\ updatedEntriesDatums) <-
+  -- subset of the entries is updated. Also decide if a the state UTxO needs to
+  -- be consumed or not.
+  ( entriesInputs /\ entriesDatums /\ updatedEntriesDatums /\
+      needToConsumeStateUtxo
+  ) <-
     case incompleteClose' of
       Nothing -> do
         -- Use all entries
@@ -157,7 +159,7 @@ closeUnbondedPoolContract
         let
           updatedEntriesDatums :: Array Entry
           updatedEntriesDatums = updateAndCloseEntriesList entriesDatums
-        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
+        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums /\ true
       Just (IncompleteClose incompClose) -> do
         -- Use only the entries with the given keys
         let
@@ -189,7 +191,8 @@ closeUnbondedPoolContract
             updateAndCloseOutdatedEntriesList
               incompClose.totalDeposited
               entriesDatums
-        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums
+        pure $ entriesInputs /\ entriesDatums /\ updatedEntriesDatums /\ not
+          incompClose.stateUtxoConsumed
   -- Make constraints and lookups and close pool state and entries.
   let
     redeemer = Redeemer $ toData AdminAct
@@ -206,25 +209,34 @@ closeUnbondedPoolContract
   -- We deliberately omit the admin utxos, since batching includes
   -- them automatically before every batch.
 
-  -- Submit transaction that closes state utxo separately (if necessary)
-  stateUtxoConsumed <- case poolStateUtxo of
-    Just (poolTxInput /\ _ /\ _) -> do
-      adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
-        getWalletUtxos
-      Array.null <$> submitTransaction
-        constraints
-        lookups
-        confirmationTimeout
-        submissionAttempts
-        [ mustSpendScriptOutput poolTxInput redeemer /\
-            ScriptLookups.unspentOutputs adminUtxos
-        ]
-    Nothing -> pure false
-  if stateUtxoConsumed then logInfo'
-    "closeUnbondedPoolContract: Succesfully closed pool's state utxo"
-  else logInfo'
-    "closeUnbondedPool: Could not close pool state utxo"
-  -- Submit transaction that closes entries with possible batching
+  -- Submit transaction that closes state utxo separately (if necessary) and
+  -- evaluate if the state utxo is consumed or not.
+  stateUtxoConsumed <-
+    if needToConsumeStateUtxo then case poolStateUtxo of
+      Just (poolTxInput /\ _ /\ _) -> do
+        adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos"
+          $
+            getWalletUtxos
+        isClosed <- Array.null <$> submitTransaction
+          constraints
+          lookups
+          confirmationTimeout
+          submissionAttempts
+          [ mustSpendScriptOutput poolTxInput redeemer /\
+              ScriptLookups.unspentOutputs adminUtxos
+          ]
+        logInfo' $
+          if isClosed then
+            "closeUnbondedPoolContract: failed to consume state utxo"
+          else "closeUnbondedPoolContract: succesfully consumed state utxo"
+        pure isClosed
+      Nothing -> do
+        logInfo' "closeUnbondedPoolContract: could not find state utxo to close"
+        pure true
+    else do
+      logInfo' "closeUnbondedPoolContract: state utxo already closed"
+      pure true
+
   entryUpdates
     :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
     traverse (updateEntryTx params valHash)
