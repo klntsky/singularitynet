@@ -94,7 +94,7 @@ test initParams userCount = withWalletsAndPool initParams
               )
               zero
               entries
-          , stateUtxoConsumed: true
+          , stateUtxoConsumed: false
           }
         incompleteClose2 =
           IncompleteClose $ i1
@@ -109,7 +109,8 @@ test initParams userCount = withWalletsAndPool initParams
       when (not $ isNothing failedDeposits1)
         $ lift
         $ throwContractError
-        $ "Some entries failed to be updated " <> show failedDeposits1
+        $ "First close: Some entries failed to be closed " <> show
+            failedDeposits1
       -- Close last two users
       failedDeposits2 <- lift $ closeUnbondedPoolContract
         unbondedPoolParams
@@ -119,7 +120,8 @@ test initParams userCount = withWalletsAndPool initParams
       when (not $ isNothing failedDeposits2)
         $ lift
         $ throwContractError
-        $ "Some entries failed to be updated " <> show failedDeposits2
+        $ "Last close: Some entries failed to be closed " <> show
+            failedDeposits2
       -- Validate spent FAKEGIX amount
       finalFakegix <- getWalletFakegix
       let realAdminDeposit = initialFakegix - finalFakegix

@@ -4,55 +4,10 @@ const BigInteger = require("big-integer");
 
 const frontend = import("./output.js");
 
-exports.BondedPool = class BondedPool {
-  constructor(config, args, address) {
-    this.config = config;
-    this.args = args;
-    this.address = address;
-    this._config = this._getConfig(config);
-  }
-
-  async _getConfig(config) {
-    const contracts = await frontend;
-    const _config = await contracts.buildContractConfig(config)();
-    this._config = _config;
-  }
-
-  async deposit(amount, batchSize, idxArray) {
-    const contracts = await frontend;
-    const _config = await this._config;
-    return contracts.callDepositBondedPool(_config)(this.args)(amount)(
-      idxArray
-    )();
-  }
-
-  async close(batchSize, idxArray) {
-    const contracts = await frontend;
-    const _config = await this._config;
-    return contracts.callCloseBondedPool(_config)(this.args)(batchSize)(
-      idxArray
-    )();
-  }
-
-  async userStake(amount) {
-    const contracts = await frontend;
-    const _config = await this._config;
-    return contracts.callUserStakeBondedPool(_config)(this.args)(amount)();
-  }
-
-  async userWithdraw() {
-    const contracts = await frontend;
-    const _config = await this._config;
-    return contracts.callUserWithdrawBondedPool(_config)(this.args)();
-  }
-
-};
-
 exports.UnbondedPool = class UnbondedPool {
-  constructor(config, args, address, env) {
+  constructor(config, args, env) {
     this.config = config;
     this.args = args;
-    this.address = address;
     this._contractEnv = env;
   }
 
@@ -156,44 +111,20 @@ const arraybufferEqual = (buf1, buf2) => {
   return true;
 };
 
-exports.createBondedPool = async (sdkConfig, initialArgs) => {
-  const contracts = await frontend;
-  const config = await contracts.buildContractConfig(sdkConfig)();
-  const contractEnv = await contracts.callMkContractEnv(config)();
-  const info = await contracts.callCreateBondedPool(contractEnv)(initialArgs)();
-  return new exports.BondedPool(sdkConfig, info.args, info.address, contractEnv);
-};
-
-exports.getBondedPools = async (sdkConfig, address, initialArgs) => {
-  const contracts = await frontend;
-  const config = await contracts.buildContractConfig(sdkConfig)();
-  const contractEnv = await contracts.callMkContractEnv(config)();
-  const poolsBondedParams = await contracts.callGetBondedPools(contractEnv)(address)(initialArgs)();
-  let pools = [];
-  for (const bondedParams of poolsBondedParams) {
-      pools.push(new exports.BondedPool(sdkConfig, bondedParams, address, contractEnv));
-  }
-  return pools;
-};
-
 exports.createUnbondedPool = async (sdkConfig, initialArgs) => {
   const contracts = await frontend;
   const config = await contracts.buildContractConfig(sdkConfig)();
   const contractEnv = await contracts.callMkContractEnv(config)();
   const info = await contracts.callCreateUnbondedPool(contractEnv)(initialArgs)();
-  return new exports.UnbondedPool(sdkConfig, info.args, info.address, contractEnv);
+  return new exports.UnbondedPool(sdkConfig, info.args, contractEnv);
 };
 
-exports.getUnbondedPools = async (sdkConfig, address, initialArgs) => {
+exports.getUnbondedPool = async (sdkConfig, unbondedPoolArgs) => {
   const contracts = await frontend;
   const config = await contracts.buildContractConfig(sdkConfig)();
   const contractEnv = await contracts.callMkContractEnv(config)();
-  const poolsUnbondedParams = await contracts.callGetUnbondedPools(contractEnv)(address)(initialArgs)();
-  let pools = [];
-  for (const unbondedParams of poolsUnbondedParams) {
-      pools.push(new exports.UnbondedPool(sdkConfig, unbondedParams, address, contractEnv));
-  }
-  return pools;
+  const poolUnbondedParams = await contracts.callGetUnbondedPool(contractEnv)(unbondedPoolArgs.admin)(unbondedPoolArgs.nftCs)(unbondedPoolArgs)();
+  return new exports.UnbondedPool(sdkConfig, poolUnbondedParams, contractEnv);
 };
 
 exports.getNodeTime = async (sdkConfig) => {

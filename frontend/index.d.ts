@@ -114,11 +114,12 @@ export declare function createUnbondedPool(
   initialArgs: InitialUnbondedArgs
 ): Promise<UnbondedPool>;
 
-export declare function getUnbondedPools(
+export declare function getUnbondedPool(
   config: SdkConfig,
-  address: string,
+  adminPkh: string,
+  stateCs: string,
   initialArgs: InitialUnbondedArgs
-): Promise<Array<UnbondedPool>>;
+): Promise<UnbondedPool>;
 
 export type UnbondedPoolArgs = {
   start: BigInteger; // like POSIXTime so positive

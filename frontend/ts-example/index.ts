@@ -1,6 +1,6 @@
 import {
     main
-  } from './examples/incomplete';
+  } from './examples/default';
 
 // Run the contracts, see `main` above
 main()
