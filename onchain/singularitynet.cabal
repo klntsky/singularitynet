@@ -19,17 +19,21 @@ source-repository head
   type:     git
   location: https://github.com/mlabs-haskell/singularitynet
 
+-- Configuration
+
+Flag TimeChecks
+  Description: Enable time checks in serialised validators
+  Default: True
+
 -- Common sections
 
 common common-lang
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
-    -Wno-partial-type-signatures -Wmissing-export-lists
+    -Wno-partial-type-signatures -Wmissing-export-lists 
     -Wincomplete-record-updates -Wmissing-deriving-strategies
     -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists
-
-  ---Werror
+    -fprint-explicit-kinds -fwarn-missing-import-lists -Werror
 
   mixins:
     base hiding (Prelude),
@@ -114,6 +118,7 @@ library
     UnbondedStaking.PTypes
     UnbondedStaking.Types
     UnbondedStaking.UnbondedPool
+    UnbondedStaking.UnbondedPoolDebug
     Utils
 
   build-depends:
@@ -167,6 +172,7 @@ executable serialise
     , base
     , base16-bytestring
     , bytestring
+    , filepath
     , optparse-applicative
     , plutarch
     , plutus-ledger-api
@@ -176,3 +182,5 @@ executable serialise
     , text
 
   hs-source-dirs: exe
+  if flag(TimeChecks)
+    cpp-options: -DTimeChecks

@@ -42,7 +42,11 @@ mkStateNFTPolicy st sv txInput = do
   pure <<< rmap PlutusMintingPolicy $ applyArgs unappliedScript
     [ toData txInput ]
 
+_bondedStateNFTNoTimeChecks :: Json
+_bondedStateNFTNoTimeChecks = _bondedStateNFT
+
+_unbondedStateNFTNoTimeChecks :: Json
+_unbondedStateNFTNoTimeChecks = _unbondedStateNFT
+
 foreign import _bondedStateNFT :: Json
 foreign import _unbondedStateNFT :: Json
-foreign import _bondedStateNFTNoTimeChecks :: Json
-foreign import _unbondedStateNFTNoTimeChecks :: Json
