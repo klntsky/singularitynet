@@ -16,6 +16,7 @@ module SdkApi
   , callCreateBondedPool
   , callCreateUnbondedPool
   , callDepositBondedPool
+  , callDepositUnbondedPool
   , callGetBondedPools
   , callGetNodeTime
   , callGetUnbondedPool
