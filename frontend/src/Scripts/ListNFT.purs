@@ -42,7 +42,16 @@ mkListNFTPolicy st sv nftCs = do
   unappliedScript <- liftContractE $ listNFTPolicy st sv
   pure <<< rmap PlutusMintingPolicy $ applyArgs unappliedScript [ toData nftCs ]
 
-foreign import _bondedListNFT :: Json
-foreign import _unbondedListNFT :: Json
-foreign import _bondedListNFTNoTimeChecks :: Json
-foreign import _unbondedListNFTNoTimeChecks :: Json
+_bondedListNFTNoTimeChecks :: Json
+_bondedListNFTNoTimeChecks = _listNFT
+
+_unbondedListNFTNoTimeChecks :: Json
+_unbondedListNFTNoTimeChecks = _listNFT
+
+_bondedListNFT :: Json
+_bondedListNFT = _listNFT
+
+_unbondedListNFT :: Json
+_unbondedListNFT = _listNFT
+
+foreign import _listNFT :: Json
