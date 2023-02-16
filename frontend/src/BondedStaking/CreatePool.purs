@@ -14,11 +14,7 @@ import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionOutputWithRefScript
-  , balanceTx
-  , signTransaction
-  )
+import Contract.Transaction (TransactionOutputWithRefScript)
 import Contract.TxConstraints
   ( TxConstraints
   , mustMintValue
@@ -139,18 +135,8 @@ createBondedPoolContract ibp scriptVersion =
             , mustSpendPubKeyOutput txOutRef
             ]
 
-      unattachedUnbalancedTx <-
-        liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
-      logAesonInfo unattachedUnbalancedTx
-      -- `balanceAndSignTx` does the following:
-      -- 1) Balance a transaction
-      -- 2) Reindex `Spend` redeemers after finalising transaction inputs.
-      -- 3) Attach datums and redeemers to transaction.
-      -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
-      bTx <- liftedE $ balanceTx unattachedUnbalancedTx
-      signedTx <- signTransaction bTx
-      -- Return the transaction and the pool info for subsequent transactions
-      pure { signedTx, bondedPoolParams, address }
+      ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
+      pure { ubTx, bondedPoolParams, address }
 
 -- Get all the pools at the given address. Although more than one could be
 -- returned, in all likelihood the user intended (and managed) to create only

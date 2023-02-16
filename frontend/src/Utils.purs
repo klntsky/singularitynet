@@ -34,7 +34,7 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address (Address, Bech32String, PaymentPubKeyHash, getNetworkId)
 import Contract.Hashing (blake2b256Hash)
-import Contract.Log (logInfo, logInfo', logAesonInfo)
+import Contract.Log (logInfo, logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -53,7 +53,7 @@ import Contract.PlutusData
   , OutputDatum(OutputDatumHash)
   )
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray, byteArrayToHex)
-import Contract.ScriptLookups (ScriptLookups)
+import Contract.ScriptLookups (ScriptLookups, UnattachedUnbalancedTx)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript, ValidatorHash)
 import Contract.Time
@@ -75,6 +75,8 @@ import Contract.Transaction
   , signTransaction
   , submit
   )
+import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
+import Ctl.Internal.Cardano.Types.Transaction (TxBody)
 import Contract.TxConstraints
   ( TxConstraints
   , DatumPresence(DatumWitness)
@@ -90,6 +92,7 @@ import Contract.Value
   , getTokenName
   , valueOf
   )
+import Ctl.Internal.Cardano.Types.Value (Value, valueToCoin') as Cardano
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
 import Ctl.Internal.Plutus.Conversion (toPlutusAddress)
@@ -497,12 +500,8 @@ submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
       lookups = baseLookups <> mconcat lookupList
     result <- try $ repeatUntilConfirmed timeout maxAttempts do
       -- Build transaction
-      unattachedBalancedTx <-
-        liftedE $ ScriptLookups.mkUnbalancedTx lookups constraints
-      logAesonInfo unattachedBalancedTx
-      bTx <- liftedE $ balanceTx unattachedBalancedTx
-      signedTx <- signTransaction bTx
-      pure { signedTx }
+      ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookups constraints
+      pure { ubTx }
     case result of
       Left e -> do
         logInfo_ "submitTransaction:" e
@@ -555,16 +554,17 @@ submitBatchesSequentially
 repeatUntilConfirmed
   :: forall (r :: Row Type) (p :: Row Type)
    . Lacks "txId" p
-  => Lacks "signedTx" p
+  => Lacks "ubTx" p
   => Seconds
   -> Int
-  -> Contract r { signedTx :: BalancedSignedTransaction | p }
+  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
   -> Contract r
        { txId :: String | p }
 repeatUntilConfirmed timeout maxTrials contract = do
-  result@{ signedTx } <- contract
+  result@{ ubTx } <- contract
   logInfo' "repeatUntilConfirmed: transaction built successfully"
-  txHash <- submit signedTx
+  tx <- balanceAndSignTx' ubTx
+  txHash <- submit tx
   logInfo'
     "repeatUntilConfirmed: transaction submitted. Waiting for confirmation"
   confirmation <- try $ awaitTxConfirmedWithTimeout timeout txHash
@@ -586,7 +586,58 @@ repeatUntilConfirmed timeout maxTrials contract = do
       logInfo_ "TX Hash" txHash
       -- pure $ insert { txId: txHash } result
       pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
-        (delete (SProxy :: SProxy "signedTx") result)
+        (delete (SProxy :: SProxy "ubTx") result)
+
+-- | Balances and signs TXs. Handles `BalanceInsufficientError`
+-- exceptions occasioned by a very low amount of ADA by throwing a custom, more
+-- user-friendly error.
+balanceAndSignTx'
+  :: forall r. UnattachedUnbalancedTx -> Contract r BalancedSignedTransaction
+balanceAndSignTx' ubTx = do
+  result <- balanceTx ubTx
+  bTx <- case result of
+    Left e -> handleError e
+    Right r -> pure r
+  signTransaction bTx
+  where
+  handleError :: forall a. BalanceTxError -> Contract r a
+  handleError = case _ of
+    InsufficientTxInputs expected actual
+      | adaAmt expected < adaAmt actual ->
+          if adaAmt actual < fees + adaInOutputs then throwContractError
+            $
+              "balanceAndSignTx': Not enough ADA to cover the TX fees and the min. ADA requirement of the outputs. Actual: "
+            <> show (adaAmt actual)
+            <> " Expected: "
+            <> show (adaAmt expected)
+          else
+            throwContractError
+              $
+                "balanceAndSignTx': There is not enough ADA to cover the balancing of this transaction. Actual: "
+              <> show (adaAmt actual)
+              <> " Expected: "
+              <> show (adaAmt expected)
+      | otherwise -> throwContractError
+          "balanceAndSignTx': There is not enough of a non-Ada asset to balance this transaction."
+    err -> throwContractError err
+
+  adaAmt :: forall a. Newtype a Cardano.Value => a -> BigInt
+  adaAmt x = Cardano.valueToCoin' $ unwrap x
+
+  txBody :: TxBody
+  txBody =
+    unwrap
+      >>> _.unbalancedTx
+      >>> unwrap
+      >>> _.transaction
+      >>> unwrap
+      >>> _.body
+      $ ubTx
+
+  fees = unwrap >>> _.fee >>> unwrap $ txBody
+  adaInOutputs = sum $ map (unwrap >>> _.amount >>> Cardano.valueToCoin')
+    $ _.outputs
+    $ unwrap txBody
 
 mustPayToScript
   :: forall (i :: Type) (o :: Type)

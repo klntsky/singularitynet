@@ -13,7 +13,6 @@ import Contract.Scripts
   , Validator(Validator)
   , applyArgs
   )
-import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)
 import Scripts.Production (_bondedPoolValidator, _unbondedPoolValidator)

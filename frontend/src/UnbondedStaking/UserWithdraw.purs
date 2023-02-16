@@ -43,8 +43,6 @@ import Contract.Transaction
   ( TransactionInput
   , TransactionOutput
   , TransactionOutputWithRefScript
-  , balanceTx
-  , signTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -214,12 +212,7 @@ userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
         liftedE $ ScriptLookups.mkUnbalancedTx
           (baseLookups <> lookups)
           (baseConstraints <> constraints)
-      logInfo_
-        "userWithdrawUnbondedPoolContract: unAttachedUnbalancedTx"
-        ubTx
-      bTx <- liftedE $ balanceTx ubTx
-      signedTx <- signTransaction bTx
-      pure { signedTx }
+      pure { ubTx }
 
 -- | Obtain the necessary data for constructing the user withdrawal's
 -- constraints and lookups. With this info it's possible to do any kind of

@@ -28,6 +28,7 @@ module SdkApi
   , callUserStakeBondedPool
   , callUserStakeUnbondedPool
   , callUserWithdrawBondedPool
+  , callAdminWithdrawUnbondedPool
   , callUserWithdrawUnbondedPool
   , fromSdkLogLevel
   , toUnbondedPoolArgs

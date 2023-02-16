@@ -10,7 +10,7 @@ import Contract.Address
   , ownStakePubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo', logAesonInfo)
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -31,12 +31,7 @@ import Contract.PlutusData
 import Contract.Prim.ByteArray (ByteArray)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( TransactionInput
-  , TransactionOutputWithRefScript
-  , balanceTx
-  , signTransaction
-  )
+import Contract.Transaction (TransactionInput, TransactionOutputWithRefScript)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -398,12 +393,8 @@ userWithdrawBondedPoolContract
 
           pure $ constraints /\ lookup
 
-  unattachedBalancedTx <-
-    liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
-  logAesonInfo unattachedBalancedTx
-  bTx <- liftedE $ balanceTx unattachedBalancedTx
-  signedTx <- signTransaction bTx
-  pure { signedTx }
+  ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
+  pure { ubTx }
 
 -- | This function filters all the asset UTxOs from a `UtxoMap`
 getBondedAssetUtxos :: forall (r :: Row Type). UtxoMap -> Contract r UtxoMap

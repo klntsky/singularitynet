@@ -29,7 +29,7 @@ import Contract.PlutusData
   )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (TransactionOutput, balanceTx, signTransaction)
+import Contract.Transaction (TransactionOutput)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -582,12 +582,5 @@ userStakeUnbondedPoolContract
       "userStakeUnbondedPoolContract: \
       \Datum incorrect type"
 
-  unattachedBalancedTx <-
-    liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
-  logInfo_
-    "userStakeUnbondedPoolContract: unAttachedUnbalancedTx"
-    unattachedBalancedTx
-  bTx <- liftedE $ balanceTx unattachedBalancedTx
-  signedTx <- signTransaction bTx
-  -- Submit transaction using Cbor-hex encoded `ByteArray`
-  pure { signedTx }
+  ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
+  pure { ubTx }

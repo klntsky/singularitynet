@@ -17,10 +17,6 @@ import Contract.Monad (Contract, liftContractM, liftedE, liftedE', liftedM)
 import Contract.PlutusData (Datum(Datum), PlutusData, toData)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction
-  ( balanceTx
-  , signTransaction
-  )
 import Contract.TxConstraints
   ( TxConstraints
   , mustMintValue
@@ -140,18 +136,9 @@ createUnbondedPoolContract iup scriptVersion =
           , mustSpendPubKeyOutput txOutRef
           ]
 
-    unattachedBalancedTx <-
-      liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
+    ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
 
-    -- `balanceAndSignTx` does the following:
-    -- 1) Balance a transaction
-    -- 2) Reindex `Spend` redeemers after finalising transaction inputs.
-    -- 3) Attach datums and redeemers to transaction.
-    -- 3) Sign tx, returning the Cbor-hex encoded `ByteArray`.
-    bTx <- liftedE $ balanceTx unattachedBalancedTx
-    signedTx <- signTransaction bTx
-    -- Return the pool info for subsequent transactions
-    pure { signedTx, unbondedPoolParams, address }
+    pure { ubTx, unbondedPoolParams, address }
 
 -- To know the pool we need to know the initialUnbondedParams, the admin pkh and the CS of the state token
 getUnbondedPoolContract

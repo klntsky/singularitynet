@@ -9,7 +9,7 @@ import Contract.Address
   , ownPaymentPubKeyHash
   , scriptHashAddress
   )
-import Contract.Log (logInfo', logAesonInfo)
+import Contract.Log (logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -29,7 +29,6 @@ import Contract.PlutusData
   )
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (validatorHash)
-import Contract.Transaction (balanceTx, signTransaction)
 import Contract.TxConstraints
   ( TxConstraints
   , mustBeSignedBy
@@ -540,9 +539,5 @@ userStakeBondedPoolContract
       "userStakeBondedPoolContract: \
       \Datum incorrect type"
 
-  unattachedBalancedTx <-
-    liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
-  logAesonInfo unattachedBalancedTx
-  bTx <- liftedE $ balanceTx unattachedBalancedTx
-  signedTx <- signTransaction bTx
-  pure { signedTx }
+  ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookup constraints
+  pure { ubTx }
