@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Main (main) where
 
 {- TODO: Update documentation
@@ -16,7 +17,6 @@ module Main (main) where
   the result to screen.
 -}
 
-import Control.Monad (when)
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy qualified as T
@@ -33,108 +33,64 @@ import Options.Applicative (
   info,
   long,
   metavar,
-  option,
   progDesc,
   short,
   showDefault,
-  str,
   subparser,
-  switch,
-  value,
  )
-import Plutarch.Api.V1 (scriptHash)
 import Plutus.V1.Ledger.Scripts (Script)
 
 import BondedStaking.BondedPool (pbondedPoolValidatorUntyped)
 import ListNFT (plistNFTPolicyUntyped)
-import Plutarch (ClosedTerm, compile)
+import Plutarch (compile)
 import SingularityNet.Settings (bondedStakingTokenName, unbondedStakingTokenName)
 import StateNFT (pstateNFTPolicyUntyped)
+#ifdef TimeChecks
 import UnbondedStaking.UnbondedPool (punbondedPoolValidatorUntyped)
+#else
+import UnbondedStaking.UnbondedPoolDebug (punbondedPoolValidatorUntyped)
+#endif
+import Options.Applicative.Builder (strOption)
 
 serialisePlutusScript :: Script -> Text
 serialisePlutusScript script = encodeToLazyText script
 
-writeScriptToFile ::
-  (FilePath -> Text -> IO ()) ->
-  Text ->
+writeScriptsToFile ::
   FilePath ->
-  Script ->
+  [(Text, Script)] ->
   IO ()
-writeScriptToFile writerFunc name filepath script =
-  writerFunc filepath $
-    "exports._" <> name <> " = {\n"
-      <> "\tscript: "
-      <> serialisePlutusScript script
-      <> ",\n};\n"
-
-serialiseClosedTerm ::
-  forall (s :: PType).
-  ClosedTerm s ->
-  (FilePath -> Text -> IO ()) ->
-  CLI ->
-  String ->
-  String ->
-  IO ()
-serialiseClosedTerm closedTerm writerFunc args name json = do
-  let script = compile closedTerm
-      hash = scriptHash script
-  writeScriptToFile
-    writerFunc
-    (T.pack name)
-    (maybe json id $ outPath args)
-    script
-  when (printHash args) $
-    putStr $ "\n" <> name <> " hash (unapplied): " <> show hash
+writeScriptsToFile filepath nameScripts =
+  TIO.writeFile filepath $
+    "// File generated automatically by serialise\n"
+      <> T.concat (fmap (\(name, script) ->
+         "exports._" <> name <> " = {\n"
+           <> "\tscript: "
+           <> serialisePlutusScript script
+           <> ",\n};\n"
+         ) nameScripts)
 
 main :: IO ()
 main = do
   args <- execParser opts
   case cliCommand args of
     SerialiseStateNFT -> do
-      serialiseClosedTerm
-        (pstateNFTPolicyUntyped bondedStakingTokenName)
-        TIO.writeFile
-        args
-        "bondedStateNFT"
-        "StateNFT.json"
-      serialiseClosedTerm
-        (pstateNFTPolicyUntyped unbondedStakingTokenName)
-        TIO.appendFile
-        args
-        "unbondedStateNFT"
-        "StateNFT.json"
+      writeScriptsToFile
+        (outPath args)
+        [("bondedStateNFT", compile $ pstateNFTPolicyUntyped bondedStakingTokenName)
+         , ("unbondedStateNFT", compile $ pstateNFTPolicyUntyped unbondedStakingTokenName)]
     SerialiseListNFT -> do
-      serialiseClosedTerm
-        plistNFTPolicyUntyped
-        TIO.writeFile
-        args
-        "bondedListNFT"
-        "ListNFT.json"
-      serialiseClosedTerm
-        plistNFTPolicyUntyped
-        TIO.appendFile
-        args
-        "unbondedListNFT"
-        "ListNFT.json"
+      writeScriptsToFile
+        (outPath args)
+        [("listNFT", compile plistNFTPolicyUntyped)]
     SerialiseValidator -> do
-      serialiseClosedTerm
-        pbondedPoolValidatorUntyped
-        TIO.writeFile
-        args
-        "bondedPoolValidator"
-        "PoolValidator.json"
-      serialiseClosedTerm
-        punbondedPoolValidatorUntyped
-        TIO.appendFile
-        args
-        "unbondedPoolValidator"
-        "PoolValidator.json"
+      writeScriptsToFile
+        (outPath args)
+        [("bondedPoolValidator", compile pbondedPoolValidatorUntyped)
+        ,("unbondedPoolValidator", compile punbondedPoolValidatorUntyped)]
 
 -- Parsers --
 data CLI = CLI
-  { outPath :: Maybe FilePath
-  , printHash :: Bool
+  { outPath :: FilePath
   , cliCommand :: CLICommand
   }
 
@@ -155,7 +111,6 @@ parser :: Parser CLI
 parser =
   CLI
     <$> outOption
-    <*> printHashSwitch
     <*> commandParser
 
 commandParser :: Parser CLICommand
@@ -195,21 +150,12 @@ serialiseValidatorCommand =
             "Serialise the pool validators"
       )
 
-outOption :: Parser (Maybe FilePath)
+outOption :: Parser FilePath
 outOption =
-  option
-    (Just <$> str)
+  strOption
     ( long "out"
         <> short 'o'
         <> metavar "OUT"
-        <> help "Location of serialised file"
-        <> value Nothing
+        <> help "Path of serialised file"
         <> showDefault
-    )
-
-printHashSwitch :: Parser Bool
-printHashSwitch =
-  switch
-    ( long "print-hash"
-        <> short 'v'
     )

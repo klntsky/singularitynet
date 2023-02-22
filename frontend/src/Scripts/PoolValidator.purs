@@ -16,6 +16,11 @@ import Contract.Scripts
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)
+import Scripts.Production (_bondedPoolValidator, _unbondedPoolValidator)
+import Scripts.Debug
+  ( _bondedPoolValidatorNoTimeChecks
+  , _unbondedPoolValidatorNoTimeChecks
+  )
 import Types (BondedPoolParams, ScriptVersion(..))
 import UnbondedStaking.Types (UnbondedPoolParams)
 import Utils (jsonReader)
@@ -59,8 +64,3 @@ mkValidator
 mkValidator ps params = do
   unappliedScript <- liftedE $ pure ps
   pure <<< rmap Validator $ applyArgs unappliedScript [ toData params ]
-
-foreign import _bondedPoolValidator :: Json
-foreign import _unbondedPoolValidator :: Json
-foreign import _bondedPoolValidatorNoTimeChecks :: Json
-foreign import _unbondedPoolValidatorNoTimeChecks :: Json
