@@ -4,7 +4,6 @@ module Settings
   , bondedStakingTokenName
   , ntxCs
   , ntxTn
-  , testInitBondedParams
   , testInitUnbondedParams
   , unbondedStakingTokenName
   , confirmationTimeout
@@ -27,10 +26,7 @@ import Contract.Value
 import Data.Int as Int
 import Data.Maybe (Maybe)
 import Data.Time.Duration (Seconds(Seconds))
-import Types
-  ( AssetClass(AssetClass)
-  , InitialBondedParams(InitialBondedParams)
-  )
+import Types (AssetClass(AssetClass))
 import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams))
 import Utils (nat, big)
 
@@ -40,10 +36,6 @@ bondedStakingTokenName = mkTokenName =<< byteArrayFromAscii "BondedStakingToken"
 unbondedStakingTokenName :: Maybe TokenName
 unbondedStakingTokenName = mkTokenName =<< byteArrayFromAscii
   "UnbondedStakingToken"
-
--- Defined as fixed rate for one cycle in APY
-bondedInterest :: Maybe Rational
-bondedInterest = toRational <$> fromNaturals (nat 10) (nat 100)
 
 -- Defined as fixed rate for one time increment in APY
 unbondedInterest :: Maybe Rational
@@ -63,27 +55,6 @@ ntxCs = mkCurrencySymbol
 
 ntxTn :: Maybe TokenName
 ntxTn = mkTokenName =<< byteArrayFromAscii "NTX"
-
--- Used for local example:
-testInitBondedParams :: Maybe InitialBondedParams
-testInitBondedParams = do
-  interest <- bondedInterest
-  currencySymbol <- agixCs
-  tokenName <- agixTn
-  pure $ InitialBondedParams
-    { iterations: nat 1
-    , start: big 1000 -- dummy value
-    , end: big 2000 -- dummy value
-    , userLength: big 180_000 -- We use 3 minutes to make testing manageable
-    , bondingLength: big 180_000
-    , interest
-    , minStake: nat 1
-    , maxStake: nat 50_000
-    , bondedAssetClass: AssetClass
-        { currencySymbol
-        , tokenName
-        }
-    }
 
 testInitUnbondedParams :: Maybe InitialUnbondedParams
 testInitUnbondedParams = do

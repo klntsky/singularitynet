@@ -12,7 +12,6 @@ module Utils
   , jsonReader
   , logInfo_
   , mkAssetUtxosConstraints
-  , mkBondedPoolParams
   , mkOnchainAssocList
   , mkRatUnsafe
   , toRational
@@ -127,8 +126,6 @@ import Prim.Row (class Lacks)
 import Record (insert, delete)
 import Types
   ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
   , MintingAction(MintEnd, MintInBetween)
   )
 
@@ -251,30 +248,6 @@ logInfo_
   -> a
   -> Contract r Unit
 logInfo_ k = flip logInfo mempty <<< tag k <<< show
-
--- Creates the `BondedPoolParams` from the `InitialBondedParams` and runtime
--- parameters from the user.
-mkBondedPoolParams
-  :: PaymentPubKeyHash
-  -> CurrencySymbol
-  -> CurrencySymbol
-  -> InitialBondedParams
-  -> BondedPoolParams
-mkBondedPoolParams admin nftCs assocListCs (InitialBondedParams ibp) = do
-  BondedPoolParams
-    { iterations: ibp.iterations
-    , start: ibp.start
-    , end: ibp.end
-    , userLength: ibp.userLength
-    , bondingLength: ibp.bondingLength
-    , interest: ibp.interest
-    , minStake: ibp.minStake
-    , maxStake: ibp.maxStake
-    , admin
-    , bondedAssetClass: ibp.bondedAssetClass
-    , nftCs
-    , assocListCs
-    }
 
 hashPkh :: PaymentPubKeyHash -> Aff ByteArray
 hashPkh =
