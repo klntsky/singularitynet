@@ -94,6 +94,8 @@ suite =
       runMachineWith testInitialParamsNoTimeChecks twoStakesInARow
     test "Rounding" $
       runMachineWith testInitialParamsNoTimeChecks rounding
+    test "Stake-withdraw-stake" $
+      runMachineWith testInitialParamsNoTimeChecks stakeWithdrawStake
     group "Random" $ runMachine testInitialParamsNoTimeChecks inputCfg 10
 
 -- | A test for validating stake updates
@@ -125,6 +127,24 @@ rounding =
   , adminInputs:
       [ { command: AdminDeposit $ BigInt.fromInt 1138, result: Success }
       , { command: AdminDeposit $ BigInt.fromInt 1435, result: Success }
+      ]
+  }
+
+-- | A test for validating the scenario where a user stakes in first cycle and
+-- then withdraws-stakes in the second. The user is entitled to full rewards,
+-- since they have locked their funds for the entirety of the bonding period.
+stakeWithdrawStake :: StateMachineOnlyInputs
+stakeWithdrawStake =
+  { usersInputs:
+      [ [ [ { command: UserStake $ BigInt.fromInt 5000, result: Success } ] ]
+      , [ [ { command: UserWithdraw, result: Success }
+          , { command: UserStake $ BigInt.fromInt 1000, result: Success }
+          ]
+        ]
+      ]
+  , adminInputs:
+      [ { command: AdminDeposit $ BigInt.fromInt 1000, result: Success }
+      , { command: AdminDeposit $ BigInt.fromInt 0, result: Success }
       ]
   }
 
