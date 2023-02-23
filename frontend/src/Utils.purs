@@ -24,6 +24,7 @@ module Utils
   , toIntUnsafe
   , valueOf'
   , repeatUntilConfirmed
+  , repeatUntilConfirmed'
   , mustPayToScript
   , getUtxoDatumHash
   , addressFromBech32
@@ -74,8 +75,6 @@ import Contract.Transaction
   , signTransaction
   , submit
   )
-import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
-import Ctl.Internal.Cardano.Types.Transaction (TxBody)
 import Contract.TxConstraints
   ( TxConstraints
   , DatumPresence(DatumWitness)
@@ -87,14 +86,27 @@ import Contract.Value
   ( CurrencySymbol
   , TokenName
   , Value
+  , adaSymbol
+  , adaToken
   , flattenNonAdaAssets
+  , flattenValue
+  , getCurrencySymbol
   , getTokenName
+  , negation
   , valueOf
   )
-import Ctl.Internal.Cardano.Types.Value (Value, valueToCoin') as Cardano
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
-import Ctl.Internal.Plutus.Conversion (toPlutusAddress)
+import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
+import Ctl.Internal.Cardano.Types.Transaction (TxBody)
+import Ctl.Internal.Cardano.Types.Value
+  ( Value(..)
+  , Coin(..)
+  , flattenNonAdaValue
+  , valueToCoin'
+  , minus
+  ) as CardanoValue
+import Ctl.Internal.Plutus.Conversion (toPlutusAddress, toPlutusValue)
 import Ctl.Internal.Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Ctl.Internal.Serialization.Hash (ed25519KeyHashToBytes)
 import Data.Argonaut.Core (Json, caseJsonObject)
@@ -109,11 +121,21 @@ import Data.Array
   , mapMaybe
   , slice
   , sortBy
+  , (:)
   , (..)
   )
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
+import Data.BigInt
+  ( BigInt
+  , fromInt
+  , fromNumber
+  , quot
+  , rem
+  , toInt
+  , toNumber
+  , toString
+  )
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
 import Data.Symbol (SProxy(..))
@@ -124,10 +146,9 @@ import Effect.Exception (error, throw)
 import Math (ceil)
 import Prim.Row (class Lacks)
 import Record (insert, delete)
-import Types
-  ( AssetClass(AssetClass)
-  , MintingAction(MintEnd, MintInBetween)
-  )
+import Settings (unbondedStakingTokenName)
+import Types (AssetClass(AssetClass), MintingAction(MintEnd, MintInBetween))
+import UnbondedStaking.Types (UnbondedPoolParams(..))
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
 -- typed validator
@@ -202,14 +223,6 @@ mkAssetUtxosConstraints utxos redeemer =
     ( Map.toUnfoldable $ utxos
         :: Array (TransactionInput /\ TransactionOutputWithRefScript)
     )
-
--- | Convert from `Int` to `Natural`
-nat :: Int -> Natural
-nat = fromBigInt' <<< fromInt
-
--- | Convert from `Int` to `BigInt`
-big :: Int -> BigInt
-big = fromInt
 
 roundUp :: Rational -> BigInt
 roundUp r =
@@ -448,7 +461,8 @@ splitByLength size array
 -- | Submits a transaction with the given list of constraints/lookups. It
 -- returns the same constraints/lookups if it fails.
 submitTransaction
-  :: TxConstraints Unit Unit
+  :: UnbondedPoolParams
+  -> TxConstraints Unit Unit
   -> ScriptLookups.ScriptLookups PlutusData
   -> Seconds
   -> Int
@@ -464,14 +478,14 @@ submitTransaction
                (ScriptLookups.ScriptLookups PlutusData)
            )
        )
-submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
+submitTransaction ubp baseConstraints baseLookups timeout maxAttempts updateList =
   do
     let
       constraintList = fst <$> updateList
       lookupList = snd <$> updateList
       constraints = baseConstraints <> mconcat constraintList
       lookups = baseLookups <> mconcat lookupList
-    result <- try $ repeatUntilConfirmed timeout maxAttempts do
+    result <- try $ repeatUntilConfirmed ubp timeout maxAttempts do
       -- Build transaction
       ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookups constraints
       pure { ubTx }
@@ -486,7 +500,8 @@ submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
 -- is defined by a given list of constraints/lookups. Importantly, for each
 -- batch the wallet's UTxOs are fetched and added to the lookups.
 submitBatchesSequentially
-  :: TxConstraints Unit Unit
+  :: UnbondedPoolParams
+  -> TxConstraints Unit Unit
   -> ScriptLookups PlutusData
   -> Seconds
   -> Int
@@ -505,6 +520,7 @@ submitBatchesSequentially
            )
        )
 submitBatchesSequentially
+  ubp
   constraints
   lookups
   confirmationTimeout
@@ -516,7 +532,7 @@ submitBatchesSequentially
     utxos <- liftedM "submitBatchesSequentially: could not get wallet utxos" $
       getWalletUtxos
     let lookups' = lookups <> ScriptLookups.unspentOutputs utxos
-    submitTransaction constraints lookups' confirmationTimeout
+    submitTransaction ubp constraints lookups' confirmationTimeout
       submissionAttempts
       batch
 
@@ -528,15 +544,16 @@ repeatUntilConfirmed
   :: forall (r :: Row Type) (p :: Row Type)
    . Lacks "txId" p
   => Lacks "ubTx" p
-  => Seconds
+  => UnbondedPoolParams
+  -> Seconds
   -> Int
   -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
   -> Contract r
        { txId :: String | p }
-repeatUntilConfirmed timeout maxTrials contract = do
+repeatUntilConfirmed ubp timeout maxTrials contract = do
   result@{ ubTx } <- contract
   logInfo' "repeatUntilConfirmed: transaction built successfully"
-  tx <- balanceAndSignTx' ubTx
+  tx <- balanceAndSignTx ubp ubTx
   txHash <- submit tx
   logInfo'
     "repeatUntilConfirmed: transaction submitted. Waiting for confirmation"
@@ -553,64 +570,137 @@ repeatUntilConfirmed timeout maxTrials contract = do
         logInfo' $ "repeatUntilConfirmed: running transaction again, "
           <> show maxTrials
           <> " trials remaining"
-        repeatUntilConfirmed timeout (maxTrials - 1) contract
+        repeatUntilConfirmed ubp timeout (maxTrials - 1) contract
     Right _ -> do
       logInfo' "repeatUntilConfirmed: transaction confirmed!"
       logInfo_ "TX Hash" txHash
-      -- pure $ insert { txId: txHash } result
+      pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
+        (delete (SProxy :: SProxy "ubTx") result)
+
+-- | A variant of `repeatUntilConfirmed` less comprehensive error support.
+-- This is used by `createPool`, since by the time the pool is created, there
+-- are no `UnbondedPoolParams` to provide better error messages.
+repeatUntilConfirmed'
+  :: forall (r :: Row Type) (p :: Row Type)
+   . Lacks "txId" p
+  => Lacks "ubTx" p
+  => Seconds
+  -> Int
+  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
+  -> Contract r
+       { txId :: String | p }
+
+repeatUntilConfirmed' timeout maxTrials contract = do
+  result@{ ubTx } <- contract
+  logInfo' "repeatUntilConfirmed: transaction built successfully"
+  bTx <- liftedE $ balanceTx ubTx
+  tx <- signTransaction bTx
+  txHash <- submit tx
+  logInfo'
+    "repeatUntilConfirmed: transaction submitted. Waiting for confirmation"
+  confirmation <- try $ awaitTxConfirmedWithTimeout timeout txHash
+  case confirmation of
+    Left _ -> do
+      logInfo'
+        "repeatUntilConfirmed: timeout reached, the transaction was not confirmed"
+      if maxTrials == 0 then do
+        logInfo'
+          "repeatUntilConfirmed: no more trials remaining, throwing exception..."
+        liftEffect $ throw "Failed to submit transaction"
+      else do
+        logInfo' $ "repeatUntilConfirmed: running transaction again, "
+          <> show maxTrials
+          <> " trials remaining"
+        repeatUntilConfirmed' timeout (maxTrials - 1) contract
+    Right _ -> do
+      logInfo' "repeatUntilConfirmed: transaction confirmed!"
+      logInfo_ "TX Hash" txHash
       pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
         (delete (SProxy :: SProxy "ubTx") result)
 
 -- | Balances and signs TXs. Handles `BalanceInsufficientError`
 -- exceptions occasioned by a very low amount of ADA by throwing a custom, more
 -- user-friendly error.
-balanceAndSignTx'
-  :: forall r. UnattachedUnbalancedTx -> Contract r BalancedSignedTransaction
-balanceAndSignTx' ubTx = do
+balanceAndSignTx
+  :: forall r
+   . UnbondedPoolParams
+  -> UnattachedUnbalancedTx
+  -> Contract r BalancedSignedTransaction
+balanceAndSignTx ubp ubTx = do
   result <- balanceTx ubTx
   bTx <- case result of
-    Left e -> handleError e
+    Left e -> handleBalanceError ubp e
     Right r -> pure r
   signTransaction bTx
+
+-- | Match on a `BalanceTxError` and output a user-friendly, domain-specific
+-- error
+handleBalanceError
+  :: forall r a. UnbondedPoolParams -> BalanceTxError -> Contract r a
+handleBalanceError ubp err = case err of
+  InsufficientTxInputs expected actual ->
+    throwValueDifference
+      ubp
+      $ toPlutusValue (unwrap expected)
+          `minus` toPlutusValue (unwrap actual)
+  _ -> throwContractError err
   where
-  handleError :: forall a. BalanceTxError -> Contract r a
-  handleError = case _ of
-    InsufficientTxInputs expected actual
-      | adaAmt expected < adaAmt actual ->
-          if adaAmt actual < fees + adaInOutputs then throwContractError
-            $
-              "balanceAndSignTx': Not enough ADA to cover the TX fees and the min. ADA requirement of the outputs. Actual: "
-            <> show (adaAmt actual)
-            <> " Expected: "
-            <> show (adaAmt expected)
-          else
-            throwContractError
-              $
-                "balanceAndSignTx': There is not enough ADA to cover the balancing of this transaction. Actual: "
-              <> show (adaAmt actual)
-              <> " Expected: "
-              <> show (adaAmt expected)
-      | otherwise -> throwContractError
-          "balanceAndSignTx': There is not enough of a non-Ada asset to balance this transaction."
-    err -> throwContractError err
+  minus :: Value -> Value -> Value
+  minus v1 v2 = v1 <> negation v2
 
-  adaAmt :: forall a. Newtype a Cardano.Value => a -> BigInt
-  adaAmt x = Cardano.valueToCoin' $ unwrap x
+throwValueDifference
+  :: forall r a
+   . UnbondedPoolParams
+  -> Value
+  -> Contract r a
+throwValueDifference
+  (UnbondedPoolParams ubp)
+  diff =
+  do
+    let
+      AssetClass { currencySymbol: agixCs, tokenName: agixTn } =
+        ubp.unbondedAssetClass
 
-  txBody :: TxBody
-  txBody =
-    unwrap
-      >>> _.unbalancedTx
-      >>> unwrap
-      >>> _.transaction
-      >>> unwrap
-      >>> _.body
-      $ ubTx
+      -- `flattenValue` ignores the non-positive parts and this is exactly what
+      -- we want, since negative and zero means a given asset is sufficient in
+      -- the inputs.
+      insufficientAssets :: Array (CurrencySymbol /\ TokenName /\ BigInt)
+      insufficientAssets = flattenValue diff
+    nftTn <- liftMaybe
+      (error "throwValueDifference: could not get unbonded token name")
+      unbondedStakingTokenName
+    let
+      msg :: BigInt -> String -> String
+      msg n assetName = "Insufficient inputs: Missing " <> toString n
+        <> " "
+        <> assetName
 
-  fees = unwrap >>> _.fee >>> unwrap $ txBody
-  adaInOutputs = sum $ map (unwrap >>> _.amount >>> Cardano.valueToCoin')
-    $ _.outputs
-    $ unwrap txBody
+      mismatches :: Array String
+      mismatches =
+        map
+          ( \(cs /\ tn /\ n) -> case unit of
+              _
+                | cs == adaSymbol && tn == adaToken -> msg n "Lovelace"
+                | cs == agixCs && tn == agixTn -> msg n "AGIX"
+                | cs == ubp.nftCs && tn == nftTn ->
+                    "Missing input: Could not find pool's state UTxO"
+                | cs == ubp.assocListCs ->
+                    "Missing input: Could not find UTxO for entry with key "
+                      <> (byteArrayToHex <<< getTokenName) tn
+                | otherwise -> "Insufficient inputs: Missing "
+                    <> toString n
+                    <> " of unknown asset with currency symbol \""
+                    <> (byteArrayToHex <<< getCurrencySymbol) cs
+                    <> "\" and token name \""
+                    <> (byteArrayToHex <<< getTokenName) tn
+                    <> "\""
+          )
+          insufficientAssets
+
+    throwContractError
+      $ mconcat
+      $ Array.intersperse ", "
+          mismatches
 
 mustPayToScript
   :: forall (i :: Type) (o :: Type)
@@ -641,3 +731,11 @@ addressFromBech32 str = do
 -- | `valueOf` but with sane argument ordering.
 valueOf' :: CurrencySymbol -> TokenName -> Value -> BigInt
 valueOf' cs tn v = valueOf v cs tn
+
+-- | Convert from `Int` to `Natural`
+nat :: Int -> Natural
+nat = fromBigInt' <<< fromInt
+
+-- | Convert from `Int` to `BigInt`
+big :: Int -> BigInt
+big = fromInt

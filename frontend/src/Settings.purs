@@ -13,22 +13,16 @@ module Settings
 import Contract.Prelude
 
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
+import Contract.Numeric.Natural (Natural, fromBigInt')
 import Contract.Numeric.Rational (Rational)
 import Contract.Prim.ByteArray (byteArrayFromAscii, hexToByteArray)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  -- , adaSymbol
-  -- , adaToken
-  , mkCurrencySymbol
-  , mkTokenName
-  )
+import Contract.Value (CurrencySymbol, TokenName, mkCurrencySymbol, mkTokenName)
+import Data.BigInt (BigInt, fromInt)
 import Data.Int as Int
 import Data.Maybe (Maybe)
 import Data.Time.Duration (Seconds(Seconds))
 import Types (AssetClass(AssetClass))
 import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams))
-import Utils (nat, big)
 
 bondedStakingTokenName :: Maybe TokenName
 bondedStakingTokenName = mkTokenName =<< byteArrayFromAscii "BondedStakingToken"
@@ -86,4 +80,13 @@ confirmationTimeout = Seconds $ Int.toNumber 120
 -- | throwing an error
 submissionAttempts :: Int
 submissionAttempts = 5
+
+-- We use local definitions of `nat` and `big` to avoid an import cycle between
+-- this module and `Utils`
+
+nat :: Int -> Natural
+nat = fromBigInt' <<< fromInt
+
+big :: Int -> BigInt
+big = fromInt
 

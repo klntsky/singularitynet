@@ -242,6 +242,7 @@ depositUnbondedPoolContract
       failedDeposits <-
         if batchSize == zero then
           submitTransaction
+            params
             constraints
             (lookups <> ScriptLookups.unspentOutputs adminUtxos)
             confirmationTimeout
@@ -252,6 +253,7 @@ depositUnbondedPoolContract
             entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
               entryUpdates
           submitBatchesSequentially
+            params
             constraints
             lookups
             confirmationTimeout

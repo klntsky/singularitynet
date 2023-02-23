@@ -14,10 +14,9 @@ import Contract.Scripts
   )
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)
-import Scripts.Production (_bondedPoolValidator, _unbondedPoolValidator)
+import Scripts.Production (_unbondedPoolValidator)
 import Scripts.Debug
-  ( _bondedPoolValidatorNoTimeChecks
-  , _unbondedPoolValidatorNoTimeChecks
+  ( _unbondedPoolValidatorNoTimeChecks
   )
 import Types (ScriptVersion(..))
 import UnbondedStaking.Types (UnbondedPoolParams)

@@ -159,7 +159,7 @@ userWithdrawUnbondedPoolContract'
   -> Contract ()
        { txId :: String }
 userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
-  repeatUntilConfirmed confirmationTimeout submissionAttempts
+  repeatUntilConfirmed params confirmationTimeout submissionAttempts
     do
       -- Get withdrawal information
       d <- getWithdrawalData params scriptVersion userAddr iAmUser

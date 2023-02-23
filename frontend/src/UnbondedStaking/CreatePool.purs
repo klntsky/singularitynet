@@ -50,7 +50,7 @@ import UnbondedStaking.Utils (mkUnbondedPoolParams)
 import Utils
   ( logInfo_
   , mustPayToScript
-  , repeatUntilConfirmed
+  , repeatUntilConfirmed'
   )
 
 -- Sets up pool configuration, mints the state NFT and deposits
@@ -64,7 +64,7 @@ createUnbondedPoolContract
        , address :: Bech32String
        }
 createUnbondedPoolContract iup scriptVersion =
-  repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
+  repeatUntilConfirmed' confirmationTimeout submissionAttempts $ do
     adminPkh <- liftedM "createUnbondedPoolContract: Cannot get admin's pkh"
       ownPaymentPubKeyHash
     -- Get the (Nami) wallet address

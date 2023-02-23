@@ -218,6 +218,7 @@ closeUnbondedPoolContract
           $
             getWalletUtxos
         isClosed <- Array.null <$> submitTransaction
+          params
           constraints
           lookups
           confirmationTimeout
@@ -248,6 +249,7 @@ closeUnbondedPoolContract
   failedCloses <-
     if batchSize == zero then
       submitTransaction
+        params
         constraints
         (lookups <> ScriptLookups.unspentOutputs adminUtxos)
         confirmationTimeout
@@ -258,6 +260,7 @@ closeUnbondedPoolContract
         entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
           entryUpdates
       submitBatchesSequentially
+        params
         constraints
         lookups
         confirmationTimeout

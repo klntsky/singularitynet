@@ -91,7 +91,7 @@ userStakeUnbondedPoolContract
         }
     )
   scriptVersion
-  amt = repeatUntilConfirmed confirmationTimeout submissionAttempts $ do
+  amt = repeatUntilConfirmed params confirmationTimeout submissionAttempts $ do
   -- Fetch information related to the pool
   -- Get network ID
   networkId <- getNetworkId
