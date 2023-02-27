@@ -26,7 +26,9 @@ export declare class EntryList {
 
 export type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
 
-export type WalletSpec = "Nami" | "Gero" | "Flint" | "Lode" | "Eternl";
+export type WalletSpec = LightWalletSpec | KeyPath ;
+
+export type LightWalletSpec = "Nami" | "Gero" | "Flint" | "Lode" | "Eternl";
 
 export type NetworkId = 0 | 1;
 
@@ -40,6 +42,11 @@ export type SdkServerConfig = {
 export type SdkAssetClass = {
   currencySymbol: string;
   tokenName: string;
+};
+
+export type KeyPath = {
+  privatePaymentKeyPath: string;
+  privateStakingKeyPath?: string;
 };
 
 export type Ratio = {

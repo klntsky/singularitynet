@@ -35,6 +35,19 @@ module SdkApi
 
 import Contract.Prelude
 
+import Aeson
+  ( Aeson
+  , AesonCases
+  , JsonDecodeError(..)
+  , (.:)
+  , (.:?)
+  , caseAeson
+  , caseAesonString
+  , constAesonCases
+  , encodeAeson
+  , fromString
+  , printJsonDecodeError
+  )
 import ClosePool (closeBondedPoolContract)
 import Contract.Address (PaymentPubKeyHash, Bech32String)
 import Contract.Config
@@ -68,6 +81,12 @@ import Contract.Value
   , mkCurrencySymbol
   , mkTokenName
   )
+import Contract.Wallet
+  ( PrivatePaymentKeySource(..)
+  , PrivateStakeKeySource(..)
+  , WalletSpec(..)
+  )
+import Control.Alt ((<|>))
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
 import CreatePool (createBondedPoolContract, getBondedPoolsContract)
@@ -76,7 +95,9 @@ import Ctl.Internal.Serialization.Hash
   ( ed25519KeyHashFromBytes
   , ed25519KeyHashToBytes
   )
+import Data.Argonaut.Core as Json
 import Data.ArrayBuffer.Types (Uint8Array)
+import Data.Bifunctor (lmap)
 import Data.BigInt (BigInt)
 import Data.Char (fromCharCode)
 import Data.Int as Int
@@ -94,10 +115,6 @@ import Types
   , InitialBondedParams
   , ScriptVersion(..)
   )
-import UnbondedStaking.UserWithdraw
-  ( userWithdrawUnbondedPoolContract
-  , adminWithdrawUnbondedPoolContract
-  )
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
@@ -112,6 +129,10 @@ import UnbondedStaking.Types
   , UnbondedPoolParams(UnbondedPoolParams)
   )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
+import UnbondedStaking.UserWithdraw
+  ( userWithdrawUnbondedPoolContract
+  , adminWithdrawUnbondedPoolContract
+  )
 import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
 import UserStake (userStakeBondedPoolContract)
 import UserWithdraw (userWithdrawBondedPoolContract)
@@ -124,7 +145,7 @@ type SdkConfig =
   , datumCacheConfig :: SdkServerConfig
   , networkId :: Number -- converts to Int
   , logLevel :: String -- "Trace", "Debug", "Info", "Warn", "Error"
-  , walletSpec :: String -- "Nami", "Gero", "Flint", "Lode"
+  , walletSpec :: Aeson
   }
 
 type SdkServerConfig =
@@ -182,6 +203,27 @@ fromSdkIncompleteClose { failedKeys: fk, stateUtxoConsumed, totalDeposited } =
     , totalDeposited: sdkRatioToBigInt totalDeposited
     }
 
+fromWalletSpec :: Aeson -> Either Error WalletSpec
+fromWalletSpec = lmap (error <<< printJsonDecodeError) <<< caseAeson aesonCases
+  where
+  aesonCases :: AesonCases (Either JsonDecodeError WalletSpec)
+  aesonCases =
+    (constAesonCases $ Left $ TypeMismatch "Expected Object or string")
+      { caseString = case _ of
+          "Nami" -> pure ConnectToNami
+          "Gero" -> pure ConnectToGero
+          "Flint" -> pure ConnectToFlint
+          "Lode" -> pure ConnectToLode
+          "Eternl" -> pure ConnectToEternl
+          s -> Left $ UnexpectedValue $ Json.fromString s
+      , caseObject = \o -> do
+          pkey :: String <- o .: "privatePaymentKeyPath"
+          skey :: Maybe String <- o .:? "privateStakingKeyPath"
+          pure $ UseKeys
+            (PrivatePaymentKeyFile pkey)
+            (PrivateStakeKeyFile <$> skey)
+      }
+
 buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
 buildContractConfig cfg = Promise.fromAff $ do
   ogmiosConfig <- liftEither $ fromSdkServerConfig "ogmios" cfg.ogmiosConfig
@@ -193,7 +235,7 @@ buildContractConfig cfg = Promise.fromAff $ do
   networkId <- liftM (errorWithContext "invalid `NetworkId`")
     $ intToNetworkId networkIdInt
   logLevel <- liftEither $ fromSdkLogLevel cfg.logLevel
-  walletSpec <- Just <$> liftEither (fromSdkWalletSpec cfg.walletSpec)
+  walletSpec <- map Just $ liftEither $ fromWalletSpec cfg.walletSpec
   pure
     { ogmiosConfig
     , kupoConfig
@@ -311,15 +353,6 @@ fromSdkAdmin context admin = note (error msg)
   where
   msg :: String
   msg = context <> ": invalid admin"
-
-fromSdkWalletSpec :: String -> Either Error WalletSpec
-fromSdkWalletSpec = case _ of
-  "Nami" -> pure ConnectToNami
-  "Gero" -> pure ConnectToGero
-  "Flint" -> pure ConnectToFlint
-  "Lode" -> pure ConnectToLode
-  "Eternl" -> pure ConnectToEternl
-  s -> Left $ error $ "Invalid `WalletSpec`: " <> s
 
 errorWithMsg :: String -> String -> Error
 errorWithMsg context name = error $ context <> ": invalid " <> name

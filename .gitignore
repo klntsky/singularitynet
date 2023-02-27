@@ -78,3 +78,7 @@ spec/_*
 # The cabal.project file is generated dynamically by the nix shell as a symbolic
 # to cabal.project.onchain or cabal.project.offchain
 cabal.project
+
+# Payment and staking keys
+payment*
+staking*
