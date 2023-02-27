@@ -11,9 +11,7 @@
     "unit": "spago run -b 'unit' --main SNet.Test.Unit",
     "unit-withtimechecks": "spago run -b 'unit --with-timechecks' --main SNet.Test.Unit",
     "integration": "spago run -b 'integration' --main SNet.Test.Integration",
-    "ps:dev": "make ps-dev",
-    "ps:build": "make ps-build",
-    "js:build": "make js-build"
+    "bundle": "make bundle"
   },
   "author": "",
   "dependencies": {

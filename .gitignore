@@ -3,6 +3,7 @@
 **/node_modules
 **/dist/
 **/dist-newstyle/
+**/ts-built/
 **/output/
 **/output.js
 **/generated-docs/
