@@ -81,5 +81,6 @@ spec/_*
 cabal.project
 
 # Payment and staking keys
-payment*
-staking*
+*.vkey
+*.skey
+*.addr
