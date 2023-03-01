@@ -1,7 +1,5 @@
 module SdkApi
   ( AnyType
-  , BondedPoolArgs
-  , InitialBondedArgs
   , InitialUnbondedArgs
   , SdkAssetClass
   , SdkConfig
@@ -10,14 +8,10 @@ module SdkApi
   , SdkRatio
   , SdkServerConfig
   , buildContractConfig
-  , callCloseBondedPool
   , callCloseUnbondedPool
   , callConsumeMaybe
-  , callCreateBondedPool
   , callCreateUnbondedPool
-  , callDepositBondedPool
   , callDepositUnbondedPool
-  , callGetBondedPools
   , callGetNodeTime
   , callGetUnbondedPool
   , callHashPkh
@@ -25,9 +19,8 @@ module SdkApi
   , callMkContractEnv
   , callNothing
   , callQueryAssocListUnbondedPool
-  , callUserStakeBondedPool
   , callUserStakeUnbondedPool
-  , callUserWithdrawBondedPool
+  , callAdminWithdrawUnbondedPool
   , callUserWithdrawUnbondedPool
   , fromSdkLogLevel
   , toUnbondedPoolArgs
@@ -35,7 +28,6 @@ module SdkApi
 
 import Contract.Prelude
 
-import ClosePool (closeBondedPoolContract)
 import Contract.Address (PaymentPubKeyHash, Bech32String)
 import Contract.Config
   ( ConfigParams
@@ -70,7 +62,6 @@ import Contract.Value
   )
 import Control.Promise (Promise, fromAff)
 import Control.Promise as Promise
-import CreatePool (createBondedPoolContract, getBondedPoolsContract)
 import Ctl.Internal.Serialization.Address (intToNetworkId)
 import Ctl.Internal.Serialization.Hash
   ( ed25519KeyHashFromBytes
@@ -84,14 +75,11 @@ import Data.Log.Level (LogLevel(Trace, Debug, Info, Warn, Error))
 import Data.String.CodeUnits (fromCharArray)
 import Data.UInt (UInt)
 import Data.UInt as UInt
-import DepositPool (depositBondedPoolContract)
 import Effect.Aff (error)
 import Effect.Exception (Error)
 import Partial.Unsafe (unsafePartial)
 import Types
   ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams
   , ScriptVersion(..)
   )
 import UnbondedStaking.UserWithdraw
@@ -113,8 +101,6 @@ import UnbondedStaking.Types
   )
 import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import UnbondedStaking.Utils (queryAssocListUnbonded, calculateRewards)
-import UserStake (userStakeBondedPoolContract)
-import UserWithdraw (userWithdrawBondedPoolContract)
 import Utils (currentRoundedTime, hashPkh)
 
 -- | Configuration needed to call contracts from JS.
@@ -323,179 +309,6 @@ fromSdkWalletSpec = case _ of
 
 errorWithMsg :: String -> String -> Error
 errorWithMsg context name = error $ context <> ": invalid " <> name
-
---Bonded------------------------------------------------------------------------
-
-type BondedPoolArgs =
-  { iterations :: BigInt -- Natural
-  , start :: BigInt -- like POSIXTime
-  , end :: BigInt -- like POSIXTime
-  , userLength :: BigInt -- like POSIXTime
-  , bondingLength :: BigInt -- like POSIXTime
-  , interest :: SdkRatio
-  , minStake :: BigInt -- Natural
-  , maxStake :: BigInt -- Natural
-  , bondedAssetClass :: SdkAssetClass
-  , admin :: String -- PaymentPubKeyHash
-  , nftCs :: String -- CurrencySymbol
-  , assocListCs :: String -- CurrencySymbol
-  }
-
-type InitialBondedArgs =
-  { iterations :: BigInt -- Natural
-  , start :: BigInt -- like POSIXTime
-  , end :: BigInt -- like POSIXTime
-  , userLength :: BigInt -- like POSIXTime
-  , bondingLength :: BigInt -- like POSIXTime
-  , interest :: SdkRatio
-  , minStake :: BigInt -- Natural
-  , maxStake :: BigInt -- Natural
-  , bondedAssetClass :: SdkAssetClass
-  }
-
-callCreateBondedPool
-  :: ContractEnv ()
-  -> InitialBondedArgs
-  -> Effect
-       (Promise { args :: BondedPoolArgs, address :: String, txId :: String })
-callCreateBondedPool env iba = Promise.fromAff do
-  ibp <- liftEither $ fromInitialBondedArgs iba
-  { bondedPoolParams: bpp, address, txId } <- runContractInEnv env $
-    createBondedPoolContract ibp Production
-  pure $ { args: toBondedPoolArgs bpp, address, txId }
-
-callGetBondedPools
-  :: ContractEnv ()
-  -> String
-  -> InitialBondedArgs
-  -> Effect (Promise (Array BondedPoolArgs))
-callGetBondedPools env addrStr iba = Promise.fromAff do
-  ibp <- liftEither $ fromInitialBondedArgs iba
-  bpps <- runContractInEnv env $ getBondedPoolsContract addrStr ibp Production
-  pure $ map toBondedPoolArgs bpps
-
-callDepositBondedPool
-  :: ContractEnv ()
-  -> BondedPoolArgs
-  -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callDepositBondedPool env bpa bi arr = Promise.fromAff $ runContractInEnv env do
-  upp <- liftEither $ fromBondedPoolArgs bpa
-  nat <- liftM (error "callDepositBondedPool: Invalid natural number")
-    $ fromBigInt bi
-  depositBondedPoolContract upp Production nat arr
-
-callCloseBondedPool
-  :: ContractEnv ()
-  -> BondedPoolArgs
-  -> BigInt
-  -> Array Int
-  -> Effect (Promise (Array Int))
-callCloseBondedPool env bpa bi arr = Promise.fromAff $ runContractInEnv env do
-  upp <- liftEither $ fromBondedPoolArgs bpa
-  nat <- liftM (error "callCloseBondedPool: Invalid natural number")
-    $ fromBigInt bi
-  closeBondedPoolContract upp Production nat arr
-
-callUserStakeBondedPool
-  :: ContractEnv ()
-  -> BondedPoolArgs
-  -> BigInt
-  -> Effect (Promise { txId :: String })
-callUserStakeBondedPool env bpa bi = Promise.fromAff $ runContractInEnv env do
-  bpp <- liftEither $ fromBondedPoolArgs bpa
-  nat <- liftM (error "callUserStakeBondedPool: Invalid natural number")
-    $ fromBigInt bi
-  userStakeBondedPoolContract bpp Production nat
-
-callUserWithdrawBondedPool
-  :: ContractEnv () -> BondedPoolArgs -> Effect (Promise { txId :: String })
-callUserWithdrawBondedPool =
-  callWithBondedPoolArgs (\ubp -> userWithdrawBondedPoolContract ubp Production)
-
-callWithBondedPoolArgs
-  :: (BondedPoolParams -> Contract () { txId :: String })
-  -> ContractEnv ()
-  -> BondedPoolArgs
-  -> Effect (Promise { txId :: String })
-callWithBondedPoolArgs contract env = callWithArgs fromBondedPoolArgs contract
-  env
-
-fromInitialBondedArgs
-  :: InitialBondedArgs -> Either Error InitialBondedParams
-fromInitialBondedArgs iba = do
-  iterations <- fromSdkNat' "iteration" iba.iterations
-  interest <- fromSdkRatio context iba.interest
-  minStake <- fromSdkNat' "minStake" iba.minStake
-  maxStake <- fromSdkNat' "maxStake" iba.maxStake
-  bondedAssetClass <- fromSdkAssetClass context iba.bondedAssetClass
-  pure $ wrap
-    { iterations
-    , start: iba.start
-    , end: iba.end
-    , userLength: iba.userLength
-    , bondingLength: iba.bondingLength
-    , interest
-    , minStake
-    , maxStake
-    , bondedAssetClass
-    }
-  where
-  fromSdkNat' :: String -> BigInt -> Either Error Natural
-  fromSdkNat' name = fromSdkNat context name
-
-  context :: String
-  context = "fromInitialBondedArgs"
-
-toBondedPoolArgs :: BondedPoolParams -> BondedPoolArgs
-toBondedPoolArgs (BondedPoolParams bpp) =
-  { iterations: toBigInt bpp.iterations
-  , start: bpp.start
-  , end: bpp.end
-  , userLength: bpp.userLength
-  , bondingLength: bpp.bondingLength
-  , interest: toSdkRatio bpp.interest
-  , minStake: toBigInt bpp.minStake
-  , maxStake: toBigInt bpp.maxStake
-  , bondedAssetClass: toSdkAssetClass bpp.bondedAssetClass
-  , admin: toSdkAdmin bpp.admin
-  , nftCs: toSdkCurrencySymbol bpp.nftCs
-  , assocListCs: toSdkCurrencySymbol bpp.assocListCs
-  }
-
-fromBondedPoolArgs :: BondedPoolArgs -> Either Error BondedPoolParams
-fromBondedPoolArgs bpa = do
-  iterations <- fromSdkNat' "iterations" bpa.iterations
-  interest <- fromSdkRatio context bpa.interest
-  minStake <- fromSdkNat' "minStake" bpa.minStake
-  maxStake <- fromSdkNat' "maxStake" bpa.maxStake
-  admin <- fromSdkAdmin context bpa.admin
-  bondedAssetClass <- fromSdkAssetClass context bpa.bondedAssetClass
-  nftCs <- fromSdkCurrencySymbol context bpa.nftCs
-  assocListCs <- fromSdkCurrencySymbol context bpa.assocListCs
-  pure $ wrap
-    { iterations
-    , start: bpa.start
-    , end: bpa.end
-    , userLength: bpa.userLength
-    , bondingLength: bpa.bondingLength
-    , interest
-    , minStake
-    , maxStake
-    , admin
-    , bondedAssetClass
-    , nftCs
-    , assocListCs
-    }
-  where
-  fromSdkNat' :: String -> BigInt -> Either Error Natural
-  fromSdkNat' name = fromSdkNat context name
-
-  context :: String
-  context = "fromBondedPoolArgs"
-
---Unbonded----------------------------------------------------------------------
 
 type UnbondedPoolArgs =
   { start :: BigInt -- like POSIXTime

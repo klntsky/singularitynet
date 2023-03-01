@@ -1,6 +1,5 @@
 module Scripts.PoolValidator
-  ( mkBondedPoolValidator
-  , mkUnbondedPoolValidator
+  ( mkUnbondedPoolValidator
   ) where
 
 import Contract.Prelude
@@ -13,38 +12,20 @@ import Contract.Scripts
   , Validator(Validator)
   , applyArgs
   )
-import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Error (JsonDecodeError)
 import Data.Bifunctor (rmap)
-import Scripts.Production (_bondedPoolValidator, _unbondedPoolValidator)
+import Scripts.Production (_unbondedPoolValidator)
 import Scripts.Debug
-  ( _bondedPoolValidatorNoTimeChecks
-  , _unbondedPoolValidatorNoTimeChecks
+  ( _unbondedPoolValidatorNoTimeChecks
   )
-import Types (BondedPoolParams, ScriptVersion(..))
+import Types (ScriptVersion(..))
 import UnbondedStaking.Types (UnbondedPoolParams)
 import Utils (jsonReader)
-
--- | This is the parameterized validator script. It still needs to receive a
--- `BondedPoolParams` to become a minting policy
-bondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
-bondedPoolValidator Production = jsonReader "script" _bondedPoolValidator
-bondedPoolValidator DebugNoTimeChecks = jsonReader "script"
-  _bondedPoolValidatorNoTimeChecks
 
 unbondedPoolValidator :: ScriptVersion -> Either JsonDecodeError PlutusScript
 unbondedPoolValidator Production = jsonReader "script" _unbondedPoolValidator
 unbondedPoolValidator DebugNoTimeChecks = jsonReader "script"
   _unbondedPoolValidatorNoTimeChecks
-
--- | This function takes a `BondedPoolParams` and produces the `Validator`
--- for the bonded pool
-mkBondedPoolValidator
-  :: forall (r :: Row Type)
-   . BondedPoolParams
-  -> ScriptVersion
-  -> Contract r (Either ApplyArgsError Validator)
-mkBondedPoolValidator bpp sv = mkValidator (bondedPoolValidator sv) bpp
 
 -- | This function takes a `UnbondedPoolParams` and produces the `Validator`
 -- for the bonded pool

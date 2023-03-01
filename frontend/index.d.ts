@@ -63,48 +63,6 @@ export type UserEntry = {
   nextCycleRewards: Number;
 }
 
-// Bonded pool
-
-export declare class BondedPool extends Pool<BondedPoolArgs> {}
-
-export declare function createBondedPool(
-  config: SdkConfig,
-  initialArgs: InitialBondedArgs
-): Promise<BondedPool>;
-
-export declare function getBondedPools(
-  config: SdkConfig,
-  address: string,
-  initialArgs: InitialBondedArgs
-): Promise<Array<BondedPool>>;
-
-export type BondedPoolArgs = {
-  iterations: BigInteger; // Natural
-  start: BigInteger; // like POSIXTime so positive
-  end: BigInteger; // like POSIXTime so positive
-  userLength: BigInteger; // like POSIXTime so positive
-  bondingLength: BigInteger; // like POSIXTime so positive
-  interest: Ratio;
-  minStake: BigInteger; // Natural
-  maxStake: BigInteger; // Natural
-  bondedAssetClass: SdkAssetClass;
-  admin: string; // PaymentPubKeyHash
-  nftCs: string; // CBORHexCurrencySymbol
-  assocListCs: string; // CBORHexCurrencySymbol
-};
-
-export type InitialBondedArgs = {
-  iterations: BigInteger; // Natural
-  start: BigInteger; // like POSIXTime so positive
-  end: BigInteger; // like POSIXTime so positive
-  userLength: BigInteger; // like POSIXTime so positive
-  bondingLength: BigInteger; // like POSIXTime so positive
-  interest: Ratio;
-  minStake: BigInteger; // Natural
-  maxStake: BigInteger; // Natural
-  bondedAssetClass: SdkAssetClass;
-};
-
 // Unbonded pool
 
 export declare class UnbondedPool extends Pool<UnbondedPoolArgs> {}

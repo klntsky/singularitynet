@@ -150,7 +150,7 @@
             flake = {
               packages = {
                 frontend-bundle-web = project.bundlePursProject {
-                  main = "Main";
+                  main = "SdkApi";
                 };
               };
 
