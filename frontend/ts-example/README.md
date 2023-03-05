@@ -41,16 +41,37 @@ Since we haven't published the package, we need to build it first using the foll
    $ nix develop .#frontend
    $ cd frontend
    ```
-3. Build the SDK
+3. Compile and bundle the Purescript code.
    ```
-   $ npm run js:build
+   $ npm run bundle
    ```
 
-This will output the built package into `dist`. It has been made available under the library name of `singularitynet` and can be imported by package consumers using this name (see the SDK's [Webpack configuration](../webpack.config.js) under `output.library.name`).
+This will compile all the Purescript source files under `src/` and produce an
+`output.js` file, which implements most of the functionality made available
+under `index.d.ts`. *Only* after this step is done, the library is complete and
+available to be used as a dependency in other packages.
 
-### Build the Typescript project
+The library is called `singularitynet` and with this name it can be imported
+by package consumers (see the examples' [Webpack configuration](webpack.config.js).
 
-We're now ready to consume the (local) SDK package. If you make any changes in the `frontend` directory, you can easily repeat the previous step to re-build it and update it as a dependency for the TS project.
+### Build the Typescript project (for the browser)
+
+We're now ready to consume the (local) SDK package. If you make any changes in
+the `frontend` directory, you can easily repeat the previous step to re-build
+it and update it as a dependency for the TS project.
+
+There are a few examples under `ts-example/examples/` which can be loaded by
+changing which one is imported in `index.ts`:
+
+_frontend/ts-example/index.ts_
+
+```
+import {
+    main
+  } from './examples/default'; // Change which example to run here.
+```
+
+These are the instructions for building the TS project for the browser:
 
 1. Enter the `frontend/ts-example` directory
 2. Install the NPM dependencies to the local directory, including the `singularitynet` package
@@ -61,12 +82,30 @@ We're now ready to consume the (local) SDK package. If you make any changes in t
 3. If you're running the CTL runtime on `localhost`, make sure that's started. Otherwise, change the configurations in `index.ts` (see [below](#changing-the-service-configurations))
 4. Either start the development server or run the build:
    ```
-   $ npm run dev
+   $ npm run web:dev
    ```
    And visit `localhost:4008` in your browser, _or_
    ```
-   $ npm run build
+   $ npm run web:build
+
    ```
+### Build the Typescript project (for NodeJS)
+
+To run the Typescript project in a NodeJS environment, make follow the same steps as before, but in step 4
+instead run the following:
+
+```
+$ npm run node:build
+```
+
+And then run the resulting executable under `ts-built`:
+
+```
+$ node run ts-built/index.js
+```
+
+But before doing this, *make sure to run an example that works under NodeJS*. For now, the only example
+made to run in a Node environment is `example/node.ts`.
 
 ## Other important notes
 
@@ -74,91 +113,71 @@ This section outlines some things you should be aware of when consuming the main
 
 ### Type definitions
 
-The present example makes use of several type definitions, but there are several more defined for the SDK. Have a look at the TS [declarations](../index.d.ts) for the main SDK to see all of the defined types. All of these can be `import`ed normally in your own integrations, e.g.
+The `default` example makes use of several type definitions, but there are several more defined for the SDK.
+Have a look at the TS [declarations](../index.d.ts) for the main SDK to see all of the defined types.
+All of these can be `import`ed normally in your own integrations, e.g.
 
 ```typescript
 import {
   SdkConfig,
   LogLevel,
   SdkServerConfig,
-  BondedPool,
+  UnbondedPool,
 } from "singularitynet";
 ```
 
 ### Creating the pools
 
-`index.d.ts` defines two immutable classes that represent bonded and unbonded pools (`BondedPool` and `UnbondedPool`, respectively). **Do not** use the constructors directly. Instead, use the asynchronous `createBondedPool` and `createUnbondedPool` functions. This is because the initializations of each pool must be done asynchronously and JS does not allow `async` constructors. For example
+`index.d.ts` defines one immutable class that represents unbonded pools (`UnbondedPool`).
+**Do not** use the constructors directly. Instead, use the asynchronous `createUnbondedPool` function.
+This is because the initializations of each pool must be done asynchronously and JS does not allow `async` constructors.
+For example
 
 ```typescript
 const main = async () => {
-  const pool: BondedPool = await createBondedPool(
+  const pool: UnbondedPool = await createBondedPool(
     someSdkConfig,
     someInitialArgs
   );
-  await pool.deposit(BigInteger(1), []);
+  await pool.deposit(BigInteger(1), BigInteger(0));
   // more pool operations...
 };
 ```
 
 #### Changing the service configurations
 
-Both types of pools take an `SdkConfig` as their first argument which includes information for the contracts to connect to the required runtime services (`ogmios`, `ctl-server`, etc...). For the purposes of this TS example, we're using `localhost` for all services:
+The `UnbondedPool` takes an `SdkConfig` as their first argument which includes
+information for the contracts to connect to the required runtime services (`ogmios`, `kupo`, etc...).
+For the purposes of this TS example, we are using MLabs hosted infrastructure for all services:
 
-_`frontend/ts-example/index.ts`_
-
+_frontend/ts-example/examples/utils.ts_
 ```typescript
 import { SdkConfig } from "singularitynet";
 
 // omitted for brevity
 
-const localHostSdkConfig: SdkConfig = {
-  ctlServerConfig: {
-    host: "localhost",
-    port: 8081,
-    secure: false,
+export const mlabsSdkConfig: SdkConfig = {
+  ogmiosConfig: {
+    host: "ogmios.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
-  ogmiosConfig: {
-    host: "localhost",
-    port: 1337,
-    secure: false,
+  kupoConfig: {
+    host: "kupo.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
   datumCacheConfig: {
-    host: "localhost",
-    port: 9999,
-    secure: false,
+    host: "ogmios-datum-cache.preprod.ctl-runtime.staging.mlabs.city",
+    port: 443,
+    secure: true,
     path: "",
   },
-  networkId: 1,
+  networkId: 0,
   logLevel: "Info",
-};
-```
-
-You can easily change all of these to connect to remote services, however. For example, we could host all of them on `some-domain.com` with TLS enabled and route them to different paths. We would only need to change the `SdkConfig` to support this:
-
-```typescript
-const remoteSdkConfig: SdkConfig = {
-  ctlServerConfig: {
-    host: "some-domain.com",
-    port: 443,
-    secure: true,
-    path: "ctl",
-  },
-  ogmiosConfig: {
-    host: "some-domain.com",
-    port: 443,
-    secure: true,
-    path: "ogmios",
-  },
-  datumCacheConfig: {
-    host: "some-domain.com",
-    port: 443,
-    secure: true,
-    path: "odc",
-  },
-  networkId: 1,
-  logLevel: "Error",
+  walletSpec: "Eternl",
 };
 ```
 
@@ -186,7 +205,7 @@ const someFn = (
 
 CTL depends directly on `cardano-serialization-lib` which publishes several incompatible packages for different environments (the browser, NodeJS, ASM.js, etc...). It isn't possible to polyfill these, so the CTL authors have introduced a `BROWSER_RUNTIME` environment variable to determine the environment and load the correct package.
 
-In our case, we **always** want to select the `-browser` package, so we must set `BROWSER_RUNTIME=1` when building (that is, when invoking Webpack). This is illustrated by the following:
+When bundling for the web, it is important to select the `-browser` package, so we must set `BROWSER_RUNTIME=1` when building (that is, when invoking Webpack). This is illustrated by the following:
 
 _`frontend/ts-example/package.json`_:
 
@@ -194,9 +213,10 @@ _`frontend/ts-example/package.json`_:
 {
   "name": "singularitynet-example",
   "scripts": {
-    "dev": "BROWSER_RUNTIME=1 webpack-dev-server --mode=development",
-    "build": "BROWSER_RUNTIME=1 webpack --mode=production"
-  }
+    "web:dev": "BROWSER_RUNTIME=1 webpack-dev-server --mode=development",
+    "web:build": "BROWSER_RUNTIME=1 webpack --mode=production",
+    // Omitted for brevity
+  },
   // Omitted for brevity
 }
 ```
