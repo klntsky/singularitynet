@@ -4,7 +4,6 @@ module Settings
   , bondedStakingTokenName
   , ntxCs
   , ntxTn
-  , testInitBondedParams
   , testInitUnbondedParams
   , unbondedStakingTokenName
   , confirmationTimeout
@@ -14,25 +13,16 @@ module Settings
 import Contract.Prelude
 
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
+import Contract.Numeric.Natural (Natural, fromBigInt')
 import Contract.Numeric.Rational (Rational)
 import Contract.Prim.ByteArray (byteArrayFromAscii, hexToByteArray)
-import Contract.Value
-  ( CurrencySymbol
-  , TokenName
-  -- , adaSymbol
-  -- , adaToken
-  , mkCurrencySymbol
-  , mkTokenName
-  )
+import Contract.Value (CurrencySymbol, TokenName, mkCurrencySymbol, mkTokenName)
+import Data.BigInt (BigInt, fromInt)
 import Data.Int as Int
 import Data.Maybe (Maybe)
 import Data.Time.Duration (Seconds(Seconds))
-import Types
-  ( AssetClass(AssetClass)
-  , InitialBondedParams(InitialBondedParams)
-  )
+import Types (AssetClass(AssetClass))
 import UnbondedStaking.Types (InitialUnbondedParams(InitialUnbondedParams))
-import Utils (nat, big)
 
 bondedStakingTokenName :: Maybe TokenName
 bondedStakingTokenName = mkTokenName =<< byteArrayFromAscii "BondedStakingToken"
@@ -40,10 +30,6 @@ bondedStakingTokenName = mkTokenName =<< byteArrayFromAscii "BondedStakingToken"
 unbondedStakingTokenName :: Maybe TokenName
 unbondedStakingTokenName = mkTokenName =<< byteArrayFromAscii
   "UnbondedStakingToken"
-
--- Defined as fixed rate for one cycle in APY
-bondedInterest :: Maybe Rational
-bondedInterest = toRational <$> fromNaturals (nat 10) (nat 100)
 
 -- Defined as fixed rate for one time increment in APY
 unbondedInterest :: Maybe Rational
@@ -63,27 +49,6 @@ ntxCs = mkCurrencySymbol
 
 ntxTn :: Maybe TokenName
 ntxTn = mkTokenName =<< byteArrayFromAscii "NTX"
-
--- Used for local example:
-testInitBondedParams :: Maybe InitialBondedParams
-testInitBondedParams = do
-  interest <- bondedInterest
-  currencySymbol <- agixCs
-  tokenName <- agixTn
-  pure $ InitialBondedParams
-    { iterations: nat 1
-    , start: big 1000 -- dummy value
-    , end: big 2000 -- dummy value
-    , userLength: big 180_000 -- We use 3 minutes to make testing manageable
-    , bondingLength: big 180_000
-    , interest
-    , minStake: nat 1
-    , maxStake: nat 50_000
-    , bondedAssetClass: AssetClass
-        { currencySymbol
-        , tokenName
-        }
-    }
 
 testInitUnbondedParams :: Maybe InitialUnbondedParams
 testInitUnbondedParams = do
@@ -115,4 +80,13 @@ confirmationTimeout = Seconds $ Int.toNumber 120
 -- | throwing an error
 submissionAttempts :: Int
 submissionAttempts = 5
+
+-- We use local definitions of `nat` and `big` to avoid an import cycle between
+-- this module and `Utils`
+
+nat :: Int -> Natural
+nat = fromBigInt' <<< fromInt
+
+big :: Int -> BigInt
+big = fromInt
 

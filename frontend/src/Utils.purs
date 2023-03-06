@@ -12,7 +12,6 @@ module Utils
   , jsonReader
   , logInfo_
   , mkAssetUtxosConstraints
-  , mkBondedPoolParams
   , mkOnchainAssocList
   , mkRatUnsafe
   , toRational
@@ -25,6 +24,7 @@ module Utils
   , toIntUnsafe
   , valueOf'
   , repeatUntilConfirmed
+  , repeatUntilConfirmed'
   , mustPayToScript
   , getUtxoDatumHash
   , addressFromBech32
@@ -34,7 +34,7 @@ import Contract.Prelude hiding (length)
 
 import Contract.Address (Address, Bech32String, PaymentPubKeyHash, getNetworkId)
 import Contract.Hashing (blake2b256Hash)
-import Contract.Log (logInfo, logInfo', logAesonInfo)
+import Contract.Log (logInfo, logInfo')
 import Contract.Monad
   ( Contract
   , liftContractM
@@ -53,7 +53,7 @@ import Contract.PlutusData
   , OutputDatum(OutputDatumHash)
   )
 import Contract.Prim.ByteArray (ByteArray, hexToByteArray, byteArrayToHex)
-import Contract.ScriptLookups (ScriptLookups)
+import Contract.ScriptLookups (ScriptLookups, UnattachedUnbalancedTx)
 import Contract.ScriptLookups as ScriptLookups
 import Contract.Scripts (PlutusScript, ValidatorHash)
 import Contract.Time
@@ -86,13 +86,19 @@ import Contract.Value
   ( CurrencySymbol
   , TokenName
   , Value
+  , adaSymbol
+  , adaToken
   , flattenNonAdaAssets
+  , flattenValue
+  , getCurrencySymbol
   , getTokenName
+  , negation
   , valueOf
   )
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
-import Ctl.Internal.Plutus.Conversion (toPlutusAddress)
+import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
+import Ctl.Internal.Plutus.Conversion (toPlutusAddress, toPlutusValue)
 import Ctl.Internal.Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Ctl.Internal.Serialization.Hash (ed25519KeyHashToBytes)
 import Data.Argonaut.Core (Json, caseJsonObject)
@@ -111,7 +117,16 @@ import Data.Array
   )
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.BigInt (BigInt, fromInt, fromNumber, quot, rem, toInt, toNumber)
+import Data.BigInt
+  ( BigInt
+  , fromInt
+  , fromNumber
+  , quot
+  , rem
+  , toInt
+  , toNumber
+  , toString
+  )
 import Data.Map (Map, toUnfoldable)
 import Data.Map as Map
 import Data.Symbol (SProxy(..))
@@ -122,12 +137,9 @@ import Effect.Exception (error, throw)
 import Math (ceil)
 import Prim.Row (class Lacks)
 import Record (insert, delete)
-import Types
-  ( AssetClass(AssetClass)
-  , BondedPoolParams(BondedPoolParams)
-  , InitialBondedParams(InitialBondedParams)
-  , MintingAction(MintEnd, MintInBetween)
-  )
+import Settings (unbondedStakingTokenName)
+import Types (AssetClass(AssetClass), MintingAction(MintEnd, MintInBetween))
+import UnbondedStaking.Types (UnbondedPoolParams(..))
 
 -- | Helper to decode the local inputs such as unapplied minting policy and
 -- typed validator
@@ -203,14 +215,6 @@ mkAssetUtxosConstraints utxos redeemer =
         :: Array (TransactionInput /\ TransactionOutputWithRefScript)
     )
 
--- | Convert from `Int` to `Natural`
-nat :: Int -> Natural
-nat = fromBigInt' <<< fromInt
-
--- | Convert from `Int` to `BigInt`
-big :: Int -> BigInt
-big = fromInt
-
 roundUp :: Rational -> BigInt
 roundUp r =
   let
@@ -248,30 +252,6 @@ logInfo_
   -> a
   -> Contract r Unit
 logInfo_ k = flip logInfo mempty <<< tag k <<< show
-
--- Creates the `BondedPoolParams` from the `InitialBondedParams` and runtime
--- parameters from the user.
-mkBondedPoolParams
-  :: PaymentPubKeyHash
-  -> CurrencySymbol
-  -> CurrencySymbol
-  -> InitialBondedParams
-  -> BondedPoolParams
-mkBondedPoolParams admin nftCs assocListCs (InitialBondedParams ibp) = do
-  BondedPoolParams
-    { iterations: ibp.iterations
-    , start: ibp.start
-    , end: ibp.end
-    , userLength: ibp.userLength
-    , bondingLength: ibp.bondingLength
-    , interest: ibp.interest
-    , minStake: ibp.minStake
-    , maxStake: ibp.maxStake
-    , admin
-    , bondedAssetClass: ibp.bondedAssetClass
-    , nftCs
-    , assocListCs
-    }
 
 hashPkh :: PaymentPubKeyHash -> Aff ByteArray
 hashPkh =
@@ -472,7 +452,8 @@ splitByLength size array
 -- | Submits a transaction with the given list of constraints/lookups. It
 -- returns the same constraints/lookups if it fails.
 submitTransaction
-  :: TxConstraints Unit Unit
+  :: UnbondedPoolParams
+  -> TxConstraints Unit Unit
   -> ScriptLookups.ScriptLookups PlutusData
   -> Seconds
   -> Int
@@ -488,21 +469,17 @@ submitTransaction
                (ScriptLookups.ScriptLookups PlutusData)
            )
        )
-submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
+submitTransaction ubp baseConstraints baseLookups timeout maxAttempts updateList =
   do
     let
       constraintList = fst <$> updateList
       lookupList = snd <$> updateList
       constraints = baseConstraints <> mconcat constraintList
       lookups = baseLookups <> mconcat lookupList
-    result <- try $ repeatUntilConfirmed timeout maxAttempts do
+    result <- try $ repeatUntilConfirmed ubp timeout maxAttempts do
       -- Build transaction
-      unattachedBalancedTx <-
-        liftedE $ ScriptLookups.mkUnbalancedTx lookups constraints
-      logAesonInfo unattachedBalancedTx
-      bTx <- liftedE $ balanceTx unattachedBalancedTx
-      signedTx <- signTransaction bTx
-      pure { signedTx }
+      ubTx <- liftedE $ ScriptLookups.mkUnbalancedTx lookups constraints
+      pure { ubTx }
     case result of
       Left e -> do
         logInfo_ "submitTransaction:" e
@@ -514,7 +491,8 @@ submitTransaction baseConstraints baseLookups timeout maxAttempts updateList =
 -- is defined by a given list of constraints/lookups. Importantly, for each
 -- batch the wallet's UTxOs are fetched and added to the lookups.
 submitBatchesSequentially
-  :: TxConstraints Unit Unit
+  :: UnbondedPoolParams
+  -> TxConstraints Unit Unit
   -> ScriptLookups PlutusData
   -> Seconds
   -> Int
@@ -533,6 +511,7 @@ submitBatchesSequentially
            )
        )
 submitBatchesSequentially
+  ubp
   constraints
   lookups
   confirmationTimeout
@@ -544,7 +523,7 @@ submitBatchesSequentially
     utxos <- liftedM "submitBatchesSequentially: could not get wallet utxos" $
       getWalletUtxos
     let lookups' = lookups <> ScriptLookups.unspentOutputs utxos
-    submitTransaction constraints lookups' confirmationTimeout
+    submitTransaction ubp constraints lookups' confirmationTimeout
       submissionAttempts
       batch
 
@@ -555,16 +534,18 @@ submitBatchesSequentially
 repeatUntilConfirmed
   :: forall (r :: Row Type) (p :: Row Type)
    . Lacks "txId" p
-  => Lacks "signedTx" p
-  => Seconds
+  => Lacks "ubTx" p
+  => UnbondedPoolParams
+  -> Seconds
   -> Int
-  -> Contract r { signedTx :: BalancedSignedTransaction | p }
+  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
   -> Contract r
        { txId :: String | p }
-repeatUntilConfirmed timeout maxTrials contract = do
-  result@{ signedTx } <- contract
+repeatUntilConfirmed ubp timeout maxTrials contract = do
+  result@{ ubTx } <- contract
   logInfo' "repeatUntilConfirmed: transaction built successfully"
-  txHash <- submit signedTx
+  tx <- balanceAndSignTx ubp ubTx
+  txHash <- submit tx
   logInfo'
     "repeatUntilConfirmed: transaction submitted. Waiting for confirmation"
   confirmation <- try $ awaitTxConfirmedWithTimeout timeout txHash
@@ -580,13 +561,137 @@ repeatUntilConfirmed timeout maxTrials contract = do
         logInfo' $ "repeatUntilConfirmed: running transaction again, "
           <> show maxTrials
           <> " trials remaining"
-        repeatUntilConfirmed timeout (maxTrials - 1) contract
+        repeatUntilConfirmed ubp timeout (maxTrials - 1) contract
     Right _ -> do
       logInfo' "repeatUntilConfirmed: transaction confirmed!"
       logInfo_ "TX Hash" txHash
-      -- pure $ insert { txId: txHash } result
       pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
-        (delete (SProxy :: SProxy "signedTx") result)
+        (delete (SProxy :: SProxy "ubTx") result)
+
+-- | A variant of `repeatUntilConfirmed` less comprehensive error support.
+-- This is used by `createPool`, since by the time the pool is created, there
+-- are no `UnbondedPoolParams` to provide better error messages.
+repeatUntilConfirmed'
+  :: forall (r :: Row Type) (p :: Row Type)
+   . Lacks "txId" p
+  => Lacks "ubTx" p
+  => Seconds
+  -> Int
+  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
+  -> Contract r
+       { txId :: String | p }
+
+repeatUntilConfirmed' timeout maxTrials contract = do
+  result@{ ubTx } <- contract
+  logInfo' "repeatUntilConfirmed: transaction built successfully"
+  bTx <- liftedE $ balanceTx ubTx
+  tx <- signTransaction bTx
+  txHash <- submit tx
+  logInfo'
+    "repeatUntilConfirmed: transaction submitted. Waiting for confirmation"
+  confirmation <- try $ awaitTxConfirmedWithTimeout timeout txHash
+  case confirmation of
+    Left _ -> do
+      logInfo'
+        "repeatUntilConfirmed: timeout reached, the transaction was not confirmed"
+      if maxTrials == 0 then do
+        logInfo'
+          "repeatUntilConfirmed: no more trials remaining, throwing exception..."
+        liftEffect $ throw "Failed to submit transaction"
+      else do
+        logInfo' $ "repeatUntilConfirmed: running transaction again, "
+          <> show maxTrials
+          <> " trials remaining"
+        repeatUntilConfirmed' timeout (maxTrials - 1) contract
+    Right _ -> do
+      logInfo' "repeatUntilConfirmed: transaction confirmed!"
+      logInfo_ "TX Hash" txHash
+      pure $ insert (SProxy :: SProxy "txId") (byteArrayToHex $ unwrap txHash)
+        (delete (SProxy :: SProxy "ubTx") result)
+
+-- | Balances and signs TXs. Handles `BalanceInsufficientError`
+-- exceptions occasioned by a very low amount of ADA by throwing a custom, more
+-- user-friendly error.
+balanceAndSignTx
+  :: forall r
+   . UnbondedPoolParams
+  -> UnattachedUnbalancedTx
+  -> Contract r BalancedSignedTransaction
+balanceAndSignTx ubp ubTx = do
+  result <- balanceTx ubTx
+  bTx <- case result of
+    Left e -> handleBalanceError ubp e
+    Right r -> pure r
+  signTransaction bTx
+
+-- | Match on a `BalanceTxError` and output a user-friendly, domain-specific
+-- error
+handleBalanceError
+  :: forall r a. UnbondedPoolParams -> BalanceTxError -> Contract r a
+handleBalanceError ubp err = case err of
+  InsufficientTxInputs expected actual ->
+    throwValueDifference
+      ubp
+      $ toPlutusValue (unwrap expected)
+          `minus` toPlutusValue (unwrap actual)
+  _ -> throwContractError err
+  where
+  minus :: Value -> Value -> Value
+  minus v1 v2 = v1 <> negation v2
+
+throwValueDifference
+  :: forall r a
+   . UnbondedPoolParams
+  -> Value
+  -> Contract r a
+throwValueDifference
+  (UnbondedPoolParams ubp)
+  diff =
+  do
+    let
+      AssetClass { currencySymbol: agixCs, tokenName: agixTn } =
+        ubp.unbondedAssetClass
+
+      -- `flattenValue` ignores the non-positive parts and this is exactly what
+      -- we want, since negative and zero means a given asset is sufficient in
+      -- the inputs.
+      insufficientAssets :: Array (CurrencySymbol /\ TokenName /\ BigInt)
+      insufficientAssets = flattenValue diff
+    nftTn <- liftMaybe
+      (error "throwValueDifference: could not get unbonded token name")
+      unbondedStakingTokenName
+    let
+      msg :: BigInt -> String -> String
+      msg n assetName = "Insufficient inputs: Missing " <> toString n
+        <> " "
+        <> assetName
+
+      mismatches :: Array String
+      mismatches =
+        map
+          ( \(cs /\ tn /\ n) -> case unit of
+              _
+                | cs == adaSymbol && tn == adaToken -> msg n "Lovelace"
+                | cs == agixCs && tn == agixTn -> msg n "AGIX"
+                | cs == ubp.nftCs && tn == nftTn ->
+                    "Missing input: Could not find pool's state UTxO"
+                | cs == ubp.assocListCs ->
+                    "Missing input: Could not find UTxO for entry with key "
+                      <> (byteArrayToHex <<< getTokenName) tn
+                | otherwise -> "Insufficient inputs: Missing "
+                    <> toString n
+                    <> " of unknown asset with currency symbol \""
+                    <> (byteArrayToHex <<< getCurrencySymbol) cs
+                    <> "\" and token name \""
+                    <> (byteArrayToHex <<< getTokenName) tn
+                    <> "\""
+          )
+          insufficientAssets
+
+    throwContractError
+      $ mconcat
+      $ Array.intersperse ", "
+          mismatches
 
 mustPayToScript
   :: forall (i :: Type) (o :: Type)
@@ -617,3 +722,11 @@ addressFromBech32 str = do
 -- | `valueOf` but with sane argument ordering.
 valueOf' :: CurrencySymbol -> TokenName -> Value -> BigInt
 valueOf' cs tn v = valueOf v cs tn
+
+-- | Convert from `Int` to `Natural`
+nat :: Int -> Natural
+nat = fromBigInt' <<< fromInt
+
+-- | Convert from `Int` to `BigInt`
+big :: Int -> BigInt
+big = fromInt

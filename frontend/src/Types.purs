@@ -1,11 +1,7 @@
 module Types
   ( AssetClass(..)
-  , BondedPoolParams(..)
-  , BondedStakingAction(..)
-  , BondedStakingDatum(..)
   , BurningAction(..)
   , Entry(..)
-  , InitialBondedParams(..)
   , ListAction(..)
   , MintingAction(..)
   , PoolInfo(..)

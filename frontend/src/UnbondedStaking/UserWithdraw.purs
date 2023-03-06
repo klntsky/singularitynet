@@ -43,8 +43,6 @@ import Contract.Transaction
   ( TransactionInput
   , TransactionOutput
   , TransactionOutputWithRefScript
-  , balanceTx
-  , signTransaction
   )
 import Contract.TxConstraints
   ( TxConstraints
@@ -161,7 +159,7 @@ userWithdrawUnbondedPoolContract'
   -> Contract ()
        { txId :: String }
 userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
-  repeatUntilConfirmed confirmationTimeout submissionAttempts
+  repeatUntilConfirmed params confirmationTimeout submissionAttempts
     do
       -- Get withdrawal information
       d <- getWithdrawalData params scriptVersion userAddr iAmUser
@@ -214,12 +212,7 @@ userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
         liftedE $ ScriptLookups.mkUnbalancedTx
           (baseLookups <> lookups)
           (baseConstraints <> constraints)
-      logInfo_
-        "userWithdrawUnbondedPoolContract: unAttachedUnbalancedTx"
-        ubTx
-      bTx <- liftedE $ balanceTx ubTx
-      signedTx <- signTransaction bTx
-      pure { signedTx }
+      pure { ubTx }
 
 -- | Obtain the necessary data for constructing the user withdrawal's
 -- constraints and lookups. With this info it's possible to do any kind of
