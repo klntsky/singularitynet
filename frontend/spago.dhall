@@ -4,7 +4,8 @@ You can edit this file as you like.
 -}
 { name = "singularitynet-frontend"
 , dependencies =
-  [ "aff"
+  [ "aeson"
+  , "aff"
   , "aff-promise"
   , "argonaut-codecs"
   , "argonaut-core"

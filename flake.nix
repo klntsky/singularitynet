@@ -142,7 +142,11 @@
               packageJson = ./frontend/package.json;
               packageLock = ./frontend/package-lock.json;
               nodejs = pkgs.nodejs-14_x;
-              shell.packages = [ pkgs.fd pkgs.nodePackages.typescript-language-server ];
+              shell.packages =
+                 [ pkgs.fd
+                   pkgs.nodePackages.typescript-language-server
+                   pkgs.nodePackages.typescript
+                 ];
               strictComp = false;
             };
           in

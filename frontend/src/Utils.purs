@@ -98,14 +98,6 @@ import Contract.Value
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
 import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
-import Ctl.Internal.Cardano.Types.Transaction (TxBody)
-import Ctl.Internal.Cardano.Types.Value
-  ( Value(..)
-  , Coin(..)
-  , flattenNonAdaValue
-  , valueToCoin'
-  , minus
-  ) as CardanoValue
 import Ctl.Internal.Plutus.Conversion (toPlutusAddress, toPlutusValue)
 import Ctl.Internal.Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Ctl.Internal.Serialization.Hash (ed25519KeyHashToBytes)
@@ -121,7 +113,6 @@ import Data.Array
   , mapMaybe
   , slice
   , sortBy
-  , (:)
   , (..)
   )
 import Data.Array as Array

@@ -4,18 +4,11 @@ SHELL := bash
 
 ps-sources := $(shell fd -epurs)
 bundle = spago bundle-module -m $(1) --to output.js
-ps-bundle = $(call bundle,Main)
 js-bundle = $(call bundle,SdkApi)
-build = $(1) && BROWSER_RUNTIME=1 webpack --mode=production --entry $(2)
+build = $(1) && BROWSER_RUNTIME=$(2) webpack --mode=production --entry $(3)
 
-ps-dev:
-	@${ps-bundle} && BROWSER_RUNTIME=1 webpack-dev-server --progress --entry ./main.js
-
-ps-build:
-	@$(call build,${ps-bundle},./main.js)
-
-js-build:
-	@$(call build,${js-bundle},./index.js)
+bundle:
+	@$(call bundle,SdkApi)
 
 check:
 	@purs-tidy check ${ps-sources}
