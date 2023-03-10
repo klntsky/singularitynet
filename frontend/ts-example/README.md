@@ -101,7 +101,7 @@ $ npm run node:build
 And then run the resulting executable under `ts-built`:
 
 ```
-$ node run ts-built/index.js
+$ node ts-built/index.js
 ```
 
 But before doing this, *make sure to run an example that works under NodeJS*. For now, the only example
