@@ -228,8 +228,8 @@ closeUnbondedPoolContract
           ]
         logInfo' $
           if isClosed then
-            "closeUnbondedPoolContract: failed to consume state utxo"
-          else "closeUnbondedPoolContract: succesfully consumed state utxo"
+            "closeUnbondedPoolContract: succesfully consumed state utxo"
+          else "closeUnbondedPoolContract: failed to consume state utxo"
         pure isClosed
       Nothing -> do
         logInfo' "closeUnbondedPoolContract: could not find state utxo to close"
