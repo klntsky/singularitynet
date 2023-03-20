@@ -68,6 +68,7 @@ export type UserEntry = {
   deposited: BigInteger;
   rewards: Number;
   nextCycleRewards: Number;
+  open: boolean
 }
 
 // Unbonded pool

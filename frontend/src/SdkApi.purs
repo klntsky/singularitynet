@@ -489,6 +489,7 @@ type UserEntry =
   , deposited :: BigInt
   , rewards :: Rational
   , nextCycleRewards :: Rational
+  , open :: Boolean
   }
 
 callHashPkh :: String -> Effect (Promise ByteArray)
@@ -510,6 +511,7 @@ callQueryAssocListUnbondedPool env upa = Promise.fromAff $ runContractInEnv env
           , deposited: e.deposited
           , rewards: e.rewards
           , nextCycleRewards: calculateRewards (wrap e)
+          , open: e.open
           }
       )
       entries
