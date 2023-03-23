@@ -139,21 +139,32 @@ const closeTime : number = poolStart.toJSNumber() + userLength.toJSNumber() + (a
 
 console.log(closeTime)
 
-// We write a function for waiting until a certain time
+/** We write a function for waiting until a certain time. To avoid polling the
+ *  node constantly, we wait until the local time is equal to the stop time.
+ *
+ *  Only then we poll the node to make sure the on-chain time is at least the
+ *  stop time.
+ */
 const countdownTo = async (tf: number) => {
+  console.log("Waiting until ", new Date(tf).toISOString(), "...");
+  const localNow = Date.now();
+  await sleep(tf - localNow)
+  console.log("Done.")
+
+  console.log("Waiting for Node to catch up...")
   let now = await getNodeTime(sdkConfig);
   let nowNum = now.toJSNumber();
   while (nowNum <= tf) {
-    console.log(`Countdown: ${showSecondsDiff(tf, nowNum)}s`);
+    console.log("...");
     await sleep(20_000);
     now = await getNodeTime(sdkConfig);
     nowNum = now.toJSNumber();
   }
-  console.log(`Countdown over`);
+  console.log("Done.");
 };
 
+/** Sleep a give number of milliseconds */
 const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
-const showSecondsDiff = (x: number, y: number) => (x - y) / 1000;
 
 // We start the waiting-deposit loop.
 for (const stopTime of depositTimes) {
