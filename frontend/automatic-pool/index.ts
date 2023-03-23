@@ -170,7 +170,12 @@ const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
 for (const stopTime of depositTimes) {
   console.log("Waiting to perform next deposit...");
   await countdownTo(stopTime);
-  unbondedPool.deposit(bigInt(args.depositAmount), bigInt(0))
+  const assocList = await unbondedPool.getAssocList();
+  if (assocList.entries.length > 0) {
+     await unbondedPool.deposit(bigInt(args.depositAmount), bigInt(0));
+  } else {
+     console.log("No stake in the pool, deposit skipped.")
+  }
 };
 
 // Now we wait for pool closing
