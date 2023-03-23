@@ -34,7 +34,6 @@ import Contract.TxConstraints
   , mustValidateIn
   )
 import Contract.Utxos (getWalletUtxos, utxosAt)
-import Control.Alt ((<|>))
 import Control.Monad.Maybe.Trans (MaybeT(..), lift, runMaybeT)
 import Ctl.Internal.Plutus.Conversion (fromPlutusAddress)
 import Data.Array ((:))
@@ -209,34 +208,17 @@ closeUnbondedPoolContract
   -- We deliberately omit the admin utxos, since batching includes
   -- them automatically before every batch.
 
-  -- Submit transaction that closes state utxo separately (if necessary) and
-  -- evaluate if the state utxo is consumed or not.
-  stateUtxoConsumed <-
+  -- Get constraints and lookups for consuming the state UTxO (if necessary).
+  stateUtxoClose <-
     if needToConsumeStateUtxo then case poolStateUtxo of
-      Just (poolTxInput /\ _ /\ _) -> do
-        adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos"
-          $
-            getWalletUtxos
-        isClosed <- Array.null <$> submitTransaction
-          params
-          constraints
-          lookups
-          confirmationTimeout
-          submissionAttempts
-          [ mustSpendScriptOutput poolTxInput redeemer /\
-              ScriptLookups.unspentOutputs adminUtxos
-          ]
-        logInfo' $
-          if isClosed then
-            "closeUnbondedPoolContract: failed to consume state utxo"
-          else "closeUnbondedPoolContract: succesfully consumed state utxo"
-        pure isClosed
+      Just (poolTxInput /\ _ /\ _) ->
+        pure $ mustSpendScriptOutput poolTxInput redeemer /\ mempty
       Nothing -> do
         logInfo' "closeUnbondedPoolContract: could not find state utxo to close"
-        pure true
+        pure $ mempty /\ mempty
     else do
       logInfo' "closeUnbondedPoolContract: state utxo already closed"
-      pure true
+      pure $ mempty /\ mempty
 
   entryUpdates
     :: Array ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData)) <-
@@ -244,6 +226,9 @@ closeUnbondedPoolContract
       ( Array.zip entriesInputs
           (Array.zip entriesDatums updatedEntriesDatums)
       )
+
+  -- We add the state utxo constraints/lookups first
+  let updates = stateUtxoClose : entryUpdates
   adminUtxos <- liftedM "closeUnbondedPool: could not get wallet's utxos" $
     getWalletUtxos
   failedCloses <-
@@ -254,27 +239,27 @@ closeUnbondedPoolContract
         (lookups <> ScriptLookups.unspentOutputs adminUtxos)
         confirmationTimeout
         submissionAttempts
-        entryUpdates
+        updates
     else do
       let
-        entryUpdateBatches = splitByLength (toIntUnsafe batchSize)
-          entryUpdates
+        updateBatches = splitByLength (toIntUnsafe batchSize)
+          updates
       submitBatchesSequentially
         params
         constraints
         lookups
         confirmationTimeout
         submissionAttempts
-        entryUpdateBatches
+        updateBatches
   logInfo_
-    "closeUnbondedPoolContract: Finished closing /\
-    \pool entries. Entries with failed closes"
+    "closeUnbondedPoolContract: Finished updating. Failed constraints/lookups: "
     failedCloses
-  -- We obtain the failed entries and return them as part of a
-  -- `IncompleteClose` (if there are any)
+
+  -- We obtain the failed entries or state utxo and return them as part of an
+  -- `IncompleteClose` (if there is any failure to return).
   let
-    maybeFailedEntries = do
-      indices <- NonEmpty.fromArray =<< traverse
+    maybeFailure = do
+      entriesIndices <- NonEmpty.fromArray =<< traverse
         (flip Array.elemIndex entryUpdates)
         failedCloses
       let
@@ -283,23 +268,15 @@ closeUnbondedPoolContract
               : acc
           )
           mempty
-          indices
+          entriesIndices
+        stateUtxoConsumed = not $ Array.elem stateUtxoClose failedCloses
       firstEntry <- Array.head entries
       Just $ IncompleteClose
         { failedKeys: map (unwrap >>> _.key) entries
         , totalDeposited: unwrap >>> _.totalDeposited $ firstEntry
         , stateUtxoConsumed
         }
-  -- We return an `IncompleteClose` value if the pool failed to be consumed
-  let
-    maybeFailedState =
-      if stateUtxoConsumed then Nothing
-      else Just $ IncompleteClose
-        { failedKeys: []
-        , totalDeposited: zero
-        , stateUtxoConsumed
-        }
-  pure $ maybeFailedEntries <|> maybeFailedState
+  pure maybeFailure
 
 updateAndCloseEntriesList :: Array Entry -> Array Entry
 updateAndCloseEntriesList = map closeEntry <<< updateEntriesList zero
