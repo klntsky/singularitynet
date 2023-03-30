@@ -12,7 +12,7 @@ import Effect.Exception as Exception
 import Utils (jsonReader)
 
 -- | This is the trivial minting policy.
-mkTrivialPolicy :: forall (r :: Row Type). Contract r MintingPolicy
+mkTrivialPolicy :: forall (r :: Row Type). Contract MintingPolicy
 mkTrivialPolicy = liftEither
   $ bimap (Exception.error <<< show) PlutusMintingPolicy
   $ jsonReader "script" _alwaysSucceedsMp

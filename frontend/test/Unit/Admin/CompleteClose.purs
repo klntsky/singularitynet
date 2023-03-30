@@ -37,7 +37,7 @@ import Utils (nat)
 
 -- | The admin deposits to a pool with `n` user entries. We take into account
 -- any rounding error, since this is a multi-user scenario.
-test :: Contract () SnetInitialParams -> Int -> PlutipTest
+test :: Contract SnetInitialParams -> Int -> PlutipTest
 test initParams userCount = withWalletsAndPool initParams
   usersInitialUtxos
   \wallets -> do

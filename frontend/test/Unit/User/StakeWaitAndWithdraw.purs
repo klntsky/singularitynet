@@ -29,7 +29,7 @@ bobInitialUtxos = map BigInt.fromInt [ 10_000_000, 100_000_000 ] /\
   (BigInt.fromInt 1_000_000_000)
 
 -- | The user stakes and withdraws after `N` periods
-test :: Int -> Contract () SnetInitialParams -> PlutipTest
+test :: Int -> Contract SnetInitialParams -> PlutipTest
 test n initParams = withWalletsAndPool initParams [ bobInitialUtxos ]
   \wallets ->
     do

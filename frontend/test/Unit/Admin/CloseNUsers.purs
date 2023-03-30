@@ -30,7 +30,7 @@ import UnbondedStaking.UserStake (userStakeUnbondedPoolContract)
 import Utils (nat)
 
 -- | The admin closes a pool with `n` user entries.
-test :: Contract () SnetInitialParams -> Int -> Int -> PlutipTest
+test :: Contract SnetInitialParams -> Int -> Int -> PlutipTest
 test initialParams userCount batchSize = withWalletsAndPool initialParams
   usersInitialUtxos
   \wallets -> do

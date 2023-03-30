@@ -109,12 +109,12 @@ import UnbondedStaking.Utils
   )
 import Utils (currentRoundedTime, currentTime, nat)
 
-fakegixTokenName :: Contract () TokenName
+fakegixTokenName :: Contract TokenName
 fakegixTokenName =
   liftMaybe (Exception.error "Could not make FAKEGIX token name") $
     mkTokenName =<< byteArrayFromAscii "FAKEGIX"
 
-getFakegixData :: Contract () (MintingPolicy /\ CurrencySymbol /\ TokenName)
+getFakegixData :: Contract (MintingPolicy /\ CurrencySymbol /\ TokenName)
 getFakegixData = do
   mp <- mkTrivialPolicy
   cs <-
@@ -126,7 +126,7 @@ getFakegixData = do
 
 -- | Initial parameters for pool that starts at `currentTime` that uses FAKEGIX
 -- as staking token.
-testInitialParams :: Contract () SnetInitialParams
+testInitialParams :: Contract SnetInitialParams
 testInitialParams = do
   (_ /\ fakegixCs /\ fakegixTn) <- getFakegixData
   let periodLen = BigInt.fromInt 25_000
@@ -153,7 +153,7 @@ testInitialParams = do
 
 -- | Identical to `testInitialParams`, but uses scripts with no time
 -- validation.
-testInitialParamsNoTimeChecks :: Contract () SnetInitialParams
+testInitialParamsNoTimeChecks :: Contract SnetInitialParams
 testInitialParamsNoTimeChecks = do
   initParams <- testInitialParams
   let
@@ -262,7 +262,7 @@ waitUntilClosed = do
 -- given `InitialUnbondedParams`. The admin wallet is also preprended to the
 -- passed wallets.
 withWalletsAndPool
-  :: Contract () SnetInitialParams
+  :: Contract SnetInitialParams
   -> Array (InitialUTxOs /\ BigInt)
   -> (Array KeyWallet -> SnetContract Unit)
   -> PlutipTest
@@ -296,13 +296,13 @@ withWalletsAndPool initParamsContract distr contract =
       logDebug' $ "Pool address: " <> show address
       runReaderT (contract wallets) { unbondedPoolParams, scriptVersion }
   where
-  getUserPkh :: KeyWallet -> Contract () PaymentPubKeyHash
+  getUserPkh :: KeyWallet -> Contract PaymentPubKeyHash
   getUserPkh w =
     Plutip.withKeyWallet w <<<
       liftedM "(getUserPkh) Could not user's PKH" $
       ownPaymentPubKeyHash
 
-  getUserSpkh :: KeyWallet -> Contract () StakePubKeyHash
+  getUserSpkh :: KeyWallet -> Contract StakePubKeyHash
   getUserSpkh w =
     Plutip.withKeyWallet w <<<
       liftedM "(getUserSpkh) Could not user's SPKH" $
@@ -360,7 +360,7 @@ getPoolFakegix = do
 mintAndDistributeFakegix
   :: BigInt
   -> Array (PaymentPubKeyHash /\ StakePubKeyHash /\ BigInt)
-  -> Contract () Unit
+  -> Contract Unit
 mintAndDistributeFakegix adminFakegix users = do
   adminUtxos <- liftedM "Could not get admin's utxos" $ getWalletUtxos
   (mp /\ cs /\ tn) <- getFakegixData
@@ -387,7 +387,7 @@ mintAndDistributeFakegix adminFakegix users = do
   txId <- submit tx
   awaitTxConfirmed txId
 
-utxosFakegix :: UtxoMap -> Contract () BigInt
+utxosFakegix :: UtxoMap -> Contract BigInt
 utxosFakegix utxos = do
   (_ /\ cs /\ tn) <- getFakegixData
   pure <<< valueOf' cs tn <<< foldMap
@@ -434,19 +434,6 @@ localPlutipCfg =
       , host: "127.0.0.1"
       , secure: false
       , path: Nothing
-      }
-  , ogmiosDatumCacheConfig:
-      { port: UInt.fromInt 10000
-      , host: "127.0.0.1"
-      , secure: false
-      , path: Nothing
-      }
-  , postgresConfig:
-      { host: "127.0.0.1"
-      , port: UInt.fromInt 5433
-      , user: "ctxlib"
-      , password: "ctxlib"
-      , dbname: "ctxlib"
       }
   , suppressLogs: true
   , customLogger: Nothing

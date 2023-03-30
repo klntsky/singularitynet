@@ -67,7 +67,7 @@ getAdminTime
   :: forall (r :: Row Type)
    . UnbondedPoolParams
   -> ScriptVersion
-  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+  -> Contract { currTime :: POSIXTime, range :: POSIXTimeRange }
 getAdminTime (UnbondedPoolParams upp) = case _ of
   Production -> do
     -- Get time and round it up to the nearest second
@@ -98,7 +98,7 @@ getUserTime
   :: forall (r :: Row Type)
    . UnbondedPoolParams
   -> ScriptVersion
-  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+  -> Contract { currTime :: POSIXTime, range :: POSIXTimeRange }
 getUserTime (UnbondedPoolParams upp) = case _ of
   Production -> do
     -- Get time and round it up to the nearest second
@@ -133,7 +133,7 @@ getUserOrBondingTime
   :: forall (r :: Row Type)
    . UnbondedPoolParams
   -> ScriptVersion
-  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+  -> Contract { currTime :: POSIXTime, range :: POSIXTimeRange }
 getUserOrBondingTime (UnbondedPoolParams upp) = case _ of
   Production -> do
     -- Get time and round it up to the nearest second
@@ -188,7 +188,7 @@ getClosingTime
   :: forall (r :: Row Type)
    . UnbondedPoolParams
   -> ScriptVersion
-  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+  -> Contract { currTime :: POSIXTime, range :: POSIXTimeRange }
 getClosingTime (UnbondedPoolParams ubp) Production = do
   currTime <- currentRoundedTime
   let rangeLen = ubp.adminLength
@@ -277,7 +277,7 @@ calculateRewards (Entry e) = do
 queryAssocListUnbonded
   :: UnbondedPoolParams
   -> ScriptVersion
-  -> Contract () (Array Entry)
+  -> Contract (Array Entry)
 queryAssocListUnbonded
   params@
     ( UnbondedPoolParams
@@ -300,7 +300,7 @@ queryAssocListUnbonded
 queryStateUnbonded
   :: UnbondedPoolParams
   -> ScriptVersion
-  -> Contract ()
+  -> Contract
        (Maybe ({ maybeEntryName :: Maybe ByteArray, open :: Boolean }))
 queryStateUnbonded
   params@
@@ -331,7 +331,7 @@ queryStateUnbonded
   where
   getDatum
     :: TransactionOutputWithRefScript
-    -> Contract () { maybeEntryName :: Maybe ByteArray, open :: Boolean }
+    -> Contract { maybeEntryName :: Maybe ByteArray, open :: Boolean }
   getDatum txOut = do
     dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash
       txOut
@@ -344,7 +344,7 @@ queryStateUnbonded
 queryAssetsUnbonded
   :: UnbondedPoolParams
   -> ScriptVersion
-  -> Contract () { ada :: BigInt, stakedAsset :: BigInt }
+  -> Contract { ada :: BigInt, stakedAsset :: BigInt }
 queryAssetsUnbonded unbondedPoolParams@(UnbondedPoolParams ubp) scriptVersion =
   do
     -- Fetch information related to the pool
@@ -371,7 +371,7 @@ queryAssetsUnbonded unbondedPoolParams@(UnbondedPoolParams ubp) scriptVersion =
 
   addDatum
     :: TransactionOutputWithRefScript
-    -> Contract () (TransactionOutputWithRefScript /\ Datum)
+    -> Contract (TransactionOutputWithRefScript /\ Datum)
   addDatum txOut = do
     dat <- liftedM "" <<< getDatumByHash <=< liftContractM "" $ getUtxoDatumHash
       txOut
@@ -387,7 +387,7 @@ queryAssetsUnbonded unbondedPoolParams@(UnbondedPoolParams ubp) scriptVersion =
 -- | Get all entries' datums
 getListDatums
   :: Array (ByteArray /\ TransactionInput /\ TransactionOutputWithRefScript)
-  -> Contract () (Array Entry)
+  -> Contract (Array Entry)
 getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
   -- Get the entry's datum
   dHash <-
@@ -415,7 +415,7 @@ getListDatums arr = for arr \(_ /\ _ /\ txOut) -> do
 noTimeChecks
   :: forall (r :: Row Type)
    . String
-  -> Contract r { currTime :: POSIXTime, range :: POSIXTimeRange }
+  -> Contract { currTime :: POSIXTime, range :: POSIXTimeRange }
 noTimeChecks fnName = do
   logInfo' $ fnName <> ": Time checks deactivated - omitting check"
   currTime <- currentRoundedTime

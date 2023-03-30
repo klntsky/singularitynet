@@ -39,7 +39,7 @@ import Aeson
   , printJsonDecodeError
   )
 import Contract.Address (PaymentPubKeyHash, Bech32String)
-import Contract.Config (ConfigParams)
+import Contract.Config (ContractParams, mkCtlBackendParams)
 import Contract.Monad (Contract, runContractInEnv, ContractEnv, mkContractEnv)
 import Contract.Numeric.NatRatio (fromNaturals, toRational)
 import Contract.Numeric.Natural (Natural, fromBigInt, toBigInt)
@@ -86,10 +86,7 @@ import Data.UInt as UInt
 import Effect.Aff (error)
 import Effect.Exception (Error)
 import Partial.Unsafe (unsafePartial)
-import Types
-  ( AssetClass(AssetClass)
-  , ScriptVersion(..)
-  )
+import Types (AssetClass(AssetClass), ScriptVersion(..))
 import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.CreatePool
   ( createUnbondedPoolContract
@@ -197,12 +194,10 @@ fromWalletSpec = lmap (error <<< printJsonDecodeError) <<< caseAeson aesonCases
             (PrivateStakeKeyFile <$> skey)
       }
 
-buildContractConfig :: SdkConfig -> Effect (Promise (ConfigParams ()))
+buildContractConfig :: SdkConfig -> Effect (Promise ContractParams)
 buildContractConfig cfg = Promise.fromAff $ do
   ogmiosConfig <- liftEither $ fromSdkServerConfig "ogmios" cfg.ogmiosConfig
   kupoConfig <- liftEither $ fromSdkServerConfig "kupo" cfg.kupoConfig
-  datumCacheConfig <- liftEither $ fromSdkServerConfig "ogmios-datum-cache"
-    cfg.datumCacheConfig
   networkIdInt <- liftM (errorWithContext "invalid `NetworkId`")
     $ Int.fromNumber cfg.networkId
   networkId <- liftM (errorWithContext "invalid `NetworkId`")
@@ -210,19 +205,21 @@ buildContractConfig cfg = Promise.fromAff $ do
   logLevel <- liftEither $ fromSdkLogLevel cfg.logLevel
   walletSpec <- map Just $ liftEither $ fromWalletSpec cfg.walletSpec
   pure
-    { ogmiosConfig
-    , kupoConfig
-    , datumCacheConfig
+    { backendParams:
+        mkCtlBackendParams
+          { kupoConfig
+          , ogmiosConfig
+          }
     , logLevel
     , networkId
     , walletSpec
     , customLogger: Nothing
     , suppressLogs: false
-    , extraConfig: {}
     , hooks:
         { beforeInit: Nothing
         , beforeSign: Nothing
         , onError: Nothing
+        , onSubmit: Nothing
         , onSuccess: Nothing
         }
     }
@@ -233,8 +230,8 @@ buildContractConfig cfg = Promise.fromAff $ do
 callWithArgs
   :: forall (a :: Type) (b :: Type) (c :: Type)
    . (a -> Either Error b)
-  -> (b -> Contract () c)
-  -> ContractEnv ()
+  -> (b -> Contract c)
+  -> ContractEnv
   -> a
   -> Effect (Promise c)
 callWithArgs f contract env args = Promise.fromAff
@@ -372,7 +369,7 @@ type SdkIncompleteClose =
   }
 
 callCreateUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> InitialUnbondedArgs
   -> Effect
        (Promise { args :: UnbondedPoolArgs, address :: String, txId :: String })
@@ -385,7 +382,7 @@ callCreateUnbondedPool env iba = Promise.fromAff do
   pure $ { args: toUnbondedPoolArgs upp, address, txId }
 
 callGetUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> String
   -> String
   -> InitialUnbondedArgs
@@ -399,7 +396,7 @@ callGetUnbondedPool env adminPkhStr stateCsStr iba = Promise.fromAff do
   pure $ toUnbondedPoolArgs ubpps
 
 callDepositUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> BigInt
   -> UnbondedPoolArgs
   -> BigInt
@@ -418,7 +415,7 @@ callDepositUnbondedPool env amt upa bi id' = Promise.fromAff $ runContractInEnv
       id
 
 callCloseUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> UnbondedPoolArgs
   -> BigInt
   -> Maybe SdkIncompleteClose
@@ -431,7 +428,7 @@ callCloseUnbondedPool env upa bi ic' = Promise.fromAff $ runContractInEnv env do
   map toSdkIncompleteClose <$> closeUnbondedPoolContract upp Production nat ic
 
 callUserStakeUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> UnbondedPoolArgs
   -> BigInt
   -> Effect
@@ -445,7 +442,7 @@ callUserStakeUnbondedPool env upa bi = Promise.fromAff $ runContractInEnv env do
   userStakeUnbondedPoolContract upp Production nat
 
 callUserWithdrawUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> UnbondedPoolArgs
   -> Effect
        ( Promise
@@ -456,7 +453,7 @@ callUserWithdrawUnbondedPool =
     (\ubp -> userWithdrawUnbondedPoolContract ubp Production)
 
 callAdminWithdrawUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> UnbondedPoolArgs
   -> Bech32String
   -> Effect
@@ -471,10 +468,10 @@ callAdminWithdrawUnbondedPool env poolArgs addr =
 
 callWithUnbondedPoolArgs
   :: ( UnbondedPoolParams
-       -> Contract ()
+       -> Contract
             { txId :: String }
      )
-  -> ContractEnv ()
+  -> ContractEnv
   -> UnbondedPoolArgs
   -> Effect
        ( Promise
@@ -498,7 +495,7 @@ callHashPkh pkh = Promise.fromAff $ do
   hashPkh p
 
 callQueryAssocListUnbondedPool
-  :: ContractEnv ()
+  :: ContractEnv
   -> UnbondedPoolArgs
   -> Effect (Promise (Array UserEntry))
 callQueryAssocListUnbondedPool env upa = Promise.fromAff $ runContractInEnv env
@@ -592,7 +589,7 @@ fromInitialUnbondedArgs iba = do
   context :: String
   context = "fromInitialUnbondedArgs"
 
-callGetNodeTime :: ContractEnv () -> Effect (Promise BigInt)
+callGetNodeTime :: ContractEnv -> Effect (Promise BigInt)
 callGetNodeTime env = fromAff
   $ runContractInEnv env
   $ unwrap
@@ -616,5 +613,5 @@ callConsumeMaybe just nothing = case _ of
   Nothing -> nothing unit
   Just x -> just x
 
-callMkContractEnv :: ConfigParams () -> Effect (Promise (ContractEnv ()))
+callMkContractEnv :: ContractParams -> Effect (Promise (ContractEnv))
 callMkContractEnv cfg = Promise.fromAff $ mkContractEnv cfg

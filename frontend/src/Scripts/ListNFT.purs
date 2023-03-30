@@ -37,7 +37,7 @@ mkListNFTPolicy
    . StakingType
   -> ScriptVersion
   -> CurrencySymbol
-  -> Contract r (Either ApplyArgsError MintingPolicy)
+  -> Contract (Either ApplyArgsError MintingPolicy)
 mkListNFTPolicy st sv nftCs = do
   unappliedScript <- liftContractE $ listNFTPolicy st sv
   pure <<< rmap PlutusMintingPolicy $ applyArgs unappliedScript [ toData nftCs ]

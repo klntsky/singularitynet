@@ -8,5 +8,5 @@ import SNet.Test.Common (withWalletsAndPool)
 import UnbondedStaking.Types (SnetInitialParams)
 
 -- | The admin opens the pool
-test :: Contract () SnetInitialParams -> PlutipTest
+test :: Contract SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [] \_ -> pure unit

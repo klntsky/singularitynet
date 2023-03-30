@@ -20,7 +20,7 @@ import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import Utils (nat)
 
 -- | The admin deposits to an empty pool
-test :: Contract () SnetInitialParams -> PlutipTest
+test :: Contract SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [] \wallets -> do
   adminWallet <- getAdminWallet wallets
   { unbondedPoolParams, scriptVersion } <- ask

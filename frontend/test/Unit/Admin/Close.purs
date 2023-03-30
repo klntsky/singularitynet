@@ -16,7 +16,7 @@ import UnbondedStaking.ClosePool (closeUnbondedPoolContract)
 import UnbondedStaking.Types (Period(..), SnetInitialParams)
 import Utils (nat)
 
-test :: Contract () SnetInitialParams -> PlutipTest
+test :: Contract SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [] \wallets -> do
   adminWallet <- getAdminWallet wallets
   withKeyWallet adminWallet do

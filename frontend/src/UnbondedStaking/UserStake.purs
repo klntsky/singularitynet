@@ -78,7 +78,7 @@ userStakeUnbondedPoolContract
   :: UnbondedPoolParams
   -> ScriptVersion
   -> Natural
-  -> Contract ()
+  -> Contract
        { txId :: String }
 userStakeUnbondedPoolContract
   params@

@@ -33,7 +33,7 @@ mkUnbondedPoolValidator
   :: forall (r :: Row Type)
    . UnbondedPoolParams
   -> ScriptVersion
-  -> Contract r (Either ApplyArgsError Validator)
+  -> Contract (Either ApplyArgsError Validator)
 mkUnbondedPoolValidator ubp sv = mkValidator (unbondedPoolValidator sv) ubp
 
 mkValidator
@@ -41,7 +41,7 @@ mkValidator
    . ToData a
   => Either JsonDecodeError PlutusScript
   -> a
-  -> Contract r (Either ApplyArgsError Validator)
+  -> Contract (Either ApplyArgsError Validator)
 mkValidator ps params = do
   unappliedScript <- liftedE $ pure ps
   pure <<< rmap Validator $ applyArgs unappliedScript [ toData params ]

@@ -97,8 +97,8 @@ import Contract.Value
   )
 import Control.Alternative (guard)
 import Control.Monad.Error.Class (liftMaybe, throwError, try)
-import Ctl.Internal.BalanceTx.Error (BalanceTxError(InsufficientTxInputs))
-import Ctl.Internal.Plutus.Conversion (toPlutusAddress, toPlutusValue)
+import Ctl.Internal.BalanceTx.Error (BalanceTxError(BalanceInsufficientError))
+import Ctl.Internal.Plutus.Conversion (toPlutusAddress)
 import Ctl.Internal.Serialization.Address (addressFromBech32, addressNetworkId) as SA
 import Ctl.Internal.Serialization.Hash (ed25519KeyHashToBytes)
 import Data.Argonaut.Core (Json, caseJsonObject)
@@ -246,11 +246,11 @@ toIntUnsafe :: Natural -> Int
 toIntUnsafe = fromMaybe 0 <<< toInt <<< toBigInt
 
 logInfo_
-  :: forall (r :: Row Type) (a :: Type)
+  :: forall (a :: Type)
    . Show a
   => String
   -> a
-  -> Contract r Unit
+  -> Contract Unit
 logInfo_ k = flip logInfo mempty <<< tag k <<< show
 
 hashPkh :: PaymentPubKeyHash -> Aff ByteArray
@@ -380,7 +380,7 @@ bigIntRange lim =
 
 -- Get the node's time rounded to the closest integer (ceiling) in seconds.
 currentRoundedTime
-  :: forall (r :: Row Type). Contract r POSIXTime
+  :: Contract POSIXTime
 currentRoundedTime = do
   POSIXTime t <- currentTime
   t' <-
@@ -393,7 +393,7 @@ currentRoundedTime = do
 -- | Get the POSIX time from the node. This is obtained by converting the current
 -- | slot.
 currentTime
-  :: forall (r :: Row Type). Contract r POSIXTime
+  :: Contract POSIXTime
 currentTime = do
   -- Get current slot
   ChainTip { slot } <- getTip >>= case _ of
@@ -407,10 +407,10 @@ currentTime = do
     <=< liftEffect
     $ slotToPosixTime es ss slot
 
-countdownTo :: forall (r :: Row Type). POSIXTime -> Contract r Unit
+countdownTo :: POSIXTime -> Contract Unit
 countdownTo targetTime = countdownTo' Nothing
   where
-  countdownTo' :: Maybe POSIXTime -> Contract r Unit
+  countdownTo' :: Maybe POSIXTime -> Contract Unit
   countdownTo' prevTime = do
     currTime <- currentTime
     let
@@ -424,7 +424,7 @@ countdownTo targetTime = countdownTo' Nothing
       countdownTo' (Just currTime)
     else wait delta *> countdownTo' (Just currTime)
 
-  wait :: BigInt -> Contract r Unit
+  wait :: BigInt -> Contract Unit
   wait n = liftAff $ delay $
     if n > fromInt 5000 then Milliseconds 5000.0
     else Milliseconds $ toNumber n
@@ -462,7 +462,7 @@ submitTransaction
            (TxConstraints Unit Unit)
            (ScriptLookups.ScriptLookups PlutusData)
        )
-  -> Contract ()
+  -> Contract
        ( Array
            ( Tuple
                (TxConstraints Unit Unit)
@@ -503,7 +503,7 @@ submitBatchesSequentially
                (ScriptLookups.ScriptLookups PlutusData)
            )
        )
-  -> Contract ()
+  -> Contract
        ( Array
            ( Tuple
                (TxConstraints Unit Unit)
@@ -538,8 +538,8 @@ repeatUntilConfirmed
   => UnbondedPoolParams
   -> Seconds
   -> Int
-  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
-  -> Contract r
+  -> Contract { ubTx :: UnattachedUnbalancedTx | p }
+  -> Contract
        { txId :: String | p }
 repeatUntilConfirmed ubp timeout maxTrials contract = do
   result@{ ubTx } <- contract
@@ -572,14 +572,13 @@ repeatUntilConfirmed ubp timeout maxTrials contract = do
 -- This is used by `createPool`, since by the time the pool is created, there
 -- are no `UnbondedPoolParams` to provide better error messages.
 repeatUntilConfirmed'
-  :: forall (r :: Row Type) (p :: Row Type)
+  :: forall (p :: Row Type)
    . Lacks "txId" p
   => Lacks "ubTx" p
   => Seconds
   -> Int
-  -> Contract r { ubTx :: UnattachedUnbalancedTx | p }
-  -> Contract r
-       { txId :: String | p }
+  -> Contract { ubTx :: UnattachedUnbalancedTx | p }
+  -> Contract { txId :: String | p }
 
 repeatUntilConfirmed' timeout maxTrials contract = do
   result@{ ubTx } <- contract
@@ -613,10 +612,9 @@ repeatUntilConfirmed' timeout maxTrials contract = do
 -- exceptions occasioned by a very low amount of ADA by throwing a custom, more
 -- user-friendly error.
 balanceAndSignTx
-  :: forall r
-   . UnbondedPoolParams
+  :: UnbondedPoolParams
   -> UnattachedUnbalancedTx
-  -> Contract r BalancedSignedTransaction
+  -> Contract BalancedSignedTransaction
 balanceAndSignTx ubp ubTx = do
   result <- balanceTx ubTx
   bTx <- case result of
@@ -627,23 +625,23 @@ balanceAndSignTx ubp ubTx = do
 -- | Match on a `BalanceTxError` and output a user-friendly, domain-specific
 -- error
 handleBalanceError
-  :: forall r a. UnbondedPoolParams -> BalanceTxError -> Contract r a
+  :: forall a. UnbondedPoolParams -> BalanceTxError -> Contract a
 handleBalanceError ubp err = case err of
-  InsufficientTxInputs expected actual ->
+  BalanceInsufficientError expected actual _ ->
     throwValueDifference
       ubp
-      $ toPlutusValue (unwrap expected)
-          `minus` toPlutusValue (unwrap actual)
+      $ (unwrap expected)
+          `minus` (unwrap actual)
   _ -> throwContractError err
   where
   minus :: Value -> Value -> Value
   minus v1 v2 = v1 <> negation v2
 
 throwValueDifference
-  :: forall r a
+  :: forall a
    . UnbondedPoolParams
   -> Value
-  -> Contract r a
+  -> Contract a
 throwValueDifference
   (UnbondedPoolParams ubp)
   diff =
@@ -707,7 +705,7 @@ getUtxoDatumHash = unwrap >>> _.output >>> unwrap >>> _.datum >>> case _ of
   _ -> Nothing
 
 -- Copied from newer CTL revision
-addressFromBech32 :: Bech32String -> Contract () Address
+addressFromBech32 :: Bech32String -> Contract Address
 addressFromBech32 str = do
   networkId <- getNetworkId
   cslAddress <- liftContractM "addressFromBech32: unable to read address" $

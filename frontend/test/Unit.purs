@@ -41,7 +41,7 @@ import Test.Unit.User.StakeWaitAndWithdraw as StakeWaitAndWithdraw
 import Test.Unit.User.WithdrawFromClosed as WithdrawFromClosed
 import UnbondedStaking.Types (SnetInitialParams)
 
-unitTests :: Contract () SnetInitialParams -> MoteT Aff PlutipTest Aff Unit
+unitTests :: Contract SnetInitialParams -> MoteT Aff PlutipTest Aff Unit
 unitTests initParams =
   group "Unit Tests" do
     group "Admin" do

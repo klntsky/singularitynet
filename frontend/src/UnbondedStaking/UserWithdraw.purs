@@ -133,7 +133,7 @@ type WithdrawalData =
 userWithdrawUnbondedPoolContract
   :: UnbondedPoolParams
   -> ScriptVersion
-  -> Contract ()
+  -> Contract
        { txId :: String }
 userWithdrawUnbondedPoolContract params scriptVersion = do
   addr <- liftedM
@@ -145,7 +145,7 @@ adminWithdrawUnbondedPoolContract
   :: UnbondedPoolParams
   -> ScriptVersion
   -> Bech32String
-  -> Contract ()
+  -> Contract
        { txId :: String }
 adminWithdrawUnbondedPoolContract params scriptVersion bech32 = do
   addr <- addressFromBech32 bech32
@@ -156,7 +156,7 @@ userWithdrawUnbondedPoolContract'
   -> ScriptVersion
   -> Address
   -> Boolean
-  -> Contract ()
+  -> Contract
        { txId :: String }
 userWithdrawUnbondedPoolContract' params scriptVersion userAddr iAmUser =
   repeatUntilConfirmed params confirmationTimeout submissionAttempts
@@ -222,7 +222,7 @@ getWithdrawalData
   -> ScriptVersion
   -> Address
   -> Boolean
-  -> Contract () WithdrawalData
+  -> Contract WithdrawalData
 getWithdrawalData
   params@
     ( UnbondedPoolParams
@@ -370,7 +370,7 @@ getWithdrawalData
 -- | Build constraints for a closed entry withdrawal
 mkClosedEntryConstraints
   :: WithdrawalData
-  -> Contract () ((TxConstraints Unit Unit) /\ ScriptLookups PlutusData)
+  -> Contract ((TxConstraints Unit Unit) /\ ScriptLookups PlutusData)
 mkClosedEntryConstraints d = do
   let
     -- Build validator redeemer
@@ -397,7 +397,7 @@ mkClosedEntryConstraints d = do
 -- | Build constraints for an open entry withdrawal
 mkOpenEntryConstraints
   :: WithdrawalData
-  -> Contract () ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
+  -> Contract ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
 mkOpenEntryConstraints d = do
   -- Get state utxo
   poolTxInput /\ poolTxOutput <-
@@ -432,7 +432,7 @@ mkOpenEntryConstraints d = do
 firstEntryConstraints
   :: WithdrawalData
   -> TransactionInput
-  -> Contract () ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
+  -> Contract ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
 firstEntryConstraints d poolTxInput = do
   -- Get the datum of the head entry and the key of the new head
   logInfo'
@@ -480,7 +480,7 @@ firstEntryConstraints d poolTxInput = do
 
 otherEntryConstraints
   :: WithdrawalData
-  -> Contract () ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
+  -> Contract ((TxConstraints Unit Unit) /\ (ScriptLookups PlutusData))
 otherEntryConstraints d = do
   -- The hashed key is greater than so we must look at the assoc. list
   -- in more detail
@@ -545,7 +545,7 @@ otherEntryConstraints d = do
   pure $ constraints /\ prevEntryDatumLookup
 
 -- | This function filters all the asset UTxOs from a `UtxoMap`
-getUnbondedAssetUtxos :: forall (r :: Row Type). UtxoMap -> Contract r UtxoMap
+getUnbondedAssetUtxos :: forall (r :: Row Type). UtxoMap -> Contract UtxoMap
 getUnbondedAssetUtxos utxos = do
   assetUtxos <- catMaybes <$> for utxoAssocList \utxo@(_ /\ txOutput) -> do
     datumHash <- liftContractM "getAssetUtxos: could not get datum hash"
@@ -567,7 +567,7 @@ getUnbondedAssetUtxos utxos = do
 
 -- | Get entry datum from transaction output
 getEntryDatumFromOutput
-  :: forall (r :: Row Type). TransactionOutputWithRefScript -> Contract r Entry
+  :: forall (r :: Row Type). TransactionOutputWithRefScript -> Contract Entry
 getEntryDatumFromOutput txOut = do
   unbondedDatum <- getUnbondedDatum txOut
   case unbondedDatum of
@@ -580,7 +580,7 @@ getEntryDatumFromOutput txOut = do
 getStateDatumFromOutput
   :: forall (r :: Row Type)
    . TransactionOutputWithRefScript
-  -> Contract r (Tuple (Maybe ByteArray) Boolean)
+  -> Contract (Tuple (Maybe ByteArray) Boolean)
 getStateDatumFromOutput txOut = do
   unbondedDatum <- getUnbondedDatum txOut
   case unbondedDatum of
@@ -593,7 +593,7 @@ getStateDatumFromOutput txOut = do
 getUnbondedDatum
   :: forall (r :: Row Type)
    . TransactionOutputWithRefScript
-  -> Contract r UnbondedStakingDatum
+  -> Contract UnbondedStakingDatum
 getUnbondedDatum =
   liftContractM
     "getUnbondedDatum: could not parse datum as unbonded staking datum"

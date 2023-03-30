@@ -36,7 +36,7 @@ mkStateNFTPolicy
    . StakingType
   -> ScriptVersion
   -> TransactionInput
-  -> Contract r (Either ApplyArgsError MintingPolicy)
+  -> Contract (Either ApplyArgsError MintingPolicy)
 mkStateNFTPolicy st sv txInput = do
   unappliedScript <- liftedE $ pure $ nftPolicy st sv
   pure <<< rmap PlutusMintingPolicy $ applyArgs unappliedScript

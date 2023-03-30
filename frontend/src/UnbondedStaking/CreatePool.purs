@@ -58,7 +58,7 @@ import Utils
 createUnbondedPoolContract
   :: InitialUnbondedParams
   -> ScriptVersion
-  -> Contract ()
+  -> Contract
        { txId :: String
        , unbondedPoolParams :: UnbondedPoolParams
        , address :: Bech32String
@@ -146,7 +146,7 @@ getUnbondedPoolContract
   -> CurrencySymbol
   -> InitialUnbondedParams
   -> ScriptVersion
-  -> Contract () UnbondedPoolParams
+  -> Contract UnbondedPoolParams
 getUnbondedPoolContract adminPkh stateCs ibp scriptVersion = do
   listPolicy <- liftedE (mkListNFTPolicy Unbonded scriptVersion stateCs)
   listCs <-

@@ -91,7 +91,7 @@ depositUnbondedPoolContract
   -> ScriptVersion
   -> Natural
   -> Maybe IncompleteDeposit
-  -> Contract () (Maybe IncompleteDeposit)
+  -> Contract (Maybe IncompleteDeposit)
 depositUnbondedPoolContract
   depositAmt
   params@
@@ -349,7 +349,7 @@ updateEntryTx
   :: UnbondedPoolParams
   -> ValidatorHash
   -> (TransactionInput /\ Entry /\ Entry)
-  -> Contract ()
+  -> Contract
        ( Tuple (TxConstraints Unit Unit)
            (ScriptLookups.ScriptLookups PlutusData)
        )

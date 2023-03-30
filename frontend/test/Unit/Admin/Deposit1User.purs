@@ -29,7 +29,7 @@ bobInitialUtxos = map BigInt.fromInt [ 10_000_000, 100_000_000 ] /\
   (BigInt.fromInt 1_000_000_000)
 
 -- | The admin deposits to a pool with one user entry.
-test :: Contract () SnetInitialParams -> PlutipTest
+test :: Contract SnetInitialParams -> PlutipTest
 test initParams = withWalletsAndPool initParams [ bobInitialUtxos ] \wallets ->
   do
     adminWallet <- getAdminWallet wallets

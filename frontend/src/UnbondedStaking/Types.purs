@@ -55,7 +55,7 @@ type SnetContractEnv =
   , scriptVersion :: ScriptVersion
   }
 
-type SnetContract a = ReaderT SnetContractEnv (Contract ()) a
+type SnetContract a = ReaderT SnetContractEnv Contract a
 
 -- | This datatype is only used in offchain. It is used to specify a period to
 -- wait for. These match the three non-overlapping time intervals that conform

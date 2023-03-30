@@ -82,7 +82,7 @@ closeUnbondedPoolContract
   -> ScriptVersion
   -> Natural
   -> Maybe IncompleteClose
-  -> Contract () (Maybe IncompleteClose)
+  -> Contract (Maybe IncompleteClose)
 closeUnbondedPoolContract
   params@
     ( UnbondedPoolParams

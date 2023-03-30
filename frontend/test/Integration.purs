@@ -149,7 +149,7 @@ stakeWithdrawStake =
   }
 
 runMachineWith
-  :: Contract () SnetInitialParams
+  :: Contract SnetInitialParams
   -> StateMachineOnlyInputs
   -> PlutipTest
 runMachineWith initParams inputs =
@@ -163,7 +163,7 @@ runMachineWith initParams inputs =
 runMachine
   ::
      -- | Initial state of the machine
-     Contract () SnetInitialParams
+     Contract SnetInitialParams
   -- | Inputs (randomly generated)
   -> InputConfig
   -- | Repetitions
@@ -190,7 +190,7 @@ inputCfg = InputConfig
 runMachine'
   ::
      -- | Initial state of the machine
-     Contract () SnetInitialParams
+     Contract SnetInitialParams
   -- | Either the inputs or the inputs config to generate them randomly
   -> Either StateMachineOnlyInputs InputConfig
   -- | Transitions for `AdminCommand` inputs
