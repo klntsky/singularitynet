@@ -6,11 +6,7 @@
     nixpkgs.follows = "plutarch/nixpkgs";
     haskell-nix.follows = "plutarch/haskell-nix";
 
-    plutip.url = "github:mlabs-haskell/plutip?rev=0b92bb7b913d213457713c09bacae06110c47bac";
-
     plutarch.url = "github:CardaxDEX/plutarch?rev=e5a50283a0cb01ce1fee880943becda1ac19f3a0";
-    plutarch.inputs.haskell-nix.follows = "plutip/haskell-nix";
-    plutarch.inputs.nixpkgs.follows = "plutip/nixpkgs";
 
     ctl = {
       type = "github";
@@ -28,7 +24,6 @@
     , nixpkgs
     , haskell-nix
     , plutarch
-    , plutip
     , ctl
     , ...
     }:
@@ -44,9 +39,9 @@
 
       nixpkgsFor = system: import nixpkgs {
         inherit system;
-        overlays = [ haskell-nix.overlay (import "${plutip.inputs.iohk-nix}/overlays/crypto") ];
         inherit (haskell-nix) config;
       };
+
       nixpkgsFor' = system: import nixpkgs {
         inherit system;
         overlays = [
