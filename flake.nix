@@ -3,7 +3,7 @@
   nixConfig.bash-prompt = "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]singularitynet \\[\\e[0;93m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
 
   inputs = {
-    nixpkgs.follows = "plutarch/nixpkgs";
+    nixpkgs.follows = "ctl/nixpkgs";
     haskell-nix.follows = "plutarch/haskell-nix";
 
     plutarch.url = "github:CardaxDEX/plutarch?rev=e5a50283a0cb01ce1fee880943becda1ac19f3a0";
@@ -14,8 +14,7 @@
       repo = "cardano-transaction-lib";
       # NOTE
       # Keep this in sync with the rev in `frontend/packages.dhall`
-      #rev = "8d6a366b09e0b747f406e1dd2a8a364ca6f89769";
-      rev = "205f25b591656b825186d2187fdcba1e00c3df87";
+      rev = "8d6a366b09e0b747f406e1dd2a8a364ca6f89769";
     };
   };
 
@@ -40,10 +39,6 @@
       nixpkgsFor = system: import nixpkgs {
         inherit system;
         inherit (haskell-nix) config;
-      };
-
-      nixpkgsFor' = system: import nixpkgs {
-        inherit system;
         overlays = [
            ctl.overlays.purescript
            ctl.overlays.runtime
@@ -54,15 +49,14 @@
       formatCheckFor = system:
         let
           pkgs = nixpkgsFor system;
-          pkgs' = nixpkgsFor' system;
         in
         pkgs.runCommand "format-check"
           {
             nativeBuildInputs = [
-              pkgs'.git
-              pkgs'.fd
-              pkgs'.haskellPackages.cabal-fmt
-              pkgs'.nixpkgs-fmt
+              pkgs.git
+              pkgs.fd
+              pkgs.haskellPackages.cabal-fmt
+              pkgs.nixpkgs-fmt
               (pkgs.haskell-nix.tools onchain.ghcVersion { inherit (plutarch.tools) fourmolu; }).fourmolu
             ];
           } ''
@@ -83,7 +77,6 @@
         ghcVersion = "ghc921";
         projectFor = system:
           let pkgs = nixpkgsFor system; in
-          let pkgs' = nixpkgsFor' system; in
           (nixpkgsFor system).haskell-nix.cabalProject' {
             src = ./.;
             compiler-nix-name = ghcVersion;
@@ -104,12 +97,12 @@
               # We use the ones from Nixpkgs, since they are cached reliably.
               # Eventually we will probably want to build these with haskell.nix.
               nativeBuildInputs = [
-                pkgs'.cabal-install
-                pkgs'.fd
-                pkgs'.haskellPackages.apply-refact
-                pkgs'.haskellPackages.cabal-fmt
-                pkgs'.hlint
-                pkgs'.nixpkgs-fmt
+                pkgs.cabal-install
+                pkgs.fd
+                pkgs.haskellPackages.apply-refact
+                pkgs.haskellPackages.cabal-fmt
+                pkgs.hlint
+                pkgs.nixpkgs-fmt
               ];
 
               inherit (plutarch) tools;
@@ -130,7 +123,7 @@
       frontend = {
         projectFor = system:
           let
-            pkgs = nixpkgsFor' system;
+            pkgs = nixpkgsFor system;
             src = ./frontend;
             project = pkgs.purescriptProject {
               inherit src;
@@ -160,7 +153,7 @@
                     name = "preprod";
                     magic = 1; # use `null` for mainnet
                   };
-                  node.tag = "1.35.3";
+                  node.tag = "1.35.4";
                 };
               };
 
